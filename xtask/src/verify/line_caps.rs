@@ -120,6 +120,8 @@ mod tests {
         );
     }
 
+    // Unix permissions are the only portable way to make a directory unreadable.
+    #[cfg(unix)]
     #[test]
     fn unreadable_directory_error_names_the_directory() {
         use std::os::unix::fs::PermissionsExt;
