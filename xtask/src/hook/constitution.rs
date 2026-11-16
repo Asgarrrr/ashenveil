@@ -85,7 +85,7 @@ fn slash_separated(path: &Path) -> String {
         .join("/")
 }
 
-fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
+pub(crate) fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
     list.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
@@ -96,8 +96,9 @@ fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
 fn covers(entry: &str, path: &str) -> bool {
     if let Some(name) = entry.strip_prefix("**/") {
         path.rsplit('/').next() == Some(name)
-    } else if entry.ends_with('/') {
-        path.starts_with(entry)
+    } else if let Some(dir) = entry.strip_suffix('/') {
+        // A file or symlink named like the directory takes its place.
+        path == dir || path.starts_with(entry)
     } else {
         path == entry
     }
@@ -224,6 +225,15 @@ mod tests {
         let repo = TestRepo::new();
         let root = checkout(&repo, "main");
         for path in ["claude.md", "docs/ADR/0001-data-model.md", "Deny.toml"] {
+            assert_blocked(&root, path);
+        }
+    }
+
+    #[test]
+    fn a_bare_directory_name_is_protected() {
+        let repo = TestRepo::new();
+        let root = checkout(&repo, "main");
+        for path in [".github", "docs/adr", ".cargo"] {
             assert_blocked(&root, path);
         }
     }

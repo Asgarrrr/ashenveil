@@ -4,11 +4,13 @@ use std::path::Path;
 use std::process::ExitCode;
 
 mod hook;
+mod protected_path_check;
 mod setup;
 mod verify;
 
 const USAGE: &str = "usage: cargo xtask verify [--fast]\n       cargo xtask setup\n       \
-                     cargo xtask hook constitution | commit-msg <message-file> | pre-commit";
+                     cargo xtask hook constitution | commit-msg <message-file> | pre-commit\n       \
+                     cargo xtask constitution --base <sha> --head <sha> [--approved]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -19,6 +21,12 @@ fn main() -> ExitCode {
         ["setup"] => run_setup(),
         ["hook", "constitution"] => run_constitution_hook(),
         ["hook", "commit-msg", message_file] => run_commit_msg_hook(Path::new(message_file)),
+        ["constitution", "--base", base, "--head", head] => {
+            run_protected_path_check(base, head, false)
+        }
+        ["constitution", "--base", base, "--head", head, "--approved"] => {
+            run_protected_path_check(base, head, true)
+        }
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -109,6 +117,31 @@ fn run_commit_msg_hook(message_file: &Path) -> ExitCode {
                 hook::commit_msg::FORMAT
             );
             ExitCode::FAILURE
+        }
+    }
+}
+
+/// Exit code 1 means protected paths are touched without approval; 2, that
+/// the check could not judge.
+fn run_protected_path_check(base: &str, head: &str, approved: bool) -> ExitCode {
+    match protected_path_check::check(repo_root(), base, head, approved) {
+        Ok(protected_path_check::Verdict::Pass(touched)) => {
+            for path in &touched {
+                println!("constitution: approved: {path}");
+            }
+            println!("constitution: ok");
+            ExitCode::SUCCESS
+        }
+        Ok(protected_path_check::Verdict::Fail(touched)) => {
+            for path in &touched {
+                eprintln!("constitution: protected: {path}");
+            }
+            eprintln!("constitution: failed: protected paths touched without --approved");
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("constitution: {error}");
+            ExitCode::from(2)
         }
     }
 }

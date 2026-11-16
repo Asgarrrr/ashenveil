@@ -24,19 +24,29 @@ Cargo.toml
 **/.rustfmt.toml
 .cargo/
 
-# Dependency matrix, cargo-deny, toolchain
+# Dependency matrix, cargo-deny, toolchain, with the alternative file names
+# that cargo-deny and rustup also read
 xtask/src/verify/dependency_matrix/allowed.rs
 deny.toml
+.deny.toml
 rust-toolchain.toml
+rust-toolchain
 
 # Hooks: the commit-time and Claude Code hook logic, setup, the installed
 # launchers (.git/hooks/) and the Claude Code settings (.claude/). Not
-# covered: the main.rs dispatch and the shared cargo runner of verify. Only
-# review guards them; CI does not, because verify uses the same runner.
+# covered: the shared cargo runner of verify. Only review guards it; CI does
+# not, because CI runs the PR's own verify.
 xtask/src/hook.rs
 xtask/src/hook/
 xtask/src/setup.rs
 .git/
+
+# The CI protected-path check runs the xtask of main. A free dispatch,
+# manifest or build script would let one PR disarm the check for the next.
+xtask/src/protected_path_check.rs
+xtask/src/main.rs
+xtask/Cargo.toml
+xtask/build.rs
 
 # CI, instruction files, Claude Code settings, rules, checklists, this list
 .github/

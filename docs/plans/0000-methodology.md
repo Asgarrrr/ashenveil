@@ -399,3 +399,39 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   `lib.rs` is not in the protected-path list: every new module edits it.
   Proposal: an `xtask` check that both crate roots keep their `no_std` and
   `deny` attributes.
+- 2026-11-16, accepted (T4 design, human decision): a single GitHub identity.
+  Agents push and open PRs with the human's account, so GitHub cannot tell an
+  agent from the human. The human's approval of a constitution change is the
+  `constitution-approved` label, which only the human applies. An agent can
+  technically apply it too: the guarantee is visible and auditable, not a lock.
+  The T4 acceptance criterion "stays blocked without the human's approval"
+  reads "stays blocked without the `constitution-approved` label".
+- 2026-11-16, accepted (T4 design): the protected-path check is
+  `cargo xtask constitution --base <sha> --head <sha> [--approved]`. It lists
+  the files changed between the merge base of `base` and `head`, renames
+  counted as a deletion plus an addition. It matches them against the list
+  read from `base`, with the T3 hook matcher. It fails when a protected path
+  is touched without `--approved`. It reads the list and runs code from the
+  base only: the CI job uses `pull_request_target`, builds `xtask` from the
+  base commit and never executes the PR's code. A PR thus cannot weaken the
+  check, the workflow or the list that judges it. A new push to the PR
+  removes the label, so an approval never covers later commits. The source
+  file of the check joins the protected-path list.
+- 2026-11-16, accepted (T4 design): squash-only and "no direct push" need a
+  repository ruleset on `main`, with an empty bypass list. Classic branch
+  protection cannot enforce squash-only. No review is required: the human
+  merges their own PRs. Required checks: `verify` and `constitution`.
+- 2026-11-16, accepted (T4 review): the protected-path check judges against
+  the current tip of `main`, not the PR's recorded base, and the ruleset
+  requires an up-to-date branch: a list entry added after the check ran
+  still applies. The label approves the head only if it was applied after
+  GitHub received that head, timed by the first `pull_request` run of the
+  head SHA. Removing the label on a new push is not enough: GitHub may
+  cancel a pending run. The `xtask` dispatch, manifest and build script join
+  the protected-path list: otherwise one free PR could disarm the check for
+  the next one.
+- 2026-11-16, accepted (human decision, T4): the repository is public, not
+  private with GitHub Pro (section 1, Hosting). Private Actions minutes were
+  blocked by billing; public repositories get standard and ARM runners and
+  rulesets at no cost. The constitution workflow stays safe for fork PRs: it
+  never executes the PR's code.
