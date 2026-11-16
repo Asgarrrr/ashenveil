@@ -46,14 +46,17 @@ fn markdown_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// Entries of `dir`. A missing directory yields none: it is not created until needed.
 fn read_dir_or_empty(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let name_dir =
+        |error: io::Error| io::Error::new(error.kind(), format!("{}: {error}", dir.display()));
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
+        Err(error) => return Err(name_dir(error)),
     };
     let mut paths = entries
         .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<io::Result<Vec<_>>>()?;
+        .collect::<io::Result<Vec<_>>>()
+        .map_err(name_dir)?;
     paths.sort();
     Ok(paths)
 }

@@ -121,6 +121,23 @@ mod tests {
     }
 
     #[test]
+    fn unreadable_directory_error_names_the_directory() {
+        use std::os::unix::fs::PermissionsExt;
+        let repo = TestRepo::new();
+        repo.write("CLAUDE.md", &lines(1));
+        let locked = repo.root().join(".claude/rules/locked");
+        std::fs::create_dir_all(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let result = check(repo.root());
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let error = result.unwrap_err();
+        assert!(
+            error.to_string().contains(".claude/rules/locked"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn missing_root_claude_md_fails() {
         let repo = TestRepo::new();
         assert_eq!(messages(&repo), ["CLAUDE.md: missing"]);

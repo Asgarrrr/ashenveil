@@ -72,8 +72,9 @@ fn headings(content: &str) -> Vec<&str> {
             }
         } else if let Some(marker) = fence_marker(line) {
             fence = Some(marker);
-        } else if let Some(rest) = line.strip_prefix("<!--") {
-            in_comment = !rest.contains("-->");
+        } else if line.starts_with("<!--") {
+            // `<!-->` and `<!--->` close themselves: the end marker may overlap the start.
+            in_comment = !line.contains("-->");
         } else if let Some(heading) = level_two_heading(line) {
             headings.push(heading);
         }
@@ -90,7 +91,9 @@ fn strip_indent(line: &str) -> Option<&str> {
 fn fence_marker(line: &str) -> Option<(char, usize)> {
     let marker = line.chars().next().filter(|c| *c == '`' || *c == '~')?;
     let len = line.chars().take_while(|c| *c == marker).count();
-    (len >= 3).then_some((marker, len))
+    // A backtick in a backtick fence's info string makes the line inline code, not a fence.
+    let info_ok = marker != '`' || !line[len..].contains('`');
+    (len >= 3 && info_ok).then_some((marker, len))
 }
 
 fn level_two_heading(line: &str) -> Option<&str> {
@@ -177,6 +180,24 @@ mod tests {
     #[test]
     fn heading_inside_html_comment_does_not_count() {
         assert_decision_missing(&VALID_ADR.replace("## Decision\n", "<!--\n## Decision\n-->\n"));
+    }
+
+    #[test]
+    fn backticks_in_info_string_do_not_open_a_fence() {
+        assert_decision_missing(&VALID_ADR.replace(
+            "## Decision\n",
+            "``` x ```\n## Note\n```\n## Decision\n```\n",
+        ));
+    }
+
+    #[test]
+    fn comment_closed_on_its_opening_line_by_short_form() {
+        for opener in ["<!-->", "<!--->"] {
+            assert_decision_missing(&VALID_ADR.replace(
+                "## Decision\n",
+                &format!("{opener}\n```\n-->\n## Decision\n```\n"),
+            ));
+        }
     }
 
     #[test]
