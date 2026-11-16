@@ -1,7 +1,26 @@
 [workspace]
 resolver = "3"
-members = ["xtask"]
+members = ["crates/*", "xtask"]
 
 [workspace.package]
 edition = "2024"
 publish = false
+
+# The common base. Every crate inherits it with `[lints] workspace = true`.
+# A crate that inherits cannot extend it: the `ash-core` and `ash-sim` bans are
+# crate-level attributes in their `lib.rs`.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+as_conversions = "deny"
+mod_module_files = "deny"
+
+# An overflow in the simulation is a violated invariant, in release too.
+[profile.release.package.ash-core]
+overflow-checks = true
+
+[profile.release.package.ash-sim]
+overflow-checks = true

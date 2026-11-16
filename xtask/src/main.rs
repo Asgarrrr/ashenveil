@@ -18,23 +18,42 @@ fn main() -> ExitCode {
     }
 }
 
+/// Runs every check, even after a failure, so one run reports all of them.
 fn run_verify() -> ExitCode {
     let root = repo_root();
-    match verify::verify(root) {
-        Ok(violations) if violations.is_empty() => {
-            println!("verify: ok");
-            ExitCode::SUCCESS
+    let mut failed = Vec::new();
+    if !report(verify::verify(root)) {
+        failed.push("files");
+    }
+    if !report(verify::dependency_matrix::check(root)) {
+        failed.push("dependency matrix");
+    }
+    for step in verify::toolchain::STEPS {
+        if !step.run(root) {
+            failed.push(step.name);
         }
+    }
+    if failed.is_empty() {
+        println!("verify: ok");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("verify: failed: {}", failed.join(", "));
+        ExitCode::FAILURE
+    }
+}
+
+/// Prints the violations; true when there are none.
+fn report(result: std::io::Result<Vec<verify::Violation>>) -> bool {
+    match result {
         Ok(violations) => {
             for violation in &violations {
                 eprintln!("{violation}");
             }
-            eprintln!("verify: {} violation(s)", violations.len());
-            ExitCode::FAILURE
+            violations.is_empty()
         }
         Err(error) => {
             eprintln!("verify: {error}");
-            ExitCode::FAILURE
+            false
         }
     }
 }

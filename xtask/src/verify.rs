@@ -1,12 +1,18 @@
-//! Repository checks that need no compiler: instruction-file line caps and
-//! mandatory document sections.
+//! The checks behind `cargo xtask verify`. `verify` holds the file checks
+//! that need no compiler; `dependency_matrix` and `toolchain` call cargo.
 
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub mod dependency_matrix;
+mod file_names;
 mod line_caps;
 mod sections;
+pub mod toolchain;
+
+/// Build output and installed dependencies, never written by us.
+const SKIPPED_DIRS: &[&str] = &[".git", "target", "node_modules"];
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Violation {
@@ -24,7 +30,30 @@ impl fmt::Display for Violation {
 pub fn verify(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = line_caps::check(root)?;
     violations.extend(sections::check(root)?);
+    violations.extend(file_names::check(root)?);
     Ok(violations)
+}
+
+/// Files below `dir` whose name passes `keep`, sorted. A subdirectory holding
+/// its own `.git` is another checkout (an agent worktree under
+/// `.claude/worktrees/`): it is skipped, like build output.
+fn repository_files(dir: &Path, keep: &dyn Fn(&str) -> bool) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for path in read_dir_or_empty(dir)? {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if path.is_dir() {
+            if !SKIPPED_DIRS.contains(&name) && !path.join(".git").exists() {
+                files.extend(repository_files(&path, keep)?);
+            }
+        } else if keep(name) {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
 }
 
 /// Markdown files anywhere below `dir`, sorted for stable output.
@@ -112,6 +141,33 @@ pub(crate) mod test_repo {
             let path = self.root.join(relative);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, content).unwrap();
+        }
+
+        pub fn append(&self, relative: &str, content: &str) {
+            let path = self.root.join(relative);
+            let existing = std::fs::read_to_string(&path).unwrap();
+            std::fs::write(path, existing + content).unwrap();
+        }
+
+        /// Copies `relative`, a file or a directory tree, from the real repository.
+        pub fn copy_from_repository(&self, relative: &str) {
+            copy_tree(&repository_root().join(relative), &self.root.join(relative));
+        }
+    }
+
+    pub fn repository_root() -> &'static Path {
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
+    }
+
+    fn copy_tree(from: &Path, to: &Path) {
+        if from.is_dir() {
+            for entry in std::fs::read_dir(from).unwrap() {
+                let entry = entry.unwrap();
+                copy_tree(&entry.path(), &to.join(entry.file_name()));
+            }
+        } else {
+            std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+            std::fs::copy(from, to).unwrap();
         }
     }
 
