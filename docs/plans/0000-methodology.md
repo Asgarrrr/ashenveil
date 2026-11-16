@@ -388,3 +388,14 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   escapes every workspace lint. Cargo only warns (`missing_lints_inheritance`).
   `verify` refuses a workspace member that does not inherit
   `[workspace.lints]`.
+- 2026-11-16, proposed (found in T3): the plan does not define the commit
+  message format. T3 enforces: a subject that starts with a capital letter,
+  at most 72 characters, no trailing period; a blank line before the body.
+  Git's own `Merge ` and `Revert "` messages and `fixup!` / `squash!` commits
+  pass. The imperative mood stays a review criterion: no mechanical check
+  tells it apart reliably.
+- 2026-11-16, proposed (found in T3): the `ash-core` and `ash-sim` bans are
+  crate-level attributes in `lib.rs` (section 4). They are lint config, but
+  `lib.rs` is not in the protected-path list: every new module edits it.
+  Proposal: an `xtask` check that both crate roots keep their `no_std` and
+  `deny` attributes.

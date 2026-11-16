@@ -1,0 +1,44 @@
+# Constitution paths (docs/plans/0000-methodology.md, section 8): only the
+# human edits them. Read by the Claude Code hook (`cargo xtask hook
+# constitution`) and by the CI protected-path check.
+#
+# One entry per line, relative to the root of the checkout, matched without
+# regard to case (macOS and Windows file systems ignore it):
+#   dir/        every path below dir
+#   **/name     every file called name, at any depth
+#   path        this exact path
+
+# Pillars, design, ADRs, budgets, templates
+docs/vision/
+docs/design/
+docs/adr/
+docs/perf/budgets.md
+docs/templates/
+
+# Lint config: the root manifest holds [workspace.lints] and the release
+# profile; .cargo/ can set rustflags that silence lints.
+Cargo.toml
+**/clippy.toml
+**/.clippy.toml
+**/rustfmt.toml
+**/.rustfmt.toml
+.cargo/
+
+# Dependency matrix, cargo-deny, toolchain
+xtask/src/verify/dependency_matrix/allowed.rs
+deny.toml
+rust-toolchain.toml
+
+# Hooks: the commit-time and Claude Code hook logic, setup, the installed
+# launchers (.git/hooks/) and the Claude Code settings (.claude/). Not
+# covered: the main.rs dispatch and the shared cargo runner of verify. Only
+# review guards them; CI does not, because verify uses the same runner.
+xtask/src/hook.rs
+xtask/src/hook/
+xtask/src/setup.rs
+.git/
+
+# CI, instruction files, Claude Code settings, rules, checklists, this list
+.github/
+**/CLAUDE.md
+.claude/

@@ -108,6 +108,7 @@ fn relative(root: &Path, path: &Path) -> PathBuf {
 #[cfg(test)]
 pub(crate) mod test_repo {
     use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
     use std::sync::atomic::{AtomicU32, Ordering};
 
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -193,6 +194,40 @@ pub(crate) mod test_repo {
             std::fs::create_dir_all(to.parent().unwrap()).unwrap();
             std::fs::copy(from, to).unwrap();
         }
+    }
+
+    /// Isolates a command from the user's git config, which may set
+    /// `core.hooksPath` or signing, and from the git variables of a calling hook.
+    pub fn isolate_git(command: &mut Command) -> &mut Command {
+        command
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "xtask test")
+            .env("GIT_AUTHOR_EMAIL", "xtask@test.invalid")
+            .env("GIT_COMMITTER_NAME", "xtask test")
+            .env("GIT_COMMITTER_EMAIL", "xtask@test.invalid")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_WORK_TREE")
+    }
+
+    /// Runs git in `repo`, isolated.
+    pub fn git(repo: &TestRepo, args: &[&str]) -> Output {
+        isolate_git(&mut Command::new("git"))
+            .args(args)
+            .current_dir(repo.root())
+            .output()
+            .unwrap()
+    }
+
+    /// Runs git in `repo` and fails the test if git fails.
+    pub fn git_ok(repo: &TestRepo, args: &[&str]) {
+        let output = git(repo, args);
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     impl Drop for TestRepo {
