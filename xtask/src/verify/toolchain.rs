@@ -1,6 +1,7 @@
 //! The `verify` steps that run the Rust toolchain: fmt, clippy, tests and
-//! cargo-deny. The lint guardrails live in the workspace manifests and the
-//! crate roots; the tests below prove that the clippy step enforces them.
+//! cargo-deny, plus the `cargo metadata` call shared by the manifest checks.
+//! The lint guardrails live in the workspace manifests and the crate roots;
+//! the tests below prove that the clippy step enforces them.
 
 use std::ffi::OsString;
 use std::io;
