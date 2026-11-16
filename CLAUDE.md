@@ -30,6 +30,11 @@ The full methodology and its rationale: `docs/plans/0000-methodology.md`.
   sections, catch-all file names), `dependency matrix`, `lint inheritance`,
   `fmt`, `clippy` (`-D warnings`), `test` (workspace), `cargo-deny`.
 - `cargo test -p xtask` — tests of the project commands.
+- `cargo xtask setup` — installs the `commit-msg` and `pre-commit` git hooks.
+  `pre-commit` runs `cargo xtask verify --fast` (fmt + clippy, touched crates).
+- Commit subject: capitalized, imperative, ≤ 72 characters, no trailing
+  period; a blank line before the body. Git's `Merge`, `Revert`, `fixup!` and
+  `squash!` messages pass.
 
 Every project command is an `xtask` subcommand, written in Rust. No shell scripts.
 
