@@ -384,7 +384,7 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   instantiates it (Cargo book, "Overrides and generics"). Proposal: set
   `overflow-checks = true` for the whole release profile, or accept the gap in
   the guardrail table.
-- 2026-11-16, proposed (found in T2): a crate without `[lints] workspace = true`
+- 2026-11-16, accepted, resolved in T2: a crate without `[lints] workspace = true`
   escapes every workspace lint. Cargo only warns (`missing_lints_inheritance`).
-  Proposal: `verify` refuses a workspace member that does not inherit
+  `verify` refuses a workspace member that does not inherit
   `[workspace.lints]`.
