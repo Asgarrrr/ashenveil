@@ -8,8 +8,9 @@
 
 use std::fmt;
 use std::path::Path;
+use std::process::Command;
 
-use crate::hook::constitution::LIST;
+use crate::hook::constitution::{LIST, protecting_entry};
 
 /// A changed file that an entry of the list protects.
 #[derive(Debug, PartialEq, Eq)]
@@ -32,15 +33,53 @@ pub enum Verdict {
     Fail(Vec<Touched>),
 }
 
-/// Judges the files changed between the merge base of `base` and `head`,
-/// and `head`. A rename counts as a deletion plus an addition.
+/// Judges the files that `head` changes since its merge base with `base`.
+/// A rename counts as a deletion plus an addition.
 pub fn check(root: &Path, base: &str, head: &str, approved: bool) -> Result<Verdict, String> {
-    let _ = (root, base, head);
-    Ok(if approved {
-        Verdict::Pass(Vec::new())
+    let list = git(root, &["show", &format!("{base}:{LIST}")])?;
+    let changed = git(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            "--no-renames",
+            "-z",
+            &format!("{base}...{head}"),
+            "--",
+        ],
+    )?;
+    let touched: Vec<Touched> = changed
+        .split('\0')
+        .filter(|path| !path.is_empty())
+        .filter_map(|path| {
+            protecting_entry(&list, path).map(|entry| Touched {
+                path: path.to_owned(),
+                entry: entry.to_owned(),
+            })
+        })
+        .collect();
+    Ok(if touched.is_empty() || approved {
+        Verdict::Pass(touched)
     } else {
-        Verdict::Fail(Vec::new())
+        Verdict::Fail(touched)
     })
+}
+
+/// Runs git in `root`; its stdout, or an error that names the command.
+fn git(root: &Path, args: &[&str]) -> Result<String, String> {
+    let command = format!("git {}", args.join(" "));
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("{command}: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "{command}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    String::from_utf8(output.stdout).map_err(|error| format!("{command}: {error}"))
 }
 
 #[cfg(test)]
@@ -121,7 +160,7 @@ mod tests {
         let repo = repository();
         repo.write("docs/adr/x.md", "decision\n");
         let base = commit(&repo);
-        git_ok(&repo, &["mv", "docs/adr/x.md", "notes/x.md"]);
+        git_ok(&repo, &["mv", "docs/adr/x.md", "x.md"]);
         let head = commit(&repo);
         assert_eq!(
             check(repo.root(), &base, &head, false).unwrap(),
