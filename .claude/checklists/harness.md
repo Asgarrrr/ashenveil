@@ -30,7 +30,9 @@ Known limits, by design:
 - One GitHub identity (plan 0000, T4 amendments): the `constitution-approved`
   label is visible, not a lock. An agent with the token can apply it, merge,
   or add a workflow with a job named `constitution`: a personal repository
-  cannot pin a required check to one workflow file.
+  cannot pin a required check to one workflow file. A free `xtask` module can
+  also shadow a std macro used by `main.rs` and disarm the check for the
+  next PR. All of these need deliberate intent, not drift.
 
 ## Manual check: constitution hook in a Claude Code session
 

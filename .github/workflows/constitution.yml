@@ -9,15 +9,10 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
   issues: write
   pull-requests: write
-
-# No cancellation: a later event must never cancel the run that drops a
-# stale approval.
-concurrency:
-  group: constitution-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
 
 jobs:
   constitution:
@@ -27,8 +22,8 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       HEAD: ${{ github.event.pull_request.head.sha }}
     steps:
-      # A new push voids the approval: it covered the earlier commits only.
-      # A failure here fails the check.
+      # Visibility only: the approval check below does not rely on this step,
+      # since GitHub may cancel a pending run.
       - name: Drop the approval on a new push
         if: github.event.action == 'synchronize'
         run: |
@@ -42,13 +37,22 @@ jobs:
           fetch-depth: 0
       - name: Fetch the PR head as data
         run: git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/head"
-      # Labels are read live, not from the event: the event snapshot can
-      # predate the removal above.
+      # The label approves the head only if it was applied after GitHub
+      # received that head: the first `pull_request` run of the head SHA marks
+      # its arrival. A missing timestamp means no approval.
       - name: Check protected paths
         run: |
+          labeled=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels \
+            --jq '.labels[].name' | grep -x constitution-approved || true)
+          approved_at=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/events" \
+            --jq '.[] | select(.event == "labeled" and .label.name == "constitution-approved") | .created_at' \
+            | tail -n 1)
+          pushed_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$HEAD&event=pull_request&per_page=100" \
+            --jq '[.workflow_runs[].created_at] | min // empty')
+          echo "label present: ${labeled:-no}; labeled at: ${approved_at:-never}; head received at: ${pushed_at:-unknown}"
           flag=""
-          if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' \
-              | grep -qx constitution-approved; then
+          if [ -n "$labeled" ] && [ -n "$approved_at" ] && [ -n "$pushed_at" ] \
+              && [[ "$approved_at" > "$pushed_at" ]]; then
             flag=--approved
           fi
           cargo xtask constitution --base "$GITHUB_SHA" --head "$HEAD" $flag

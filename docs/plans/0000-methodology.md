@@ -424,7 +424,9 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
 - 2026-11-16, accepted (T4 review): the protected-path check judges against
   the current tip of `main`, not the PR's recorded base, and the ruleset
   requires an up-to-date branch: a list entry added after the check ran
-  still applies. Approval is read from the live labels, and runs are never
-  cancelled, so no event can outrun the removal of a stale label. The
-  `xtask` dispatch, manifest and build script join the protected-path list:
-  otherwise one free PR could disarm the check for the next one.
+  still applies. The label approves the head only if it was applied after
+  GitHub received that head, timed by the first `pull_request` run of the
+  head SHA. Removing the label on a new push is not enough: GitHub may
+  cancel a pending run. The `xtask` dispatch, manifest and build script join
+  the protected-path list: otherwise one free PR could disarm the check for
+  the next one.
