@@ -68,7 +68,8 @@ Rules:
 3. **Progressive disclosure.** An agent's brief holds the spec, the slice id and
    the linked ADRs. Nothing else. Path-scoped rules load on their own.
 4. **Mechanical caps.** `xtask` checks line counts: root `CLAUDE.md` ≤ 150,
-   each `.claude/rules/` file ≤ 100, each crate `CLAUDE.md` ≤ 80. A fact "worth
+   each `.claude/rules/` file ≤ 100, every other `CLAUDE.md` or `CLAUDE.local.md`
+   ≤ 80 (amended 2026-11-16, approved by the human). A fact "worth
    not rediscovering" goes into module docs or a test, not an instruction file.
 
 ## 4. Enforced architecture
@@ -363,4 +364,12 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
 
 ## Proposed amendments
 
-(empty)
+- 2026-11-16, accepted: the 80-line cap applies to every `CLAUDE.md` and
+  `CLAUDE.local.md` other than the root `CLAUDE.md`, not only crate ones
+  (section 3, rule 4). Found by the T1 code review: `web/CLAUDE.md` or a
+  nested `src/<module>/CLAUDE.md` would otherwise grow unchecked.
+- 2026-11-16, accepted: mandatory sections. ADR: Status, Context, Decision,
+  Alternatives considered, Consequences. Spec: Status, Context, References,
+  Simplest alternative, Multiplayer impact, Slices, Proposed amendments.
+- 2026-11-16, accepted: `rust-toolchain.toml` (Rust 1.100.0) lands in T1
+  instead of T2, on the human's request.

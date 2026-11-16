@@ -91,5 +91,5 @@ constitution; two failed attempts; an unreachable perf budget. Report with
 ## Instruction file caps
 
 Checked by `cargo xtask verify`: this file ≤ 150 lines, each `.claude/rules/`
-file ≤ 100, each crate `CLAUDE.md` ≤ 80. A fact worth not rediscovering goes
-into module docs or a test, not an instruction file.
+file ≤ 100, every other `CLAUDE.md` or `CLAUDE.local.md` ≤ 80. A fact worth
+not rediscovering goes into module docs or a test, not an instruction file.

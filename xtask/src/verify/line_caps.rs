@@ -7,7 +7,11 @@ use super::{Violation, markdown_files, read_dir_or_empty, read_file, relative};
 
 const ROOT_CLAUDE_MD_CAP: usize = 150;
 const RULE_FILE_CAP: usize = 100;
-const CRATE_CLAUDE_MD_CAP: usize = 80;
+const OTHER_CLAUDE_MD_CAP: usize = 80;
+
+const INSTRUCTION_FILE_NAMES: &[&str] = &["CLAUDE.md", "CLAUDE.local.md"];
+/// Build output and installed dependencies, never written by us.
+const SKIPPED_DIRS: &[&str] = &[".git", "target", "node_modules"];
 
 pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = Vec::new();
@@ -26,8 +30,10 @@ pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
         check_file(root, &rule, RULE_FILE_CAP, &mut violations)?;
     }
 
-    for crate_claude_md in crate_claude_mds(&root.join("crates"))? {
-        check_file(root, &crate_claude_md, CRATE_CLAUDE_MD_CAP, &mut violations)?;
+    for other in instruction_files(root)? {
+        if other != root_claude_md {
+            check_file(root, &other, OTHER_CLAUDE_MD_CAP, &mut violations)?;
+        }
     }
 
     Ok(violations)
@@ -49,12 +55,26 @@ fn check_file(
     Ok(())
 }
 
-fn crate_claude_mds(crates: &Path) -> io::Result<Vec<PathBuf>> {
-    Ok(read_dir_or_empty(crates)?
-        .into_iter()
-        .map(|crate_dir| crate_dir.join("CLAUDE.md"))
-        .filter(|candidate| candidate.is_file())
-        .collect())
+/// Every `CLAUDE.md` / `CLAUDE.local.md` below `dir`, sorted. A subdirectory
+/// holding its own `.git` is another checkout (an agent worktree under
+/// `.claude/worktrees/`), with its own root `CLAUDE.md`: it is skipped.
+fn instruction_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for path in read_dir_or_empty(dir)? {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if path.is_dir() {
+            if !SKIPPED_DIRS.contains(&name) && !path.join(".git").exists() {
+                files.extend(instruction_files(&path)?);
+            }
+        } else if INSTRUCTION_FILE_NAMES.contains(&name) {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
 }
 
 #[cfg(test)]
@@ -93,6 +113,35 @@ mod tests {
                 "crates/ash-core/CLAUDE.md: 81 lines, cap is 80",
             ]
         );
+    }
+
+    #[test]
+    fn every_other_instruction_file_is_capped_at_80() {
+        let repo = TestRepo::new();
+        repo.write("CLAUDE.md", &lines(1));
+        repo.write("CLAUDE.local.md", &lines(81));
+        repo.write("web/CLAUDE.md", &lines(81));
+        repo.write("crates/ash-sim/src/world/CLAUDE.md", &lines(81));
+        repo.write("xtask/CLAUDE.md", &lines(80));
+        assert_eq!(
+            messages(&repo),
+            [
+                "CLAUDE.local.md: 81 lines, cap is 80",
+                "crates/ash-sim/src/world/CLAUDE.md: 81 lines, cap is 80",
+                "web/CLAUDE.md: 81 lines, cap is 80",
+            ]
+        );
+    }
+
+    #[test]
+    fn build_output_dependencies_and_nested_worktrees_are_skipped() {
+        let repo = TestRepo::new();
+        repo.write("CLAUDE.md", &lines(1));
+        repo.write("target/CLAUDE.md", &lines(81));
+        repo.write("web/node_modules/pkg/CLAUDE.md", &lines(81));
+        repo.write(".claude/worktrees/t2/.git", "gitdir: elsewhere\n");
+        repo.write(".claude/worktrees/t2/CLAUDE.md", &lines(140));
+        assert_eq!(messages(&repo), Vec::<String>::new());
     }
 
     #[test]
