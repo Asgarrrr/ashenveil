@@ -10,22 +10,50 @@ const HOOKS: &[&str] = &["commit-msg", "pre-commit"];
 
 /// Writes the launchers into the hooks directory of the checkout at `root`
 /// and returns their paths. Each run rewrites the same content, so setup
-/// can run again.
+/// can run again. A hook that is not the launcher is never replaced, and a
+/// hooks directory outside the repository is refused: a global
+/// `core.hooksPath` is shared by every repository of the user.
 pub fn install(root: &Path) -> io::Result<Vec<PathBuf>> {
     // Unlike `.git/hooks`, this also works from a worktree, where `.git` is a file.
     let output = Command::new("git")
-        .args(["rev-parse", "--git-path", "hooks"])
+        .args(["rev-parse", "--git-common-dir", "--git-path", "hooks"])
         .current_dir(root)
         .output()?;
     if !output.status.success() {
         return Err(io::Error::other(format!(
-            "git rev-parse --git-path hooks failed: {}",
+            "git rev-parse failed: {}",
             String::from_utf8_lossy(&output.stderr)
         )));
     }
     let printed = String::from_utf8(output.stdout).map_err(io::Error::other)?;
+    let mut lines = printed.lines();
+    let (Some(common_dir), Some(hooks_dir)) = (lines.next(), lines.next()) else {
+        return Err(io::Error::other("unexpected `git rev-parse` output"));
+    };
     // Relative to `root` in a main checkout, absolute in a worktree.
-    let dir = root.join(printed.trim_end());
+    let (common_dir, dir) = (root.join(common_dir), root.join(hooks_dir));
+    if !dir.starts_with(&common_dir) {
+        return Err(io::Error::other(format!(
+            "the hooks directory {} is outside the repository {}: core.hooksPath \
+             is set. Unset it, or call `cargo xtask hook <name>` from your own hooks.",
+            dir.display(),
+            common_dir.display()
+        )));
+    }
+    for hook in HOOKS {
+        let path = dir.join(hook);
+        match std::fs::read_to_string(&path) {
+            Ok(existing) if existing != launcher(hook) => {
+                return Err(io::Error::other(format!(
+                    "{} exists and is not the xtask launcher: move it away, then run \
+                     setup again.",
+                    path.display()
+                )));
+            }
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+    }
     std::fs::create_dir_all(&dir)?;
     HOOKS
         .iter()
@@ -98,6 +126,44 @@ mod tests {
         (output.status.success(), stderr)
     }
 
+    fn git_repo() -> TestRepo {
+        let repo = TestRepo::new();
+        git_ok(&repo, &["init", "--quiet"]);
+        repo
+    }
+
+    #[test]
+    fn a_hook_that_is_not_the_launcher_is_kept() {
+        let repo = git_repo();
+        let foreign = "#!/bin/sh\nmake lint\n";
+        repo.write(".git/hooks/pre-commit", foreign);
+        let error = install(repo.root()).unwrap_err();
+        assert!(error.to_string().contains("pre-commit"), "{error}");
+        let hooks = repo.root().join(".git/hooks");
+        assert_eq!(
+            std::fs::read_to_string(hooks.join("pre-commit")).unwrap(),
+            foreign
+        );
+        assert!(!hooks.join("commit-msg").exists());
+    }
+
+    #[test]
+    fn a_hooks_directory_outside_the_repository_is_refused() {
+        let repo = git_repo();
+        let elsewhere = TestRepo::new();
+        git_ok(
+            &repo,
+            &[
+                "config",
+                "core.hooksPath",
+                elsewhere.root().to_str().unwrap(),
+            ],
+        );
+        let error = install(repo.root()).unwrap_err();
+        assert!(error.to_string().contains("core.hooksPath"), "{error}");
+        assert_eq!(std::fs::read_dir(elsewhere.root()).unwrap().count(), 0);
+    }
+
     #[test]
     fn installed_hooks_refuse_bad_commits() {
         let repo = workspace_with_xtask();
@@ -121,6 +187,12 @@ mod tests {
         assert!(!accepted && stderr.contains("commit-msg"), "{stderr}");
         let (accepted, stderr) = commit(&repo, "Add notes");
         assert!(accepted, "{stderr}");
+
+        repo.append("crates/ash-core/src/lib.rs", "pub fn answer() -> u8 {42}\n");
+        git_ok(&repo, &["add", "crates/ash-core/src/lib.rs"]);
+        let (accepted, stderr) = commit(&repo, "Add the answer");
+        assert!(!accepted && stderr.contains("Diff in"), "{stderr}");
+        git_ok(&repo, &["reset", "--hard", "--quiet"]);
 
         repo.append(
             "crates/ash-core/src/lib.rs",

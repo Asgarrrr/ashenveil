@@ -19,6 +19,15 @@ Each "no" is a finding.
   Claude Code hook and the CI check both read that list.
 - Does `CLAUDE.md` still describe what `verify` runs?
 
+Known limits, by design:
+- `verify --fast` picks crates from the staged files but checks the working
+  tree, not the index.
+- The constitution hook fails open: when `xtask` does not compile, the edit
+  goes ahead with a non-blocking hook error. `onFailure` stays absent, so the
+  hook remains a reminder (plan section 8) and never blocks the fix.
+- Not protected by path: the `main.rs` dispatch and the shared cargo runner
+  of `verify`. CI and review guard them.
+
 ## Manual check: constitution hook in a Claude Code session
 
 Run it after any change to `.claude/settings.json` or to the
