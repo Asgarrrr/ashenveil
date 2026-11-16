@@ -10,35 +10,45 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
+# No cancellation: a later event must never cancel the run that drops a
+# stale approval.
 concurrency:
   group: constitution-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   constitution:
     runs-on: ubuntu-24.04
     env:
+      GH_TOKEN: ${{ github.token }}
       PR: ${{ github.event.pull_request.number }}
-      BASE: ${{ github.event.pull_request.base.sha }}
       HEAD: ${{ github.event.pull_request.head.sha }}
-      # A new push voids the approval: it covered the earlier commits only.
-      APPROVED: ${{ github.event.action != 'synchronize' && contains(github.event.pull_request.labels.*.name, 'constitution-approved') }}
     steps:
+      # A new push voids the approval: it covered the earlier commits only.
+      # A failure here fails the check.
       - name: Drop the approval on a new push
-        if: github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'constitution-approved')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label constitution-approved
+        if: github.event.action == 'synchronize'
+        run: |
+          if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' \
+              | grep -qx constitution-approved; then
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label constitution-approved
+          fi
+      # GITHUB_SHA is the current tip of main: its list and its xtask judge.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
       - name: Fetch the PR head as data
         run: git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/head"
+      # Labels are read live, not from the event: the event snapshot can
+      # predate the removal above.
       - name: Check protected paths
         run: |
           flag=""
-          if [ "$APPROVED" = true ]; then flag=--approved; fi
-          cargo xtask constitution --base "$BASE" --head "$HEAD" $flag
+          if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' \
+              | grep -qx constitution-approved; then
+            flag=--approved
+          fi
+          cargo xtask constitution --base "$GITHUB_SHA" --head "$HEAD" $flag
