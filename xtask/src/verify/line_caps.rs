@@ -1,17 +1,15 @@
 //! Instruction files are loaded into every agent context, so their size is capped.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::{Violation, markdown_files, read_dir_or_empty, read_file, relative};
+use super::{Violation, markdown_files, read_file, relative, repository_files};
 
 const ROOT_CLAUDE_MD_CAP: usize = 150;
 const RULE_FILE_CAP: usize = 100;
 const OTHER_CLAUDE_MD_CAP: usize = 80;
 
 const INSTRUCTION_FILE_NAMES: &[&str] = &["CLAUDE.md", "CLAUDE.local.md"];
-/// Build output and installed dependencies, never written by us.
-const SKIPPED_DIRS: &[&str] = &[".git", "target", "node_modules"];
 
 pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = Vec::new();
@@ -30,7 +28,7 @@ pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
         check_file(root, &rule, RULE_FILE_CAP, &mut violations)?;
     }
 
-    for other in instruction_files(root)? {
+    for other in repository_files(root, &|name| INSTRUCTION_FILE_NAMES.contains(&name))? {
         if other != root_claude_md {
             check_file(root, &other, OTHER_CLAUDE_MD_CAP, &mut violations)?;
         }
@@ -53,28 +51,6 @@ fn check_file(
         });
     }
     Ok(())
-}
-
-/// Every `CLAUDE.md` / `CLAUDE.local.md` below `dir`, sorted. A subdirectory
-/// holding its own `.git` is another checkout (an agent worktree under
-/// `.claude/worktrees/`), with its own root `CLAUDE.md`: it is skipped.
-fn instruction_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    for path in read_dir_or_empty(dir)? {
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("");
-        if path.is_dir() {
-            if !SKIPPED_DIRS.contains(&name) && !path.join(".git").exists() {
-                files.extend(instruction_files(&path)?);
-            }
-        } else if INSTRUCTION_FILE_NAMES.contains(&name) {
-            files.push(path);
-        }
-    }
-    files.sort();
-    Ok(files)
 }
 
 #[cfg(test)]

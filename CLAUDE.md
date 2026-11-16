@@ -25,8 +25,10 @@ The full methodology and its rationale: `docs/plans/0000-methodology.md`.
 
 ## Commands
 
-- `cargo xtask verify` — the definition of done. Today it checks instruction-file
-  line caps and the mandatory sections of every spec and ADR.
+- `cargo xtask verify` — the definition of done. It runs every step, then lists
+  the failed ones by label: `files` (instruction-file line caps, spec and ADR
+  sections, catch-all file names), `dependency matrix`, `lint inheritance`,
+  `fmt`, `clippy` (`-D warnings`), `test` (workspace), `cargo-deny`.
 - `cargo test -p xtask` — tests of the project commands.
 
 Every project command is an `xtask` subcommand, written in Rust. No shell scripts.

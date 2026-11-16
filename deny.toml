@@ -1,0 +1,22 @@
+# cargo-deny 0.20 configuration, run by `cargo xtask verify`.
+# Which crate may depend on which is the dependency matrix's job
+# (xtask/src/verify/dependency_matrix/allowed.rs), not this file's.
+
+[advisories]
+# Vulnerability and unsound advisories always fail; yanked versions too.
+yanked = "deny"
+
+[licenses]
+allow = ["Apache-2.0", "MIT"]
+# Our own crates are not published, so they carry no license.
+private = { ignore = true }
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+# Path dependencies between our own crates have no version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

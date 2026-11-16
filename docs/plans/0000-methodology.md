@@ -373,3 +373,18 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   Simplest alternative, Multiplayer impact, Slices, Proposed amendments.
 - 2026-11-16, accepted: `rust-toolchain.toml` (Rust 1.100.0) lands in T1
   instead of T2, on the human's request.
+- 2026-11-16, proposed (found in T2): `#![no_std]` does not stop
+  `extern crate std;`. With it, `ash-sim` reads the clock and clippy stays
+  green. Proposal: an `xtask` source check that refuses `extern crate std` in
+  `ash-core` and `ash-sim`. Tests do not need it: the crates are `no_std` only
+  outside `cfg(test)`.
+- 2026-11-16, proposed (found in T2): `[profile.release.package.<crate>]`
+  `overflow-checks` does not cover generic code of `ash-core` or `ash-sim`
+  instantiated in another crate. That code takes the settings of the crate that
+  instantiates it (Cargo book, "Overrides and generics"). Proposal: set
+  `overflow-checks = true` for the whole release profile, or accept the gap in
+  the guardrail table.
+- 2026-11-16, accepted, resolved in T2: a crate without `[lints] workspace = true`
+  escapes every workspace lint. Cargo only warns (`missing_lints_inheritance`).
+  `verify` refuses a workspace member that does not inherit
+  `[workspace.lints]`.

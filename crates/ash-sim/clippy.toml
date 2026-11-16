@@ -1,0 +1,4 @@
+# Newtypes with declared overflow semantics, exempt from
+# `clippy::arithmetic_side_effects`. Each entry names its overflow behavior in
+# its own docs.
+arithmetic-side-effects-allowed = []
