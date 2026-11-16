@@ -4,3 +4,5 @@
 #![cfg_attr(not(test), no_std)]
 // Simulation-only bans, here because `[workspace.lints]` cannot be extended.
 #![deny(clippy::float_arithmetic, clippy::arithmetic_side_effects)]
+
+fn  acceptance_red ( ) {}
