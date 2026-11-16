@@ -51,26 +51,33 @@ impl Step {
     /// Runs the step in `root`, output streamed. A missing plugin fails the
     /// step: skipping it would silently drop a guardrail.
     pub fn run(&self, root: &Path) -> bool {
-        println!("verify: cargo {}", self.args.join(" "));
         if let Some(install) = self.install
             && let Err(message) = require_subcommand(self.args[0], install)
         {
+            println!("verify: cargo {}", self.args.join(" "));
             eprintln!("verify: {message}");
             return false;
         }
-        match self.command(root).status() {
-            Ok(status) => status.success(),
-            Err(error) => {
-                eprintln!("verify: cannot run cargo: {error}");
-                false
-            }
-        }
+        run_cargo(root, self.args)
     }
 
+    #[cfg(test)]
     fn command(&self, root: &Path) -> Command {
         let mut command = Command::new(cargo());
         command.args(self.args).current_dir(root);
         command
+    }
+}
+
+/// Runs cargo with `args` in `root`, output streamed; true on success.
+pub fn run_cargo(root: &Path, args: &[&str]) -> bool {
+    println!("verify: cargo {}", args.join(" "));
+    match Command::new(cargo()).args(args).current_dir(root).status() {
+        Ok(status) => status.success(),
+        Err(error) => {
+            eprintln!("verify: cannot run cargo: {error}");
+            false
+        }
     }
 }
 
