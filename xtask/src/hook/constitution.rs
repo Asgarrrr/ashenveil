@@ -85,7 +85,7 @@ fn slash_separated(path: &Path) -> String {
         .join("/")
 }
 
-fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
+pub(crate) fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
     list.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
