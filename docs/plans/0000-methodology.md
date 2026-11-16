@@ -430,3 +430,8 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   cancel a pending run. The `xtask` dispatch, manifest and build script join
   the protected-path list: otherwise one free PR could disarm the check for
   the next one.
+- 2026-11-16, accepted (human decision, T4): the repository is public, not
+  private with GitHub Pro (section 1, Hosting). Private Actions minutes were
+  blocked by billing; public repositories get standard and ARM runners and
+  rulesets at no cost. The constitution workflow stays safe for fork PRs: it
+  never executes the PR's code.
