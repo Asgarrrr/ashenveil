@@ -1,0 +1,44 @@
+name: constitution
+
+# pull_request_target runs this file and the xtask code of the base branch,
+# never the PR's: a PR cannot weaken the check that judges it (plan 0000, T4
+# amendments). Never check out or execute the PR head here: it is only diffed.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: constitution-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  constitution:
+    runs-on: ubuntu-24.04
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      # A new push voids the approval: it covered the earlier commits only.
+      APPROVED: ${{ github.event.action != 'synchronize' && contains(github.event.pull_request.labels.*.name, 'constitution-approved') }}
+    steps:
+      - name: Drop the approval on a new push
+        if: github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'constitution-approved')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label constitution-approved
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+      - name: Fetch the PR head as data
+        run: git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/head"
+      - name: Check protected paths
+        run: |
+          flag=""
+          if [ "$APPROVED" = true ]; then flag=--approved; fi
+          cargo xtask constitution --base "$BASE" --head "$HEAD" $flag

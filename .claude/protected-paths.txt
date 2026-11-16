@@ -39,6 +39,7 @@ xtask/src/setup.rs
 .git/
 
 # CI, instruction files, Claude Code settings, rules, checklists, this list
+xtask/src/protected_path_check.rs
 .github/
 **/CLAUDE.md
 .claude/
