@@ -31,8 +31,8 @@ rust-toolchain.toml
 
 # Hooks: the commit-time and Claude Code hook logic, setup, the installed
 # launchers (.git/hooks/) and the Claude Code settings (.claude/). Not
-# covered: the main.rs dispatch and the shared cargo runner of verify; CI
-# and review guard them.
+# covered: the main.rs dispatch and the shared cargo runner of verify. Only
+# review guards them; CI does not, because verify uses the same runner.
 xtask/src/hook.rs
 xtask/src/hook/
 xtask/src/setup.rs

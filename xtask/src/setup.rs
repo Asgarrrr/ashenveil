@@ -11,7 +11,7 @@ const HOOKS: &[&str] = &["commit-msg", "pre-commit"];
 /// Writes the launchers into the hooks directory of the checkout at `root`
 /// and returns their paths. Each run rewrites the same content, so setup
 /// can run again. A hook that is not the launcher is never replaced, and a
-/// hooks directory outside the repository is refused: a global
+/// hooks directory outside the git directory is refused: a global
 /// `core.hooksPath` is shared by every repository of the user.
 pub fn install(root: &Path) -> io::Result<Vec<PathBuf>> {
     // Unlike `.git/hooks`, this also works from a worktree, where `.git` is a file.
@@ -34,7 +34,7 @@ pub fn install(root: &Path) -> io::Result<Vec<PathBuf>> {
     let (common_dir, dir) = (root.join(common_dir), root.join(hooks_dir));
     if !dir.starts_with(&common_dir) {
         return Err(io::Error::other(format!(
-            "the hooks directory {} is outside the repository {}: core.hooksPath \
+            "the hooks directory {} is outside the git directory {}: core.hooksPath \
              is set. Unset it, or call `cargo xtask hook <name>` from your own hooks.",
             dir.display(),
             common_dir.display()
