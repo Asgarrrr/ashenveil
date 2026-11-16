@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub mod dependency_matrix;
 mod file_names;
 mod line_caps;
+pub mod lint_inheritance;
 mod sections;
 pub mod toolchain;
 
@@ -149,6 +150,14 @@ pub(crate) mod test_repo {
             std::fs::write(path, existing + content).unwrap();
         }
 
+        /// Replaces `from`, which must be present, in the file at `relative`.
+        pub fn replace(&self, relative: &str, from: &str, to: &str) {
+            let path = self.root.join(relative);
+            let existing = std::fs::read_to_string(&path).unwrap();
+            assert!(existing.contains(from), "{relative} lacks {from:?}");
+            std::fs::write(path, existing.replace(from, to)).unwrap();
+        }
+
         /// Copies `relative`, a file or a directory tree, from the real repository.
         pub fn copy_from_repository(&self, relative: &str) {
             copy_tree(&repository_root().join(relative), &self.root.join(relative));
@@ -157,6 +166,21 @@ pub(crate) mod test_repo {
 
     pub fn repository_root() -> &'static Path {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
+    }
+
+    const XTASK_STUB_MANIFEST: &str = "[package]\nname = \"xtask\"\nversion = \"0.0.0\"\n\
+        edition.workspace = true\npublish.workspace = true\n\n[lints]\nworkspace = true\n";
+
+    /// A copy of the real workspace manifest, toolchain file and crates, with
+    /// a dependency-free `xtask` stub so the copy builds offline.
+    pub fn scratch_workspace() -> TestRepo {
+        let repo = TestRepo::new();
+        for path in ["Cargo.toml", "rust-toolchain.toml", "crates"] {
+            repo.copy_from_repository(path);
+        }
+        repo.write("xtask/Cargo.toml", XTASK_STUB_MANIFEST);
+        repo.write("xtask/src/main.rs", "fn main() {}\n");
+        repo
     }
 
     fn copy_tree(from: &Path, to: &Path) {
@@ -184,7 +208,7 @@ pub(crate) mod test_repo {
 
 #[cfg(test)]
 mod tests {
-    use super::test_repo::{TestRepo, lines};
+    use super::test_repo::{TestRepo, lines, repository_root};
     use super::*;
 
     #[test]
@@ -198,8 +222,7 @@ mod tests {
 
     #[test]
     fn real_repository_passes() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        assert_eq!(verify(root).unwrap(), Vec::new());
+        assert_eq!(verify(repository_root()).unwrap(), Vec::new());
     }
 
     #[test]

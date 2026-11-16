@@ -28,6 +28,9 @@ fn run_verify() -> ExitCode {
     if !report(verify::dependency_matrix::check(root)) {
         failed.push("dependency matrix");
     }
+    if !report(verify::lint_inheritance::check(root)) {
+        failed.push("lint inheritance");
+    }
     for step in verify::toolchain::STEPS {
         if !step.run(root) {
             failed.push(step.name);

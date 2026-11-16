@@ -3,8 +3,11 @@
 //! crate roots; the tests below prove that the clippy step enforces them.
 
 use std::ffi::OsString;
+use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+use serde_json::Value;
 
 pub struct Step {
     pub name: &'static str,
@@ -75,6 +78,32 @@ pub fn cargo() -> OsString {
     std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())
 }
 
+/// Workspace members with their declared dependencies. `--no-deps` skips
+/// resolving the graph: no network, no lockfile change.
+pub fn workspace_metadata(root: &Path) -> io::Result<Value> {
+    let output = Command::new(cargo())
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--manifest-path",
+        ])
+        .arg(root.join("Cargo.toml"))
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "cargo metadata failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+    serde_json::from_slice(&output.stdout).map_err(io::Error::other)
+}
+
+pub fn unexpected_metadata() -> io::Error {
+    io::Error::other("unexpected `cargo metadata` output")
+}
+
 fn require_subcommand(subcommand: &str, install: &str) -> Result<(), String> {
     let found = Command::new(cargo())
         .args([subcommand, "--version"])
@@ -93,23 +122,8 @@ fn require_subcommand(subcommand: &str, install: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_repo::TestRepo;
+    use super::super::test_repo::{TestRepo, scratch_workspace};
     use super::*;
-
-    const XTASK_STUB_MANIFEST: &str = "[package]\nname = \"xtask\"\nversion = \"0.0.0\"\n\
-        edition.workspace = true\npublish.workspace = true\n\n[lints]\nworkspace = true\n";
-
-    /// A copy of the real workspace manifest, toolchain file and crates, with
-    /// a dependency-free `xtask` stub so the copy builds offline.
-    fn scratch_workspace() -> TestRepo {
-        let repo = TestRepo::new();
-        for path in ["Cargo.toml", "rust-toolchain.toml", "crates"] {
-            repo.copy_from_repository(path);
-        }
-        repo.write("xtask/Cargo.toml", XTASK_STUB_MANIFEST);
-        repo.write("xtask/src/main.rs", "fn main() {}\n");
-        repo
-    }
 
     fn step(name: &str) -> &'static Step {
         STEPS.iter().find(|step| step.name == name).unwrap()

@@ -3,36 +3,14 @@
 
 use std::io;
 use std::path::Path;
-use std::process::Command;
 
-use serde_json::Value;
-
-use super::toolchain::cargo;
+use super::toolchain::{unexpected_metadata as unexpected, workspace_metadata};
 use super::{Violation, relative};
 
 mod allowed;
 
 pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
-    // `--no-deps` lists workspace members with their declared dependencies,
-    // without resolving the graph: no network, no lockfile change.
-    let output = Command::new(cargo())
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--manifest-path",
-        ])
-        .arg(root.join("Cargo.toml"))
-        .output()?;
-    if !output.status.success() {
-        return Err(io::Error::other(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-    let metadata: Value = serde_json::from_slice(&output.stdout).map_err(io::Error::other)?;
-    let unexpected = || io::Error::other("unexpected `cargo metadata` output");
+    let metadata = workspace_metadata(root)?;
     let mut violations = Vec::new();
     for package in metadata["packages"].as_array().ok_or_else(unexpected)? {
         let name = package["name"].as_str().ok_or_else(unexpected)?;
