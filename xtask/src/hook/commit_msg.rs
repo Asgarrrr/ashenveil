@@ -68,7 +68,8 @@ mod tests {
             "Add the agent harness\n\nThe body explains why.\nOn several lines.\n",
             subject_at_cap.as_str(),
             "\n\nAdd the agent harness\n# Please enter the commit message.\n",
-            "Add the agent harness\n\nBody\n# ------------------------ >8 ------------------------\n+diff line.\n",
+            // The diff below the scissors line would read as a body with no blank line.
+            "Add the agent harness\n# ------------------------ >8 ------------------------\ndiff --git a/x b/x\n",
             "Merge pull request #2 from Asgarrrr/t2-rust-guardrails",
             "Revert \"Add the agent harness\"\n\nThis reverts commit 7c5602d.",
             "fixup! add the agent harness.",
