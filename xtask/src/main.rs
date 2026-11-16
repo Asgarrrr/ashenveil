@@ -54,7 +54,7 @@ fn run_verify() -> ExitCode {
 }
 
 fn run_verify_fast() -> ExitCode {
-    if verify::fast::run(repo_root()) {
+    if hook::pre_commit::run(repo_root()) {
         println!("verify --fast: ok");
         ExitCode::SUCCESS
     } else {

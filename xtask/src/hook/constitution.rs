@@ -6,6 +6,10 @@
 //! against that checkout's list. Agents work in worktrees under
 //! `.claude/worktrees/`: judged from the main checkout, every file in a
 //! worktree would fall under `.claude/`.
+//!
+//! The hook fails open: when `xtask` does not compile, Claude Code reports a
+//! non-blocking hook error and the edit goes ahead. `onFailure: "block"` is
+//! left out on purpose, so that a broken `xtask` never blocks its own fix.
 
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -85,7 +89,7 @@ fn protecting_entry<'a>(list: &'a str, path: &str) -> Option<&'a str> {
     list.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .find(|entry| covers(entry, path))
+        .find(|entry| covers(&entry.to_lowercase(), &path.to_lowercase()))
 }
 
 /// Entry forms, as documented at the top of the list.
@@ -183,6 +187,11 @@ mod tests {
             "deny.toml",
             ".github/workflows/pr.yml",
             "xtask/src/hook/constitution.rs",
+            "xtask/src/hook/pre_commit.rs",
+            "xtask/src/setup.rs",
+            ".git/hooks/pre-commit",
+            "rustfmt.toml",
+            "crates/ash-sim/.rustfmt.toml",
             "CLAUDE.md",
             "crates/ash-sim/CLAUDE.md",
             ".claude/settings.json",
@@ -203,9 +212,19 @@ mod tests {
             "crates/ash-sim/src/world.rs",
             "crates/ash-sim/Cargo.toml",
             "docs/specs/0001-walking-skeleton.md",
-            "xtask/src/verify/fast.rs",
+            "xtask/src/verify/line_caps.rs",
         ] {
             assert_eq!(judge_write(&root, path), Verdict::Allow, "{path}");
+        }
+    }
+
+    /// macOS and Windows file systems ignore case: `claude.md` is `CLAUDE.md`.
+    #[test]
+    fn case_does_not_hide_a_protected_path() {
+        let repo = TestRepo::new();
+        let root = checkout(&repo, "main");
+        for path in ["claude.md", "docs/ADR/0001-data-model.md", "Deny.toml"] {
+            assert_blocked(&root, path);
         }
     }
 

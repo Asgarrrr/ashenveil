@@ -2,7 +2,8 @@
 # human edits them. Read by the Claude Code hook (`cargo xtask hook
 # constitution`) and by the CI protected-path check.
 #
-# One entry per line, relative to the root of the checkout:
+# One entry per line, relative to the root of the checkout, matched without
+# regard to case (macOS and Windows file systems ignore it):
 #   dir/        every path below dir
 #   **/name     every file called name, at any depth
 #   path        this exact path
@@ -19,6 +20,8 @@ docs/templates/
 Cargo.toml
 **/clippy.toml
 **/.clippy.toml
+**/rustfmt.toml
+**/.rustfmt.toml
 .cargo/
 
 # Dependency matrix, cargo-deny, toolchain
@@ -26,10 +29,14 @@ xtask/src/verify/dependency_matrix/allowed.rs
 deny.toml
 rust-toolchain.toml
 
-# Hooks: the git hooks run this code; the Claude Code hook lives in .claude/
+# Hooks: the commit-time and Claude Code hook logic, setup, the installed
+# launchers (.git/hooks/) and the Claude Code settings (.claude/). Not
+# covered: the main.rs dispatch and the shared cargo runner of verify; CI
+# and review guard them.
 xtask/src/hook.rs
 xtask/src/hook/
 xtask/src/setup.rs
+.git/
 
 # CI, instruction files, Claude Code settings, rules, checklists, this list
 .github/

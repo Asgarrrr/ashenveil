@@ -4,3 +4,4 @@
 
 pub mod commit_msg;
 pub mod constitution;
+pub mod pre_commit;

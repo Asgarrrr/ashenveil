@@ -1,13 +1,11 @@
 //! The checks behind `cargo xtask verify`. `verify` holds the file checks
-//! that need no compiler; `dependency_matrix` and `toolchain` call cargo;
-//! `fast` is the commit-time subset.
+//! that need no compiler; `dependency_matrix` and `toolchain` call cargo.
 
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
 pub mod dependency_matrix;
-pub mod fast;
 mod file_names;
 mod line_caps;
 pub mod lint_inheritance;
