@@ -3,7 +3,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{Violation, markdown_files, relative};
+use super::{Violation, markdown_files, read_dir_or_empty, read_file, relative};
 
 const ROOT_CLAUDE_MD_CAP: usize = 150;
 const RULE_FILE_CAP: usize = 100;
@@ -39,7 +39,7 @@ fn check_file(
     cap: usize,
     violations: &mut Vec<Violation>,
 ) -> io::Result<()> {
-    let count = std::fs::read_to_string(path)?.lines().count();
+    let count = read_file(root, path)?.lines().count();
     if count > cap {
         violations.push(Violation {
             path: relative(root, path),
@@ -50,20 +50,11 @@ fn check_file(
 }
 
 fn crate_claude_mds(crates: &Path) -> io::Result<Vec<PathBuf>> {
-    let entries = match std::fs::read_dir(crates) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
-    let mut files = Vec::new();
-    for entry in entries {
-        let candidate = entry?.path().join("CLAUDE.md");
-        if candidate.is_file() {
-            files.push(candidate);
-        }
-    }
-    files.sort();
-    Ok(files)
+    Ok(read_dir_or_empty(crates)?
+        .into_iter()
+        .map(|crate_dir| crate_dir.join("CLAUDE.md"))
+        .filter(|candidate| candidate.is_file())
+        .collect())
 }
 
 #[cfg(test)]
@@ -101,6 +92,31 @@ mod tests {
                 ".claude/rules/sim.md: 101 lines, cap is 100",
                 "crates/ash-core/CLAUDE.md: 81 lines, cap is 80",
             ]
+        );
+    }
+
+    #[test]
+    fn nested_rule_file_over_cap_fails() {
+        let repo = TestRepo::new();
+        repo.write("CLAUDE.md", &lines(1));
+        repo.write(".claude/rules/sim/scheduler.md", &lines(101));
+        assert_eq!(
+            messages(&repo),
+            [".claude/rules/sim/scheduler.md: 101 lines, cap is 100"]
+        );
+    }
+
+    #[test]
+    fn unreadable_file_error_names_the_file() {
+        let repo = TestRepo::new();
+        repo.write("CLAUDE.md", &lines(1));
+        let path = repo.root().join(".claude/rules/bad.md");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, [0xff, 0xfe]).unwrap();
+        let error = check(repo.root()).unwrap_err();
+        assert!(
+            error.to_string().contains(".claude/rules/bad.md"),
+            "{error}"
         );
     }
 

@@ -27,23 +27,45 @@ pub fn verify(root: &Path) -> io::Result<Vec<Violation>> {
     Ok(violations)
 }
 
-/// Markdown files directly inside `dir`, sorted for stable output.
-/// A missing directory yields no files: it is not created until needed.
+/// Markdown files anywhere below `dir`, sorted for stable output.
 fn markdown_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
     let mut files = Vec::new();
-    for entry in entries {
-        let path = entry?.path();
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "md") {
+    for path in read_dir_or_empty(dir)? {
+        if path.is_dir() {
+            files.extend(markdown_files(&path)?);
+        } else if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
             files.push(path);
         }
     }
     files.sort();
     Ok(files)
+}
+
+/// Entries of `dir`. A missing directory yields none: it is not created until needed.
+fn read_dir_or_empty(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut paths = entries
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<io::Result<Vec<_>>>()?;
+    paths.sort();
+    Ok(paths)
+}
+
+/// Reads a file; the error names it, since a bare I/O error does not.
+fn read_file(root: &Path, path: &Path) -> io::Result<String> {
+    std::fs::read_to_string(path).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!("{}: {error}", relative(root, path).display()),
+        )
+    })
 }
 
 fn relative(root: &Path, path: &Path) -> PathBuf {
@@ -55,6 +77,8 @@ pub(crate) mod test_repo {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
 
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+
     /// Throwaway repository tree, deleted on drop.
     pub struct TestRepo {
         root: PathBuf,
@@ -62,12 +86,17 @@ pub(crate) mod test_repo {
 
     impl TestRepo {
         pub fn new() -> Self {
-            static NEXT: AtomicU32 = AtomicU32::new(0);
-            let root = std::env::temp_dir().join(format!(
+            Self::at(std::env::temp_dir().join(format!(
                 "xtask-test-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+            )))
+        }
+
+        /// Clears `root` first: a killed run leaves its tree behind, and
+        /// process ids get reused.
+        pub fn at(root: PathBuf) -> Self {
+            let _ = std::fs::remove_dir_all(&root);
             std::fs::create_dir_all(&root).unwrap();
             Self { root }
         }
@@ -98,6 +127,15 @@ pub(crate) mod test_repo {
 mod tests {
     use super::test_repo::{TestRepo, lines};
     use super::*;
+
+    #[test]
+    fn test_repo_starts_empty_even_if_a_stale_directory_exists() {
+        let stale = std::env::temp_dir().join(format!("xtask-test-stale-{}", std::process::id()));
+        std::fs::create_dir_all(&stale).unwrap();
+        std::fs::write(stale.join("CLAUDE.md"), "stale").unwrap();
+        let repo = TestRepo::at(stale);
+        assert!(!repo.root().join("CLAUDE.md").exists());
+    }
 
     #[test]
     fn real_repository_passes() {
