@@ -373,14 +373,14 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   Simplest alternative, Multiplayer impact, Slices, Proposed amendments.
 - 2026-11-16, accepted: `rust-toolchain.toml` (Rust 1.100.0) lands in T1
   instead of T2, on the human's request.
-- 2026-11-17, accepted (found in T2): `#![no_std]` does not stop
+- 2026-11-16, accepted 2026-11-17 (found in T2): `#![no_std]` does not stop
   `extern crate std;`. With it, `ash-sim` reads the clock and clippy stays
   green. Proposal: an `xtask` source check that refuses `extern crate std` in
   `ash-core` and `ash-sim`. Tests do not need it: the crates are `no_std` only
   outside `cfg(test)`. Resolved by `verify::sim_purity`, in the `files`
   step. It refuses `extern crate std` in every module, tests included: tests
   get std without it.
-- 2026-11-17, accepted (found in T2): `[profile.release.package.<crate>]`
+- 2026-11-16, accepted 2026-11-17 (found in T2): `[profile.release.package.<crate>]`
   `overflow-checks` does not cover generic code of `ash-core` or `ash-sim`
   instantiated in another crate. That code takes the settings of the crate that
   instantiates it (Cargo book, "Overrides and generics"). Proposal: set
@@ -390,16 +390,17 @@ T1 is done directly. T2 to T4 go through the full flow (`implementer`,
   escapes every workspace lint. Cargo only warns (`missing_lints_inheritance`).
   `verify` refuses a workspace member that does not inherit
   `[workspace.lints]`.
-- 2026-11-17, accepted (found in T3): the plan does not define the commit
+- 2026-11-16, accepted 2026-11-17 (found in T3): the plan does not define the commit
   message format. T3 enforces: a subject that starts with a capital letter,
   at most 72 characters, no trailing period; a blank line before the body.
   Git's own `Merge ` and `Revert "` messages and `fixup!` / `squash!` commits
   pass. The imperative mood stays a review criterion: no mechanical check
   tells it apart reliably. The human asked that messages stay human: the
-  format is only a guardrail. The `reviewer` checks the tone: a natural
-  subject, a short body that explains the why in plain sentences, no
-  line-by-line narration of the diff, no stock phrases.
-- 2026-11-17, accepted (found in T3): the `ash-core` and `ash-sim` bans are
+  format is only a guardrail. The tone is a review criterion, like the
+  imperative mood: a natural subject, a short body that explains the why in
+  plain sentences, no line-by-line narration of the diff, no stock phrases.
+  No checklist holds it yet: the checklists are scoped by path.
+- 2026-11-16, accepted 2026-11-17 (found in T3): the `ash-core` and `ash-sim` bans are
   crate-level attributes in `lib.rs` (section 4). They are lint config, but
   `lib.rs` is not in the protected-path list: every new module edits it.
   Proposal: an `xtask` check that both crate roots keep their `no_std` and
