@@ -48,11 +48,7 @@ pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
 }
 
 fn crate_root_problems(source: &str) -> Vec<String> {
-    let attributes: Vec<String> = source
-        .lines()
-        .map(without_whitespace)
-        .filter(|line| line.starts_with("#!["))
-        .collect();
+    let attributes = inner_attributes(source);
     let mut problems = Vec::new();
     for required in REQUIRED_ATTRIBUTES {
         if !attributes.contains(&without_whitespace(required)) {
@@ -73,13 +69,38 @@ fn crate_root_problems(source: &str) -> Vec<String> {
     problems
 }
 
+/// Every `#![...]`, without whitespace, read up to its balancing bracket:
+/// rustfmt wraps a long `#![expect(..., reason = "...")]` over several lines.
+fn inner_attributes(source: &str) -> Vec<String> {
+    let code = without_whitespace(&without_line_comments(source));
+    let mut attributes = Vec::new();
+    let mut rest = code.as_str();
+    while let Some(start) = rest.find("#![") {
+        let attribute = &rest[start..];
+        let mut depth = 0_usize;
+        let mut end = attribute.len();
+        for (index, c) in attribute.char_indices().skip(2) {
+            match c {
+                '[' => depth = depth.saturating_add(1),
+                ']' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        end = index.saturating_add(1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        attributes.push(attribute[..end].to_string());
+        rest = &attribute[end..];
+    }
+    attributes
+}
+
 /// Textual: it catches the easy mistake, not a macro built to hide it.
 fn imports_std(source: &str) -> bool {
-    let code: String = source
-        .lines()
-        .map(|line| line.split("//").next().unwrap_or(""))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let code = without_line_comments(source);
     let tokens: Vec<&str> = code
         .split(|c: char| c.is_whitespace() || c == ';')
         .filter(|token| !token.is_empty())
@@ -87,6 +108,14 @@ fn imports_std(source: &str) -> bool {
     tokens
         .windows(3)
         .any(|window| window == ["extern", "crate", "std"])
+}
+
+fn without_line_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn without_whitespace(text: &str) -> String {
@@ -186,6 +215,18 @@ mod tests {
         );
         let messages = messages(&repo);
         assert_eq!(messages.len(), 1);
+        assert!(messages[0].1.ends_with("overrides a simulation ban"));
+    }
+
+    #[test]
+    fn wrapped_crate_level_expect_of_a_banned_lint_fails() {
+        let repo = sim_crates();
+        repo.append(
+            "crates/ash-sim/src/lib.rs",
+            "#![expect(\n    clippy::float_arithmetic,\n    reason = \"the renderer interpolates\"\n)]\n",
+        );
+        let messages = messages(&repo);
+        assert_eq!(messages.len(), 1, "{messages:?}");
         assert!(messages[0].1.ends_with("overrides a simulation ban"));
     }
 }
