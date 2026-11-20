@@ -47,10 +47,13 @@ fn play(root: &Path) -> Result<(), String> {
     let web = root.join("web");
     thread::spawn(move || files::serve(page, web));
     println!("play: open http://{PAGE_ADDRESS}/ (Ctrl-C stops)");
-    let status = server
-        .wait()
-        .map_err(|error| format!("lost the server: {error}"))?;
-    Err(format!("the server stopped: {status}"))
+    match server.wait() {
+        Ok(status) => Err(format!("the server stopped: {status}")),
+        Err(error) => {
+            let _ = server.kill();
+            Err(format!("lost the server: {error}"))
+        }
+    }
 }
 
 /// The directory cargo builds into, which `CARGO_TARGET_DIR` may move.

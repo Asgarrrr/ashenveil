@@ -26,13 +26,12 @@ pub fn build(root: &Path) -> Result<(), String> {
             .arg(web.join("pkg"))
             .arg(wasm),
     )?;
-    if !web.join("node_modules/typescript").is_dir() {
-        run_step(
-            Command::new("npm")
-                .args(["ci", "--no-audit", "--no-fund"])
-                .current_dir(&web),
-        )?;
-    }
+    // Every time: an installed TypeScript may be stale after a lock change.
+    run_step(
+        Command::new("npm")
+            .args(["ci", "--no-audit", "--no-fund"])
+            .current_dir(&web),
+    )?;
     run_step(
         Command::new("node")
             .arg(web.join("node_modules/typescript/bin/tsc"))
