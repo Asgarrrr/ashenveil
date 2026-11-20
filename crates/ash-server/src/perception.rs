@@ -3,9 +3,11 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    Action, AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot, Terrain,
+    AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot, Terrain,
 };
 use ash_sim::world::{Terrain as SimTerrain, World};
+
+use crate::action;
 
 /// R16: the whole map and every entity, stamped with the clock. Positions
 /// only: no speed, cost or next turn (R18).
@@ -44,7 +46,7 @@ pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
             .available_actions()
             .into_iter()
             .map(|offered| AvailableAction {
-                action: wire_action(offered.action),
+                action: action::to_wire(offered.action),
                 cost: offered.cost,
             })
             .collect(),
@@ -57,14 +59,7 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
         ServerMessage::Perceived(PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: wire_action(change.action),
+            action: action::to_wire(change.action),
         })
     })
-}
-
-fn wire_action(action: ash_sim::action::Action) -> Action {
-    match action {
-        ash_sim::action::Action::Move(direction) => Action::Move(direction),
-        ash_sim::action::Action::Wait => Action::Wait,
-    }
 }

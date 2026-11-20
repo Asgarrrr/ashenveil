@@ -7,8 +7,8 @@ use ash_protocol::message::{Action, ClientMessage, ServerMessage};
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
-use crate::perception;
 use crate::registry::{HostedWorld, Registry};
+use crate::{action, perception};
 
 type Socket = WebSocket<TcpStream>;
 
@@ -59,19 +59,12 @@ fn step(
         return vec![ServerMessage::Refused];
     }
     let seen = world.perceived_changes().len();
-    if world.submit(sim_action(action)).is_err() {
+    if world.submit(action::to_sim(action)).is_err() {
         return vec![ServerMessage::Refused];
     }
     let mut replies: Vec<_> = perception::changes_since(world, seen).collect();
     replies.extend(perception::awaited(world, character));
     replies
-}
-
-fn sim_action(action: Action) -> ash_sim::action::Action {
-    match action {
-        Action::Move(direction) => ash_sim::action::Action::Move(direction),
-        Action::Wait => ash_sim::action::Action::Wait,
-    }
 }
 
 /// A poisoned lock means the world panicked on a violated invariant: it is

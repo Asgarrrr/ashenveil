@@ -4,6 +4,7 @@
 //! Synchronous: one thread per connection, no async runtime. A world turns
 //! only when its controller sends a command.
 
+mod action;
 mod connection;
 mod perception;
 mod registry;
