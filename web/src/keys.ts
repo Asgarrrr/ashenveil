@@ -1,29 +1,38 @@
-// The keys of the nine commands: the eight moves and wait (R4). The numpad
-// and the vi keys lay them out as a compass around wait.
+// The keys of the nine commands: the eight moves and wait (R4). Keys are
+// matched by physical position (`KeyboardEvent.code`), so the letter block
+// keeps its compass shape on AZERTY as on QWERTY.
 
-import type { Action } from "./protocol.js";
+import type { Action, Direction } from "./protocol.js";
 
-/** Row by row from the north-west: numpad key, vi key, command. */
-const LAYOUT: [string, string, Action][] = [
-  ["7", "y", { kind: "move", direction: "northwest" }],
-  ["8", "k", { kind: "move", direction: "north" }],
-  ["9", "u", { kind: "move", direction: "northeast" }],
-  ["4", "h", { kind: "move", direction: "west" }],
-  ["5", ".", { kind: "wait" }],
-  ["6", "l", { kind: "move", direction: "east" }],
-  ["1", "b", { kind: "move", direction: "southwest" }],
-  ["2", "j", { kind: "move", direction: "south" }],
-  ["3", "n", { kind: "move", direction: "southeast" }],
+const move = (direction: Direction): Action => ({ kind: "move", direction });
+const wait: Action = { kind: "wait" };
+
+/** Row by row from the north-west: letter block, numpad, command. */
+const COMPASS: [string, string, Action][] = [
+  ["KeyQ", "Numpad7", move("northwest")],
+  ["KeyW", "Numpad8", move("north")],
+  ["KeyE", "Numpad9", move("northeast")],
+  ["KeyA", "Numpad4", move("west")],
+  ["KeyS", "Numpad5", wait],
+  ["KeyD", "Numpad6", move("east")],
+  ["KeyZ", "Numpad1", move("southwest")],
+  ["KeyX", "Numpad2", move("south")],
+  ["KeyC", "Numpad3", move("southeast")],
 ];
 
-const COMMANDS = new Map<string, Action>(
-  LAYOUT.flatMap(([numpad, vi, command]) => [
+const COMMANDS = new Map<string, Action>([
+  ...COMPASS.flatMap(([letter, numpad, command]): [string, Action][] => [
+    [letter, command],
     [numpad, command],
-    [vi, command],
   ]),
-);
+  ["ArrowUp", move("north")],
+  ["ArrowDown", move("south")],
+  ["ArrowLeft", move("west")],
+  ["ArrowRight", move("east")],
+  ["Space", wait],
+]);
 
-/** The command `key` (a `KeyboardEvent.key`) stands for, if any. */
-export function commandForKey(key: string): Action | undefined {
-  return COMMANDS.get(key);
+/** The command the key at `code` (a `KeyboardEvent.code`) stands for, if any. */
+export function commandForKey(code: string): Action | undefined {
+  return COMMANDS.get(code);
 }

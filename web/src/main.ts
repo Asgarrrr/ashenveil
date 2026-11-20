@@ -26,7 +26,7 @@ let socket: WebSocket | undefined;
 
 connect();
 document.addEventListener("keydown", (event) => {
-  const action = commandForKey(event.key);
+  const action = commandForKey(event.code);
   // R14: only an offered action is sent, so none is refused.
   if (action === undefined || world.controlled === undefined || world.costOf(action) === undefined) {
     return;
