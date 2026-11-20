@@ -199,4 +199,11 @@ mod tests {
         let repo = workspace(&[("alpha", &[("walk", PASS)]), ("beta", &[("walk", PASS)])]);
         assert!(accept(&repo, "walk").is_err());
     }
+
+    #[test]
+    fn binary_named_like_a_test_does_not_make_it_ambiguous() {
+        let repo = workspace(&[("alpha", &[("walk", PASS)]), ("beta", &[])]);
+        repo.write("beta/src/bin/walk.rs", "fn main() {}\n");
+        accept(&repo, "walk").unwrap();
+    }
 }
