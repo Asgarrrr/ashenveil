@@ -2,8 +2,7 @@
 
 ## Status
 
-Approved (2026-11-20) for S2 and S3. S1 and S4 to S7 wait for the
-constitution PR (S0); S5's takeover and S7 also wait for the design gaps.
+Approved (2026-11-20). S1 and S4 to S7 wait for the constitution PR (S0).
 S2 and S3 run before S1, so their acceptance runs through `cargo test`
 until `cargo xtask accept` exists.
 
@@ -31,8 +30,7 @@ perceived world apart from its drawing code.
 
 ## References
 
-- Design: `docs/design/action-and-time.md` (until the human moves it there:
-  `docs/plans/0002-action-and-time-design-draft.md`).
+- Design: `docs/design/action-and-time.md`.
 - Brainstorm record: `docs/plans/0002-action-and-time-brainstorm.md`.
 - ADRs: none. Phase 1 precedes ADRs 0001 to 0003 and feeds them.
 - Perf budget share: none: cold code. `docs/perf/budgets.md` does not exist yet.
@@ -85,7 +83,6 @@ Adopted as the basis of this spec, with these decisions per element:
 Batched into one human PR before S1 starts (call it S0). Each was found by
 the `researcher`, the `advisor` or the toolchain spike.
 
-- Move the design to `docs/design/action-and-time.md`.
 - Dependency matrix (`allowed.rs`): `ash-protocol` → `ash-core`;
   `ash-server` → `ash-core`, `ash-sim`, `ash-protocol`, `tungstenite`;
   `ash-wasm` → `ash-protocol`, `wasm-bindgen`.
@@ -111,7 +108,7 @@ the `researcher`, the `advisor` or the toolchain spike.
 ## Slices
 
 Sequential. Each slice ends in a behavior a test or a human can observe.
-The takeover part of S5, and S7, depend on the design gaps below.
+The design gaps found by the review are resolved in the design (R8, R20).
 
 ### - [ ] S1 — The acceptance command
 
@@ -190,13 +187,15 @@ The takeover part of S5, and S7, depend on the design gaps below.
 - Behavior: an invariant violation inside one world quarantines that world
   only; other worlds keep running. A quarantined world is never stepped
   again, and its command log is kept. Its client receives a defined message.
-  Takeover follows design gap 2.
+  A new connection for a character takes its controller, and the older
+  connection is closed (R20).
 - Invariants: the release profile keeps `panic = "unwind"`. No production
   command can trigger the test fault.
 - Perf budget: none.
 - Acceptance: `cargo xtask accept quarantine` — two clients, a fault injected
   into one world: that client gets the quarantine message, the other keeps
-  walking. A second connection with the first token behaves as gap 2 decides.
+  walking. A second connection with the first token takes the controller, and the
+  first connection is closed.
 
 ### - [ ] S6 — The character walks in the browser
 
@@ -226,7 +225,8 @@ The takeover part of S5, and S7, depend on the design gaps below.
   `crates/ash-server/tests/creature_over_websocket.rs`.
 - Behavior: a creature with speed 2 moves for 50 and waits for 25 (R6). It
   wanders with the deterministic RNG, choosing only among actions that will
-  not be refused (R14). The first turn order follows design gap 1. A move
+  not be refused (R14). At world creation, entities become due in creation order, the character
+  first (R8). A move
   into an occupied tile is a bump: the mover stays and pays the move, both
   entities perceive it, nothing else changes (R13). The browser shows the
   creature through the existing entity-generic model (R16).
@@ -242,15 +242,9 @@ The takeover part of S5, and S7, depend on the design gaps below.
 
 ## Design gaps
 
-Two behaviors the slices need have no design rule. A spec cannot invent
-them; the human decides, then the design gains a rule.
-
-1. **First turn order.** At world creation, several entities become due at
-   time 0. Recommendation: they become due in creation order, the character
-   first. Blocks S7.
-2. **Two connections, one character.** Recommendation: a character has one
-   controller at a time; the newest connection with the token takes it and
-   the older one is closed. Blocks the takeover part of S5.
+Both gaps found by the second-model review were decided by the human on
+2026-11-20 and are now design rules: creation order settles the first tie
+(R8), and the newest connection takes the controller (R20).
 
 ## Glossary proposals
 
