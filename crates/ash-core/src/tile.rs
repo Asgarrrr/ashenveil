@@ -13,8 +13,14 @@ impl TilePosition {
     /// The neighbor one step in `direction`, on the same level. Leaving the
     /// coordinate range crashes through `invariant!`.
     pub fn step(self, direction: Direction) -> Self {
-        let _ = direction;
-        self
+        let (east, south) = direction.offset();
+        match (
+            self.x.checked_add_signed(east),
+            self.y.checked_add_signed(south),
+        ) {
+            (Some(x), Some(y)) => Self { x, y, z: self.z },
+            _ => crate::invariant!("{self:?} has no neighbor to the {direction:?}"),
+        }
     }
 }
 
@@ -29,4 +35,31 @@ pub enum Direction {
     SouthWest,
     West,
     NorthWest,
+}
+
+impl Direction {
+    /// One step, as the change of x (east) and of y (south).
+    const fn offset(self) -> (i32, i32) {
+        match self {
+            Self::North => (0, -1),
+            Self::NorthEast => (1, -1),
+            Self::East => (1, 0),
+            Self::SouthEast => (1, 1),
+            Self::South => (0, 1),
+            Self::SouthWest => (-1, 1),
+            Self::West => (-1, 0),
+            Self::NorthWest => (-1, -1),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn stepping_out_of_the_coordinate_range_crashes() {
+        let _ = TilePosition { x: 0, y: 5, z: 0 }.step(Direction::West);
+    }
 }
