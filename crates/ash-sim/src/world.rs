@@ -256,3 +256,23 @@ impl World {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn an_entity_created_on_another_crashes() {
+        let mut world = World::new(0, Speed::new(1));
+        world.create_entity(Speed::new(2), CHARACTER_START, Controller::Wander);
+    }
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn an_entity_created_on_a_wall_crashes() {
+        let mut world = World::new(0, Speed::new(1));
+        let wall = TilePosition { x: 0, y: 0, z: 0 };
+        world.create_entity(Speed::new(2), wall, Controller::Wander);
+    }
+}
