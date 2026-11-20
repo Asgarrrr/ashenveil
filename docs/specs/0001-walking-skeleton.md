@@ -225,10 +225,10 @@ The design gaps found by the review are resolved in the design (R8, R20).
   `crates/ash-server/tests/creature_over_websocket.rs`.
 - Behavior: a creature with speed 2 moves for 50 and waits for 25 (R6). It
   wanders with the deterministic RNG, choosing only among actions that will
-  not be refused (R14). At world creation, entities become due in creation order, the character
-  first (R8). A move
-  into an occupied tile is a bump: the mover stays and pays the move, both
-  entities perceive it, nothing else changes (R13). The browser shows the
+  not be refused (R14). At world creation, entities become due in creation
+  order, the character first (R8). A move into an occupied tile is a bump:
+  the mover stays and pays the move, both entities perceive it, nothing
+  else changes (R13). The browser shows the
   creature through the existing entity-generic model (R16).
 - Invariants: the creature follows the same rules as the character (R3).
   No message field, in the snapshot or in a change, can carry another
