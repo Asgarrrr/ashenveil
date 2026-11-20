@@ -292,3 +292,19 @@ one world across connections).
   `crates/ash-server/src/main.rs` joins S6's files.
 - S6 (found in the S1 review): `accept` resolves Cargo integration targets
   only; S6 extends it to the Node `web_model` test. Added to S6's files.
+- S6 (found in S6): S6 also touches `crates/ash-protocol/src/message.rs`,
+  which re-exports `EntityId` and `Direction`: a command needs both, and the
+  matrix lets `ash-wasm` depend on `ash-protocol` only. Other files:
+  `web/package-lock.json`, `xtask/src/play/{client,files}.rs`, and
+  `web/tests/web_model.test.js` with `web/tests/fixtures/walk.json`, a
+  stream recorded from a real server. The test is plain JavaScript:
+  type-checking it would need `@types/node`. `accept` resolves a name to
+  `web/tests/<name>.test.js`, so `cargo test -p xtask` and `cargo xtask
+  verify` now need `node`. Decoded messages cross from WASM as JSON; times
+  stay exact up to 2^53 units. The page loads on `127.0.0.1:8000`, the
+  server listens on `127.0.0.1:8001`. No acceptance criterion changes.
+- S7 (found in S6): a perceived change carries no position, so the web
+  model steps the mover with its own copy of the direction offsets. A bump
+  (R13) is a perceived move where the mover stays, and the model cannot
+  tell it from a move. S7 must let the change say where the mover stands,
+  or say that it bumped, before the browser shows the creature.
