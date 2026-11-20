@@ -1,6 +1,7 @@
 # Action and time
 
-Status: approved by the human on 2026-11-20. First version: the rules of the
+Status: approved by the human on 2026-11-20; rule 8's creation order and
+rule 20 decided the same day. First version: the rules of the
 phase 1 walking skeleton. Later designs deepen this system; they do not
 replace it. The brainstorm record is `docs/plans/0002-action-and-time-brainstorm.md`.
 
@@ -51,6 +52,8 @@ Next time, the player waits 50 and lets it pass.
    then spend before it acts again.
 8. Entities act in order of the time they are due. When two are due at
    the same time, the one that became due first acts first.
+   At world creation, entities become due in the order they are created;
+   the character is created first.
 9. The player sees the cost their character pays for each action before
    choosing it.
 
@@ -85,6 +88,8 @@ Next time, the player waits 50 and lets it pass.
 19. When the player disconnects, their world keeps its state. Time stops
     while the character waits for its controller (rule 2). On return,
     everything is where it was.
+20. A character has one controller at a time. A new connection for the
+    same character takes it, and the older connection is closed.
 
 ## Interactions
 
@@ -119,5 +124,8 @@ hook with a placeholder rule; the named future design replaces it.
   design.
 - **Solvable chases.** Exact costs plus a 50-unit wait make chases
   solvable once a speed is inferred. Decide in the combat design.
+- **Rounding of costs.** R6 divides a base cost by a speed. No rule says
+  how to round when the division is not exact; phase 1 speeds divide
+  exactly. Decide in the first design that adds another speed.
 - **Diagonal cost.** Equal to a straight move for now. Decide in the
   terrain design.
