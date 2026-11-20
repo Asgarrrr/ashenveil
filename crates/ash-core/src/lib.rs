@@ -9,4 +9,5 @@
 pub mod entity;
 mod invariant;
 pub mod rng;
+pub mod tile;
 pub mod time;

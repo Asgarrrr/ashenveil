@@ -24,7 +24,7 @@ fn scripted_waits_give_the_expected_clock_and_perceived_changes() {
     assert_eq!(world.clock(), Time::new(0));
 
     for _ in 0..3 {
-        world.submit(Action::Wait);
+        world.submit(Action::Wait).expect("a wait is never refused");
     }
 
     // The cost is paid after the effect (R7): each wait is stamped with the
@@ -53,8 +53,8 @@ fn speed_divides_the_cost_the_awaited_character_sees() {
         }]
     );
 
-    world.submit(Action::Wait);
-    world.submit(Action::Wait);
+    world.submit(Action::Wait).expect("a wait is never refused");
+    world.submit(Action::Wait).expect("a wait is never refused");
 
     assert_eq!(world.clock(), Time::new(50));
     assert_eq!(
@@ -87,13 +87,15 @@ fn same_time_tie_resolves_in_due_order() {
 fn replaying_the_command_log_gives_the_same_stream_and_state() {
     let mut first = World::new(SEED, Speed::new(2));
     for _ in 0..4 {
-        first.submit(Action::Wait);
+        first.submit(Action::Wait).expect("a wait is never refused");
     }
     assert_eq!(first.command_log(), [Action::Wait; 4]);
 
     let mut replay = World::new(SEED, Speed::new(2));
     for &action in first.command_log() {
-        replay.submit(action);
+        replay
+            .submit(action)
+            .expect("a logged command is never refused");
     }
 
     assert_eq!(replay.perceived_changes(), first.perceived_changes());
