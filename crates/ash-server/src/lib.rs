@@ -7,6 +7,7 @@
 mod action;
 mod connection;
 mod perception;
+mod quarantine;
 mod registry;
 
 use std::net::TcpListener;
@@ -27,9 +28,13 @@ pub fn serve(listener: TcpListener) {
 
 /// `serve`, except that the world of `token` violates an invariant once it
 /// accepts its first command. Tests use it to prove the quarantine.
+///
+/// The fault cannot reach production. `serve` never sets it, and no message
+/// can. `#[cfg(test)]` would hide this function from the integration tests,
+/// and a Cargo feature would need `--features`, which neither
+/// `cargo xtask accept` nor `cargo xtask verify` passes.
 pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
-    let _ = token;
-    serve_registry(listener, Registry::default());
+    serve_registry(listener, Registry::with_fault(token));
 }
 
 fn serve_registry(listener: TcpListener, registry: Registry) {

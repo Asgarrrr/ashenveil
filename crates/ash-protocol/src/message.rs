@@ -303,6 +303,8 @@ impl Wire for ServerMessage {
             }),
             2 => PerceivedChange::read(input).map(Self::Perceived),
             3 => Ok(Self::Refused),
+            4 => Ok(Self::Quarantined),
+            5 => Ok(Self::ControllerTaken),
             _ => Err(DecodeError),
         }
     }
