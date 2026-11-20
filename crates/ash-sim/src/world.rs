@@ -86,6 +86,17 @@ impl World {
             .collect()
     }
 
+    /// The map the entities stand on.
+    pub fn map(&self) -> &Map {
+        &self.map
+    }
+
+    /// Every entity, in creation order. Under whole-map perception (R16),
+    /// every character perceives each of them.
+    pub fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.entities.iter().map(|entity| entity.id)
+    }
+
     /// Where `entity` stands. Under whole-map perception (R16), every
     /// character perceives it.
     pub fn position(&self, entity: EntityId) -> TilePosition {

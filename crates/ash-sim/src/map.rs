@@ -18,7 +18,7 @@ const SKELETON: [&[u8; WIDTH]; 6] = [
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Terrain {
+pub enum Terrain {
     Floor,
     Wall,
 }
@@ -46,6 +46,17 @@ impl Map {
             })
             .collect();
         Self { width, terrain }
+    }
+
+    /// The number of tiles in each row.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Every tile of level 0, row by row from the north, each row from the
+    /// west. Under whole-map perception (R16), every character perceives it.
+    pub fn tiles(&self) -> &[Terrain] {
+        &self.terrain
     }
 
     /// Whether the rules let an entity standing at `from` move in

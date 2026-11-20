@@ -13,6 +13,10 @@ impl Time {
         Self(units)
     }
 
+    pub const fn units(self) -> u64 {
+        self.0
+    }
+
     /// The time `cost` after `self`. An overflow crashes through `invariant!`.
     pub fn after(self, cost: ActionCost) -> Self {
         match self.0.checked_add(cost.0) {
@@ -29,6 +33,10 @@ pub struct ActionCost(u64);
 impl ActionCost {
     pub const fn new(units: u64) -> Self {
         Self(units)
+    }
+
+    pub const fn units(self) -> u64 {
+        self.0
     }
 
     /// R6: the cost of an action at `speed`, when `self` is its base cost.
