@@ -256,4 +256,21 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
         })
         .collect();
     assert_eq!(received_changes, replayed_changes);
+
+    // The stream goes on from the pending turn: no change is sent twice.
+    send(&mut socket, command(character, Action::Wait));
+    assert_eq!(
+        receive(&mut socket),
+        Some(ServerMessage::Perceived(PerceivedChange {
+            time: Time::new(250),
+            entity: character,
+            action: Action::Wait,
+        }))
+    );
+    match receive(&mut socket) {
+        Some(ServerMessage::Awaited { time, entity, .. }) => {
+            assert_eq!((time, entity), (Time::new(300), character));
+        }
+        other => panic!("expected the next turn, got {other:?}"),
+    }
 }
