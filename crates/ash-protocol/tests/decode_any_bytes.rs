@@ -166,3 +166,35 @@ fn mutated_messages_never_panic_the_decoders() {
         decode_both(&bytes);
     }
 }
+
+/// The bytes of a perceived change at time 100 by entity 2, its action
+/// already encoded in `action`, then `bumped`, the bytes of its option.
+fn perceived_bytes(action: &[u8], bumped: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![2];
+    bytes.extend(100_u64.to_le_bytes());
+    bytes.extend(2_u32.to_le_bytes());
+    bytes.extend(action);
+    bytes.extend(bumped);
+    bytes
+}
+
+#[test]
+fn a_change_the_simulation_cannot_make_is_refused() {
+    let wait = [0];
+    let move_south = [1, 4];
+    let some = |entity: u32| [vec![1], entity.to_le_bytes().to_vec()].concat();
+    // The control: a move bumping another entity decodes.
+    assert!(ServerMessage::decode(&perceived_bytes(&move_south, &some(1))).is_ok());
+
+    let refused = [
+        ("a wait that bumped", perceived_bytes(&wait, &some(1))),
+        (
+            "a move that bumped its mover",
+            perceived_bytes(&move_south, &some(2)),
+        ),
+        ("an option tag of 2", perceived_bytes(&move_south, &[2])),
+    ];
+    for (what, bytes) in refused {
+        assert!(ServerMessage::decode(&bytes).is_err(), "{what} decodes");
+    }
+}

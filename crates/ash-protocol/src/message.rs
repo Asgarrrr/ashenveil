@@ -212,12 +212,18 @@ impl Wire for PerceivedChange {
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        Ok(Self {
+        let change = Self {
             time: Time::read(input)?,
             entity: EntityId::read(input)?,
             action: Action::read(input)?,
             bumped: Option::read(input)?,
-        })
+        };
+        // Only a move bumps, and never into its own mover (R13).
+        match (change.action, change.bumped) {
+            (_, None) => Ok(change),
+            (Action::Move(_), Some(bumped)) if bumped != change.entity => Ok(change),
+            _ => Err(DecodeError),
+        }
     }
 }
 
