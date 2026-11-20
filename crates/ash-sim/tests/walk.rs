@@ -99,7 +99,12 @@ fn a_move_into_a_wall_is_refused() {
     assert_refused(&mut world, North);
     assert_refused(&mut world, NorthWest);
 
-    walk(&mut world, &[East, East, East, South]);
+    walk(&mut world, &[East, East, East]);
+    assert_eq!(world.position(world.awaited()), at(4, 1));
+    // (5, 2) is a wall, but (5, 1) and (4, 2) are floor: no corner is cut.
+    assert_refused(&mut world, SouthEast);
+
+    walk(&mut world, &[South]);
     assert_refused(&mut world, East);
 }
 
