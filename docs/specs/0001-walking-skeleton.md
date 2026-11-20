@@ -2,7 +2,10 @@
 
 ## Status
 
-Draft.
+Approved (2026-11-20) for S2 and S3. S1 and S4 to S7 wait for the
+constitution PR (S0); S5's takeover and S7 also wait for the design gaps.
+S2 and S3 run before S1, so their acceptance runs through `cargo test`
+until `cargo xtask accept` exists.
 
 ## Context
 
