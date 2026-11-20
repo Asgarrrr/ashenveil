@@ -171,7 +171,8 @@ The design gaps found by the review are resolved in the design (R8, R20).
   token finds the world unchanged (R19).
 - Invariants: `ash-protocol` depends on `ash-core` only; its messages name
   entities, never "the player". Decoding never panics on any input. The
-  server never steps a world while it holds the registry lock.
+  server never steps a world while it holds the registry lock. The costs of
+  the awaited entity go only to that entity's controller (R18).
 - Perf budget: none.
 - Acceptance: `cargo xtask accept walk_over_websocket` — a Rust WebSocket
   client walks, gets a refusal, disconnects while awaited, reconnects with
