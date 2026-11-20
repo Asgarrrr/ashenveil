@@ -5,9 +5,12 @@
 
 use alloc::vec::Vec;
 
-use ash_core::entity::EntityId;
-use ash_core::tile::{Direction, TilePosition};
+use ash_core::tile::TilePosition;
 use ash_core::time::{ActionCost, Time};
+
+// A client builds commands from these, and may depend on this crate alone.
+pub use ash_core::entity::EntityId;
+pub use ash_core::tile::Direction;
 
 use crate::wire::{self, Reader, Wire};
 
