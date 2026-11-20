@@ -7,7 +7,9 @@ use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ash_core::entity::{EntityId, Speed};
+use ash_core::tile::TilePosition;
 use ash_protocol::message::ResumeToken;
+use ash_sim::controller;
 use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
@@ -16,14 +18,26 @@ use crate::quarantine::{self, Quarantined};
 /// under its token, so it keeps the seed too: with the world's command log,
 /// it replays the world.
 pub fn world_seed(token: ResumeToken) -> u64 {
-    let _ = token;
-    0
+    let bytes = token.0.to_le_bytes();
+    let half = |start: usize| u64::from_le_bytes(std::array::from_fn(|byte| bytes[start + byte]));
+    half(0) ^ half(8)
 }
 
-/// The world a new resume token starts, from `seed`. A replay of a world's
-/// accepted commands starts from it too.
+/// Where the creature stands when a world begins: a floor tile of the fixed
+/// map, across the room from the character.
+const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+
+/// The world a new resume token starts, from `seed`: the character, then a
+/// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
+/// commands starts from it too.
 pub fn create_world(seed: u64) -> World {
-    World::new(seed, Speed::new(1))
+    let mut world = World::new(seed, Speed::new(1));
+    world.create_entity(
+        Speed::new(2),
+        CREATURE_START,
+        controller::Controller::Wander,
+    );
+    world
 }
 
 /// One player connection. The registry keeps a clone of its stream, so a

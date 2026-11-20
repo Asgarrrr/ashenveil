@@ -172,19 +172,26 @@ impl World {
     /// `entity` takes `action` under the rules every controller follows
     /// (R3), and becomes due once its cost is paid.
     fn act(&mut self, entity: EntityId, action: Action) -> Result<(), Refused> {
+        let mut bumped = None;
         if let Action::Move(direction) = action {
             let from = self.position(entity);
             if !self.map.allows_move(from, direction) {
                 return Err(Refused);
             }
-            self.entity_mut(entity).position = from.step(direction);
+            let to = from.step(direction);
+            // R13: a move into an occupied tile is a bump. The mover stays
+            // and pays the move; nothing else changes.
+            match self.occupant(to) {
+                Some(occupant) => bumped = Some(occupant),
+                None => self.entity_mut(entity).position = to,
+            }
         }
         // R7: the effect happens now; the cost delays the entity's next turn.
         self.perceived_changes.push(PerceivedChange {
             time: self.clock,
             entity,
             action,
-            bumped: None,
+            bumped,
         });
         let due = self.clock.after(action.cost(self.speed(entity)));
         self.scheduler.schedule(entity, due);

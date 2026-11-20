@@ -142,3 +142,24 @@ fn send(socket: &mut Socket, messages: Vec<ServerMessage>) -> Result<(), Gone> {
     }
     socket.flush().map_err(|_| Gone)
 }
+
+#[cfg(test)]
+mod tests {
+    use ash_protocol::message::ResumeToken;
+
+    use super::*;
+    use crate::perception::tests::world_awaiting_another_player;
+
+    #[test]
+    fn a_command_while_the_world_awaits_another_entity_is_refused() {
+        let (mut world, character, _) = world_awaiting_another_player();
+        let hosted = Registry::default().world(ResumeToken(1));
+        assert_eq!(hosted.character, character);
+        let before = world.clone();
+
+        let replies = step(&mut world, &hosted, character, Action::Wait);
+
+        assert_eq!(replies, [ServerMessage::Refused]);
+        assert_eq!(world, before);
+    }
+}
