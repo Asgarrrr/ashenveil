@@ -200,8 +200,9 @@ The design gaps found by the review are resolved in the design (R8, R20).
 
 ### - [ ] S6 — The character walks in the browser
 
-- Files: `crates/ash-wasm/` (new), `xtask/src/play.rs`, `xtask/src/main.rs`
-  (protected: label), `web/` (new: `index.html`, `src/*.ts`, `package.json`,
+- Files: `crates/ash-wasm/` (new), `xtask/src/play.rs`, `xtask/src/accept.rs`
+  (resolve `web_model` to the Node test), `xtask/src/main.rs` (protected:
+  label), `web/` (new: `index.html`, `src/*.ts`, `package.json`,
   `tsconfig.json`), `.gitignore`.
 - Behavior: `cargo xtask play` builds the WASM package and the TypeScript,
   serves `web/`, and starts the server. The page draws the map and every
@@ -257,4 +258,11 @@ one world across connections).
 
 ## Proposed amendments
 
-(empty)
+- S3 (found in the slice): the file list also needs `crates/ash-sim/src/world.rs`,
+  both `lib.rs` files, and `crates/ash-sim/tests/time_passes.rs` (its `submit`
+  calls now handle a `Result`). No acceptance criterion changes.
+- S4 (found in S3): `available_actions` offers only wait. S4 offers the moves
+  with their costs (R9) and updates the S2 assertion on the offered actions.
+  No acceptance criterion changes.
+- S6 (found in the S1 review): `accept` resolves Cargo integration targets
+  only; S6 extends it to the Node `web_model` test. Added to S6's files.
