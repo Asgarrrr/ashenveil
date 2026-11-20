@@ -54,7 +54,7 @@ impl Map {
     }
 
     /// Every tile of level 0, row by row from the north, each row from the
-    /// west. Under whole-map perception (R16), every character perceives it.
+    /// west.
     pub fn tiles(&self) -> &[Terrain] {
         &self.terrain
     }

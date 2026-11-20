@@ -8,7 +8,7 @@
 extern crate alloc;
 
 pub mod action;
-pub mod map;
+mod map;
 pub mod perception;
 pub mod scheduler;
 pub mod world;

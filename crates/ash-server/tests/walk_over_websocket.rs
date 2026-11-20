@@ -24,8 +24,7 @@ use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot, Terrain,
 };
-use ash_sim::map::Terrain as SimTerrain;
-use ash_sim::world::World;
+use ash_sim::world::{Terrain as SimTerrain, World};
 use tungstenite::{Message, WebSocket};
 
 use Direction::{East, North, South, SouthEast};
@@ -104,10 +103,9 @@ fn sim_action(action: Action) -> ash_sim::action::Action {
 fn expected_snapshot(world: &World) -> ServerMessage {
     ServerMessage::Snapshot(Snapshot {
         time: world.clock(),
-        width: world.map().width(),
+        width: world.terrain_width(),
         terrain: world
-            .map()
-            .tiles()
+            .terrain()
             .iter()
             .map(|tile| match tile {
                 SimTerrain::Floor => Terrain::Floor,

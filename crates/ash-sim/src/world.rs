@@ -9,6 +9,7 @@ use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction, Refused};
 use crate::map::Map;
+pub use crate::map::Terrain;
 use crate::perception::PerceivedChange;
 use crate::scheduler::Scheduler;
 
@@ -86,9 +87,15 @@ impl World {
             .collect()
     }
 
-    /// The map the entities stand on.
-    pub fn map(&self) -> &Map {
-        &self.map
+    /// The number of tiles in each row of the terrain.
+    pub fn terrain_width(&self) -> u32 {
+        self.map.width()
+    }
+
+    /// Every tile of level 0, row by row from the north, each row from the
+    /// west. Under whole-map perception (R16), every character perceives it.
+    pub fn terrain(&self) -> &[Terrain] {
+        self.map.tiles()
     }
 
     /// Every entity, in creation order. Under whole-map perception (R16),

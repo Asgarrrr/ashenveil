@@ -5,15 +5,13 @@ use ash_core::entity::EntityId;
 use ash_protocol::message::{
     Action, AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot, Terrain,
 };
-use ash_sim::map::Terrain as SimTerrain;
-use ash_sim::world::World;
+use ash_sim::world::{Terrain as SimTerrain, World};
 
 /// R16: the whole map and every entity, stamped with the clock. Positions
 /// only: no speed, cost or next turn (R18).
 pub fn snapshot(world: &World) -> ServerMessage {
     let terrain = world
-        .map()
-        .tiles()
+        .terrain()
         .iter()
         .map(|tile| match tile {
             SimTerrain::Floor => Terrain::Floor,
@@ -29,7 +27,7 @@ pub fn snapshot(world: &World) -> ServerMessage {
         .collect();
     ServerMessage::Snapshot(Snapshot {
         time: world.clock(),
-        width: world.map().width(),
+        width: world.terrain_width(),
         terrain,
         entities,
     })
