@@ -67,17 +67,21 @@ export function decodeServerMessage(bytes: Uint8Array): ServerMessage | undefine
   return json === undefined ? undefined : (JSON.parse(json) as ServerMessage);
 }
 
-export function encodeHello(token: bigint): Uint8Array {
-  return encode_hello(token);
+// The codec returns fresh copies of WASM memory, never shared memory, which
+// `WebSocket.send` requires.
+type Bytes = Uint8Array<ArrayBuffer>;
+
+export function encodeHello(token: bigint): Bytes {
+  return encode_hello(token) as Bytes;
 }
 
-export function encodeCommand(entity: number, action: Action): Uint8Array {
+export function encodeCommand(entity: number, action: Action): Bytes {
   if (action.kind === "wait") {
-    return encode_wait(entity);
+    return encode_wait(entity) as Bytes;
   }
   const bytes = encode_move(entity, action.direction);
   if (bytes === undefined) {
     throw new Error(`the codec knows no direction ${action.direction}`);
   }
-  return bytes;
+  return bytes as Bytes;
 }
