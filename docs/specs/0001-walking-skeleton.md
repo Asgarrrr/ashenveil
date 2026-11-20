@@ -337,3 +337,17 @@ one world across connections).
   target: `cargo xtask accept creature_over_websocket`. This changes the
   acceptance command of S7 from one command to two, so it is an acceptance
   change for the human to approve.
+- S4 (found in the cross-slice review): a reply the server wrote may never
+  be read, so a reconnecting client could miss committed changes (R17).
+  `Hello` now carries `received`, the number of perceived changes the client
+  holds. The greeting sends the changes after that count, then the snapshot
+  and the pending turn. Only the client knows what it received, so the
+  server keeps no count. A fresh page sends 0 and receives the whole
+  history; phase 1 worlds are small. The S7 branch also touches
+  `crates/ash-server/tests/quarantine.rs`, `crates/ash-wasm/src/lib.rs`
+  (`encode_hello(token, received)`) and `web/src/{protocol,main}.ts`. The
+  page also clears the offer once it sends a command, so a second key never
+  sends a command for the same turn. No acceptance criterion changes.
+- S5 (found in the cross-slice review): the server's per-connection type
+  was named `Controller`, the glossary term for what drives an entity. It
+  is now `PlayerConnection`.
