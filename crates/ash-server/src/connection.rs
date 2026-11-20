@@ -30,10 +30,12 @@ pub fn run(stream: TcpStream, registry: &Registry) {
         return;
     };
     if let Ok(mut socket) = tungstenite::accept(stream)
-        && let Some(ClientMessage::Hello { token, .. }) = receive(&mut socket)
+        && let Some(ClientMessage::Hello { token, received }) = receive(&mut socket)
     {
         let hosted = registry.world(token);
-        match control(&mut socket, &hosted, &controller) {
+        // A count past every change sends none.
+        let received = usize::try_from(received).unwrap_or(usize::MAX);
+        match control(&mut socket, &hosted, &controller, received) {
             End::Left => {}
             End::Quarantined => farewell(socket, ServerMessage::Quarantined),
             End::ControllerTaken => farewell(socket, ServerMessage::ControllerTaken),
@@ -44,11 +46,22 @@ pub fn run(stream: TcpStream, registry: &Registry) {
     controller.close();
 }
 
-fn control(socket: &mut Socket, hosted: &HostedWorld, controller: &Controller) -> End {
+/// Greets the client, then serves its commands. The greeting holds the
+/// changes after the first `received`, then the snapshot and the pending
+/// turn. Only the client knows what it received: a reply the server wrote
+/// may never have been read (R17).
+fn control(
+    socket: &mut Socket,
+    hosted: &HostedWorld,
+    controller: &Controller,
+    received: usize,
+) -> End {
     let greeting = hosted.run(|controlled| {
         controlled.take(controller);
-        let mut greeting = vec![perception::snapshot(&controlled.world)];
-        greeting.extend(perception::awaited(&controlled.world, hosted.character));
+        let world = &controlled.world;
+        let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
+        greeting.push(perception::snapshot(world));
+        greeting.extend(perception::awaited(world, hosted.character));
         greeting
     });
     let Ok(greeting) = greeting else {
