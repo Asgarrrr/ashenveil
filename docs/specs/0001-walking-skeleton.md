@@ -268,8 +268,9 @@ one world across connections).
 - S4 (found in the S3 review): the snapshot needs the terrain (R16), and
   `ash-sim` has no accessor for it. S4 may add one to `crates/ash-sim/src/`.
 - S4 (found in S4): S4 also touches `crates/ash-core/src/{entity,time}.rs`
-  (raw-value accessors for the codec) and `crates/ash-sim/src/{lib,map,world}.rs`
-  (terrain and entity accessors for the snapshot). The client chooses its
+  (raw-value accessors for the codec) and `crates/ash-sim/src/{map,world}.rs`
+  (`World::terrain`, `World::terrain_width`, `World::entities`; the map module
+  stays private). The client chooses its
   resume token (`u128`); tokens are not secrets in phase 1. `Awaited`
   carries the clock, so the client can show it. No acceptance criterion
   changes.
