@@ -26,7 +26,9 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
     ...world.log
       .slice(-20)
       .reverse()
-      .map(({ time, entity, action }) => item(`${time}  ${name(world, entity)} ${describe(action)}`)),
+      .map(({ time, entity, action, bumped }) =>
+        item(`${time}  ${name(world, entity)} ${describe(action)}${bumpedInto(world, bumped)}`),
+      ),
   );
 }
 
@@ -68,6 +70,10 @@ function status(world: PerceivedWorld, connected: boolean): string {
 
 function name(world: PerceivedWorld, entity: number): string {
   return entity === world.controlled ? "@" : `entity ${entity}`;
+}
+
+function bumpedInto(world: PerceivedWorld, bumped: number | null): string {
+  return bumped === null ? "" : `, bumps into ${name(world, bumped)}`;
 }
 
 function describe(action: Action): string {

@@ -48,7 +48,7 @@ export type ServerMessage =
       entities: PerceivedEntity[];
     }
   | { kind: "awaited"; time: number; entity: number; actions: AvailableAction[] }
-  | { kind: "perceived"; time: number; entity: number; action: Action }
+  | { kind: "perceived"; time: number; entity: number; action: Action; bumped: number | null }
   | { kind: "refused" }
   | { kind: "quarantined" }
   | { kind: "controller_taken" };
