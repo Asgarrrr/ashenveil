@@ -1,6 +1,7 @@
 //! Acceptance of spec 0001, slice S2: time passes; replay is green.
 
 use ash_core::entity::{EntityId, Speed};
+use ash_core::tile::Direction;
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, AvailableAction};
 use ash_sim::perception::PerceivedChange;
@@ -45,12 +46,19 @@ fn scripted_waits_give_the_expected_clock_and_perceived_changes() {
 fn speed_divides_the_cost_the_awaited_character_sees() {
     let mut world = World::new(SEED, Speed::new(2));
     let character = world.awaited();
+    let offer = |action, cost| AvailableAction {
+        action,
+        cost: ActionCost::new(cost),
+    };
+    // From the start of the fixed map, only these three moves are allowed.
     assert_eq!(
         world.available_actions(),
-        [AvailableAction {
-            action: Action::Wait,
-            cost: ActionCost::new(25),
-        }]
+        [
+            offer(Action::Wait, 25),
+            offer(Action::Move(Direction::East), 50),
+            offer(Action::Move(Direction::SouthEast), 50),
+            offer(Action::Move(Direction::South), 50),
+        ]
     );
 
     world.submit(Action::Wait).expect("a wait is never refused");

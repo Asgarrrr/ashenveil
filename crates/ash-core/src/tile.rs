@@ -38,6 +38,18 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// Every direction, clockwise from the north.
+    pub const ALL: [Self; 8] = [
+        Self::North,
+        Self::NorthEast,
+        Self::East,
+        Self::SouthEast,
+        Self::South,
+        Self::SouthWest,
+        Self::West,
+        Self::NorthWest,
+    ];
+
     /// One step, as the change of x (east) and of y (south).
     const fn offset(self) -> (i32, i32) {
         match self {

@@ -15,8 +15,8 @@
 
 use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
-use ash_core::time::Time;
-use ash_sim::action::{Action, Refused};
+use ash_core::time::{ActionCost, Time};
+use ash_sim::action::{Action, AvailableAction, Refused};
 use ash_sim::perception::PerceivedChange;
 use ash_sim::world::World;
 
@@ -44,9 +44,20 @@ fn walk(world: &mut World, directions: &[Direction]) {
     }
 }
 
+fn offers(world: &World, action: Action) -> bool {
+    world
+        .available_actions()
+        .iter()
+        .any(|offered| offered.action == action)
+}
+
 /// R10, R11: a refused move is not an action. The whole world, its RNG
-/// included, compares equal before and after.
+/// included, compares equal before and after. R14: it is never offered.
 fn assert_refused(world: &mut World, direction: Direction) {
+    assert!(
+        !offers(world, Action::Move(direction)),
+        "{direction:?} offered"
+    );
     let before = world.clone();
 
     assert_eq!(world.submit(Action::Move(direction)), Err(Refused));
@@ -75,6 +86,12 @@ fn a_scripted_walk_gives_the_expected_positions_and_clock() {
         (NorthWest, at(1, 1)),
     ];
     for (step, &(direction, expected)) in script.iter().enumerate() {
+        // R9: the move is offered with its cost before it is chosen.
+        let offer = AvailableAction {
+            action: Action::Move(direction),
+            cost: ActionCost::new(100),
+        };
+        assert!(world.available_actions().contains(&offer), "move {step}");
         assert_eq!(world.submit(Action::Move(direction)), Ok(()));
         assert_eq!(world.position(character), expected, "after move {step}");
     }

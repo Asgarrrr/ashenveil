@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use ash_core::entity::{EntityId, Speed};
 use ash_core::rng::Rng;
-use ash_core::tile::TilePosition;
+use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction, Refused};
@@ -69,10 +69,16 @@ impl World {
     }
 
     /// The actions the awaited character can take, with their costs (R9).
+    /// A move the rules would refuse is not offered (R14).
     pub fn available_actions(&self) -> Vec<AvailableAction> {
         let speed = self.speed(self.awaited);
-        [Action::Wait]
+        let from = self.position(self.awaited);
+        let moves = Direction::ALL
             .into_iter()
+            .filter(|&direction| self.map.allows_move(from, direction))
+            .map(Action::Move);
+        core::iter::once(Action::Wait)
+            .chain(moves)
             .map(|action| AvailableAction {
                 action,
                 cost: action.cost(speed),
