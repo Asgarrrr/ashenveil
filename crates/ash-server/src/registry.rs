@@ -32,17 +32,17 @@ impl Registry {
     /// The world `token` controls, created on first use. The registry lock
     /// is released on return, so no world is stepped while it is held.
     pub fn world(&self, token: ResumeToken) -> Arc<HostedWorld> {
+        // Built before the lock, so no simulation code runs while it is
+        // held; dropped unused when the token already has a world.
+        let world = create_world();
+        // R8: the character is created first, so it is the first awaited.
+        let candidate = HostedWorld {
+            character: world.awaited(),
+            world: Mutex::new(world),
+        };
         // Nothing panics between the reads and writes of the map, so a
         // poisoned lock still guards a consistent map.
         let mut worlds = self.worlds.lock().unwrap_or_else(PoisonError::into_inner);
-        let hosted = worlds.entry(token).or_insert_with(|| {
-            let world = create_world();
-            // R8: the character is created first, so it is the first awaited.
-            Arc::new(HostedWorld {
-                character: world.awaited(),
-                world: Mutex::new(world),
-            })
-        });
-        Arc::clone(hosted)
+        Arc::clone(worlds.entry(token).or_insert_with(|| Arc::new(candidate)))
     }
 }
