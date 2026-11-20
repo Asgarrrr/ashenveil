@@ -100,10 +100,10 @@ the `researcher`, the `advisor` or the toolchain spike.
 - `xtask/src/main.rs` is protected; S1 and S6 add subcommands to it. Their
   PRs need the `constitution-approved` label.
 - CI: a job that builds the web client and runs its tests (S6).
-  Multi-architecture replay
-  (section 10) needs no new job if the human agrees: the replay test runs on
-  x86 in `pr.yml` and on ARM in `nightly.yml`, both through `cargo xtask
-  verify`. A cross-architecture hash comparison would be a new job.
+  Multi-architecture replay (section 10) needs no new job if the human
+  agrees: the replay test runs on x86 in `pr.yml` and on ARM in
+  `nightly.yml`, both through `cargo xtask verify`. A cross-architecture
+  hash comparison would be a new job.
 
 ## Slices
 
