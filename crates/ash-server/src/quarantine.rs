@@ -4,6 +4,9 @@
 //! poisons it; a poisoned lock is the quarantine. The release profile keeps
 //! `panic = "unwind"`, so this holds in production too.
 
+#[cfg(not(panic = "unwind"))]
+compile_error!("quarantine needs panic = \"unwind\"");
+
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Mutex;
 

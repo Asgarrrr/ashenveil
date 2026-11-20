@@ -30,9 +30,10 @@ pub fn serve(listener: TcpListener) {
 /// accepts its first command. Tests use it to prove the quarantine.
 ///
 /// The fault cannot reach production. `serve` never sets it, and no message
-/// can. `#[cfg(test)]` would hide this function from the integration tests,
-/// and a Cargo feature would need `--features`, which neither
-/// `cargo xtask accept` nor `cargo xtask verify` passes.
+/// can. `#[cfg(test)]` would hide this function from the integration tests.
+/// A Cargo feature would need a self dev-dependency to reach them, and the
+/// dependency matrix, part of the constitution, allows no such edge.
+#[doc(hidden)]
 pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
     serve_registry(listener, Registry::with_fault(token));
 }

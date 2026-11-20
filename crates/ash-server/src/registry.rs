@@ -117,9 +117,37 @@ impl Registry {
 
 #[cfg(test)]
 mod tests {
+    use std::net::TcpListener;
+
     use ash_sim::action::Action;
 
     use super::*;
+
+    fn controller(listener: &TcpListener) -> Controller {
+        let address = listener.local_addr().expect("a bound address");
+        let stream = TcpStream::connect(address).expect("the listener accepts");
+        Controller::new(&stream).expect("a clone of the stream")
+    }
+
+    #[test]
+    fn only_the_newest_connection_controls_the_character() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
+        let (older, newer) = (controller(&listener), controller(&listener));
+        let mut controlled = Controlled {
+            world: create_world(),
+            controller: None,
+        };
+        controlled.take(&older);
+        controlled.take(&newer);
+        assert!(
+            !controlled.is_controlled_by(&older),
+            "the older still controls"
+        );
+        assert!(
+            controlled.is_controlled_by(&newer),
+            "the newer does not control"
+        );
+    }
 
     #[test]
     fn a_quarantined_world_stays_registered_with_its_command_log() {
