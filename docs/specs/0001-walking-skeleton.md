@@ -267,5 +267,13 @@ one world across connections).
   their costs (R9, and R14 for S7). No acceptance criterion changes.
 - S4 (found in the S3 review): the snapshot needs the terrain (R16), and
   `ash-sim` has no accessor for it. S4 may add one to `crates/ash-sim/src/`.
+- S4 (found in S4): S4 also touches `crates/ash-core/src/{entity,time}.rs`
+  (raw-value accessors for the codec) and `crates/ash-sim/src/{lib,map,world}.rs`
+  (terrain and entity accessors for the snapshot). The client chooses its
+  resume token (`u128`); tokens are not secrets in phase 1. `Awaited`
+  carries the clock, so the client can show it. No acceptance criterion
+  changes.
+- S6 (found in S4): `cargo xtask play` needs a server binary:
+  `crates/ash-server/src/main.rs` joins S6's files.
 - S6 (found in the S1 review): `accept` resolves Cargo integration targets
   only; S6 extends it to the Node `web_model` test. Added to S6's files.
