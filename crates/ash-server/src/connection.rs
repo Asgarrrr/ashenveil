@@ -8,7 +8,7 @@ use ash_sim::world::World;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
-use crate::registry::{Controller, HostedWorld, Registry};
+use crate::registry::{HostedWorld, PlayerConnection, Registry};
 use crate::{action, perception};
 
 type Socket = WebSocket<TcpStream>;
@@ -26,7 +26,7 @@ enum End {
 /// Serves one client until the connection ends. The world keeps its state
 /// (R19).
 pub fn run(stream: TcpStream, registry: &Registry) {
-    let Ok(controller) = Controller::new(&stream) else {
+    let Ok(controller) = PlayerConnection::new(&stream) else {
         return;
     };
     if let Ok(mut socket) = tungstenite::accept(stream)
@@ -53,7 +53,7 @@ pub fn run(stream: TcpStream, registry: &Registry) {
 fn control(
     socket: &mut Socket,
     hosted: &HostedWorld,
-    controller: &Controller,
+    controller: &PlayerConnection,
     received: usize,
 ) -> End {
     let greeting = hosted.run(|controlled| {

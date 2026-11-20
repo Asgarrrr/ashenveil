@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::TilePosition;
 use ash_protocol::message::ResumeToken;
-use ash_sim::controller;
+use ash_sim::controller::Controller;
 use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
@@ -32,20 +32,16 @@ const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
 /// commands starts from it too.
 pub fn create_world(seed: u64) -> World {
     let mut world = World::new(seed, Speed::new(1));
-    world.create_entity(
-        Speed::new(2),
-        CREATURE_START,
-        controller::Controller::Wander,
-    );
+    world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
     world
 }
 
 /// One player connection. The registry keeps a clone of its stream, so a
 /// newer connection can interrupt its blocking read (R20).
 #[derive(Clone)]
-pub struct Controller(Arc<TcpStream>);
+pub struct PlayerConnection(Arc<TcpStream>);
 
-impl Controller {
+impl PlayerConnection {
     pub fn new(stream: &TcpStream) -> io::Result<Self> {
         stream.try_clone().map(|clone| Self(Arc::new(clone)))
     }
@@ -60,19 +56,19 @@ impl Controller {
 /// A world and the connection that controls its character.
 pub struct Controlled {
     pub world: World,
-    controller: Option<Controller>,
+    controller: Option<PlayerConnection>,
 }
 
 impl Controlled {
     /// `controller` takes the controller of the character (R20). The read
     /// of the older connection ends; it can still write its farewell.
-    pub fn take(&mut self, controller: &Controller) {
+    pub fn take(&mut self, controller: &PlayerConnection) {
         if let Some(older) = self.controller.replace(controller.clone()) {
             let _ = older.0.shutdown(Shutdown::Read);
         }
     }
 
-    pub fn is_controlled_by(&self, controller: &Controller) -> bool {
+    pub fn is_controlled_by(&self, controller: &PlayerConnection) -> bool {
         self.controller
             .as_ref()
             .is_some_and(|current| Arc::ptr_eq(&current.0, &controller.0))
@@ -142,10 +138,10 @@ mod tests {
 
     use super::*;
 
-    fn controller(listener: &TcpListener) -> Controller {
+    fn controller(listener: &TcpListener) -> PlayerConnection {
         let address = listener.local_addr().expect("a bound address");
         let stream = TcpStream::connect(address).expect("the listener accepts");
-        Controller::new(&stream).expect("a clone of the stream")
+        PlayerConnection::new(&stream).expect("a clone of the stream")
     }
 
     #[test]
