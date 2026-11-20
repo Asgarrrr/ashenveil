@@ -14,8 +14,11 @@ impl Time {
     }
 
     /// The time `cost` after `self`. An overflow crashes through `invariant!`.
-    pub fn after(self, _cost: ActionCost) -> Self {
-        self
+    pub fn after(self, cost: ActionCost) -> Self {
+        match self.0.checked_add(cost.0) {
+            Some(units) => Self(units),
+            None => crate::invariant!("game time overflows: {self:?} after {cost:?}"),
+        }
     }
 }
 
@@ -29,8 +32,14 @@ impl ActionCost {
     }
 
     /// R6: the cost of an action at `speed`, when `self` is its base cost.
-    pub fn divided_by(self, _speed: Speed) -> Self {
-        self
+    /// The design does not say how to round, so an inexact division crashes
+    /// through `invariant!` instead of picking a rounding.
+    pub fn divided_by(self, speed: Speed) -> Self {
+        let divisor = speed.get();
+        match (self.0.checked_div(divisor), self.0.checked_rem(divisor)) {
+            (Some(units), Some(0)) => Self(units),
+            _ => crate::invariant!("{self:?} is not divisible by {speed:?}"),
+        }
     }
 }
 

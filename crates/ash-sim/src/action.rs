@@ -11,8 +11,11 @@ pub enum Action {
 
 impl Action {
     /// R6: the base cost (R5) divided by the entity's speed.
-    pub fn cost(self, _speed: Speed) -> ActionCost {
-        ActionCost::new(0)
+    pub fn cost(self, speed: Speed) -> ActionCost {
+        let base_cost = match self {
+            Self::Wait => ActionCost::new(50),
+        };
+        base_cost.divided_by(speed)
     }
 }
 

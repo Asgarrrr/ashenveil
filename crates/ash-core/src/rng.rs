@@ -13,7 +13,11 @@ impl Rng {
     }
 
     pub fn next_u64(&mut self) -> u64 {
-        self.state
+        self.state = self.state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = self.state;
+        z = (z ^ z.wrapping_shr(30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ z.wrapping_shr(27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ z.wrapping_shr(31)
     }
 }
 
