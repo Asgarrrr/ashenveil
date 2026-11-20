@@ -10,6 +10,9 @@ yanked = "deny"
 allow = ["Apache-2.0", "MIT"]
 # Our own crates are not published, so they carry no license.
 private = { ignore = true }
+# Every proc-macro pulls in unicode-ident through proc-macro2. Its Unicode
+# data tables carry Unicode-3.0; scoped to this one crate (spec 0001).
+exceptions = [{ crate = "unicode-ident", allow = ["Unicode-3.0"] }]
 
 [bans]
 multiple-versions = "deny"
