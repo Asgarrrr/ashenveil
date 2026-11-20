@@ -20,11 +20,12 @@ pub fn decode_server_message(bytes: &[u8]) -> Option<String> {
 }
 
 /// The first message of a connection: take the controller of the world
-/// `token` names.
+/// `token` names, having received `received` of its perceived changes.
 #[wasm_bindgen]
-pub fn encode_hello(token: u128) -> Vec<u8> {
+pub fn encode_hello(token: u128, received: u64) -> Vec<u8> {
     ClientMessage::Hello {
         token: ResumeToken(token),
+        received,
     }
     .encode()
 }
@@ -178,12 +179,13 @@ mod tests {
     }
 
     #[test]
-    fn hello_carries_the_whole_token() {
+    fn hello_carries_the_whole_token_and_count() {
         let token = u128::MAX - 1;
         assert_eq!(
-            ClientMessage::decode(&encode_hello(token)),
+            ClientMessage::decode(&encode_hello(token, u64::MAX - 2)),
             Ok(ClientMessage::Hello {
-                token: ResumeToken(token)
+                token: ResumeToken(token),
+                received: u64::MAX - 2,
             })
         );
     }

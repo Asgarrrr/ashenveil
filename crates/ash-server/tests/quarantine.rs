@@ -37,7 +37,8 @@ fn connect(address: SocketAddr, token: ResumeToken) -> Socket {
         .expect("a read timeout");
     let (mut socket, _) =
         tungstenite::client(format!("ws://{address}/"), stream).expect("a WebSocket handshake");
-    send(&mut socket, ClientMessage::Hello { token });
+    // Claims no change received: a known world sends its history first.
+    send(&mut socket, ClientMessage::Hello { token, received: 0 });
     socket
 }
 
@@ -81,10 +82,15 @@ fn at(x: u32, y: u32) -> TilePosition {
     TilePosition { x, y, z: 0 }
 }
 
-/// The snapshot and pending turn that greet a connection: where the
-/// character stands, and the time of its turn.
+/// The snapshot and pending turn that greet a connection, after the changes
+/// it had not received: where the character stands, and the time of its
+/// turn.
 fn greeting(socket: &mut Socket) -> (TilePosition, Time) {
-    let position = match receive(socket) {
+    let mut next = receive(socket);
+    while let Some(ServerMessage::Perceived(_)) = next {
+        next = receive(socket);
+    }
+    let position = match next {
         Some(ServerMessage::Snapshot(snapshot)) => snapshot.entities[0].position,
         other => panic!("expected a snapshot, got {other:?}"),
     };

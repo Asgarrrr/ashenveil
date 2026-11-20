@@ -71,8 +71,9 @@ export function decodeServerMessage(bytes: Uint8Array): ServerMessage | undefine
 // `WebSocket.send` requires.
 type Bytes = Uint8Array<ArrayBuffer>;
 
-export function encodeHello(token: bigint): Bytes {
-  return encode_hello(token) as Bytes;
+/** `received`: the perceived changes of the world the client already has. */
+export function encodeHello(token: bigint, received: number): Bytes {
+  return encode_hello(token, BigInt(received)) as Bytes;
 }
 
 export function encodeCommand(entity: number, action: Action): Bytes {

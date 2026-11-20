@@ -28,6 +28,7 @@ fn client_messages() -> Vec<ClientMessage> {
     vec![
         ClientMessage::Hello {
             token: ResumeToken(u128::MAX - 7),
+            received: u64::MAX - 3,
         },
         ClientMessage::Command {
             entity: EntityId::new(3),

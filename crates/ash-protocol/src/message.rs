@@ -73,8 +73,10 @@ pub struct Snapshot {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClientMessage {
     /// The first message of a connection: take the controller of the world
-    /// this token names.
-    Hello { token: ResumeToken },
+    /// this token names. `received` counts the perceived changes of that
+    /// world the client has received, so the server sends it the others
+    /// (R17).
+    Hello { token: ResumeToken, received: u64 },
     /// `entity` takes `action`.
     Command { entity: EntityId, action: Action },
 }
@@ -254,9 +256,10 @@ impl Wire for Snapshot {
 impl Wire for ClientMessage {
     fn write(&self, out: &mut Vec<u8>) {
         match self {
-            Self::Hello { token } => {
+            Self::Hello { token, received } => {
                 0_u8.write(out);
                 token.write(out);
+                received.write(out);
             }
             Self::Command { entity, action } => {
                 1_u8.write(out);
@@ -270,6 +273,7 @@ impl Wire for ClientMessage {
         match u8::read(input)? {
             0 => Ok(Self::Hello {
                 token: ResumeToken::read(input)?,
+                received: u64::read(input)?,
             }),
             1 => Ok(Self::Command {
                 entity: EntityId::read(input)?,

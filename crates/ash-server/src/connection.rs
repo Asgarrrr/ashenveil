@@ -30,7 +30,7 @@ pub fn run(stream: TcpStream, registry: &Registry) {
         return;
     };
     if let Ok(mut socket) = tungstenite::accept(stream)
-        && let Some(ClientMessage::Hello { token }) = receive(&mut socket)
+        && let Some(ClientMessage::Hello { token, .. }) = receive(&mut socket)
     {
         let hosted = registry.world(token);
         match control(&mut socket, &hosted, &controller) {

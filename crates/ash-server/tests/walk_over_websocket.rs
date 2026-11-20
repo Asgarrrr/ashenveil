@@ -40,7 +40,9 @@ fn start_server() -> SocketAddr {
     address
 }
 
-fn connect(address: SocketAddr, token: ResumeToken) -> Socket {
+/// Connects with `token`, having received `received` perceived changes of
+/// its world.
+fn connect(address: SocketAddr, token: ResumeToken, received: u64) -> Socket {
     let stream = TcpStream::connect(address).expect("the server accepts");
     // A missing reply fails the test instead of hanging it.
     stream
@@ -48,7 +50,7 @@ fn connect(address: SocketAddr, token: ResumeToken) -> Socket {
         .expect("a read timeout");
     let (mut socket, _) =
         tungstenite::client(format!("ws://{address}/"), stream).expect("a WebSocket handshake");
-    send(&mut socket, ClientMessage::Hello { token });
+    send(&mut socket, ClientMessage::Hello { token, received });
     socket
 }
 
@@ -109,6 +111,20 @@ fn sim_action(action: Action) -> ash_sim::action::Action {
         Action::Move(direction) => ash_sim::action::Action::Move(direction),
         Action::Wait => ash_sim::action::Action::Wait,
     }
+}
+
+/// Every perceived change of `world`, as the server sends it.
+fn wire_changes(world: &World) -> Vec<PerceivedChange> {
+    world
+        .perceived_changes()
+        .iter()
+        .map(|change| PerceivedChange {
+            time: change.time,
+            entity: change.entity,
+            action: wire_action(change.action),
+            bumped: change.bumped,
+        })
+        .collect()
 }
 
 /// What the server must send for `world`, built from the simulation alone.
@@ -172,7 +188,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let address = start_server();
     let start = ash_server::create_world(ash_server::world_seed(TOKEN));
     let character = start.awaited();
-    let mut socket = connect(address, TOKEN);
+    let mut socket = connect(address, TOKEN, 0);
 
     // R16: the snapshot holds the whole map and every entity, stamped at
     // time zero.
@@ -245,7 +261,8 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
 
     // R19: the controller leaves while its character is awaited.
     drop(socket);
-    let mut socket = connect(address, TOKEN);
+    let received = u64::try_from(received_changes.len()).expect("a small count");
+    let mut socket = connect(address, TOKEN, received);
 
     let snapshot = receive(&mut socket);
     assert_eq!(
@@ -268,17 +285,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     }
     assert_eq!(snapshot, Some(expected_snapshot(&replay)));
     assert_eq!(pending_turn, Some(expected_awaited(&replay)));
-    let replayed_changes: Vec<_> = replay
-        .perceived_changes()
-        .iter()
-        .map(|change| PerceivedChange {
-            time: change.time,
-            entity: change.entity,
-            action: wire_action(change.action),
-            bumped: change.bumped,
-        })
-        .collect();
-    assert_eq!(received_changes, replayed_changes);
+    assert_eq!(received_changes, wire_changes(&replay));
 
     // The stream goes on from the pending turn: no change is sent twice.
     send(&mut socket, command(character, Action::Wait));
@@ -298,4 +305,33 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
         }
         other => panic!("expected the next turn, got {other:?}"),
     }
+}
+
+#[test]
+fn a_turn_the_client_never_read_reaches_it_on_reconnect() {
+    const LOST: ResumeToken = ResumeToken(0x1057);
+    let address = start_server();
+    let mut replay = ash_server::create_world(ash_server::world_seed(LOST));
+    let character = replay.awaited();
+    let mut socket = connect(address, LOST, 0);
+    assert_eq!(receive(&mut socket), Some(expected_snapshot(&replay)));
+    assert_eq!(receive(&mut socket), Some(expected_awaited(&replay)));
+
+    send(&mut socket, command(character, Action::Move(East)));
+    // The server sent its reply, so the turn is committed; the client
+    // leaves without reading it.
+    socket
+        .get_ref()
+        .peek(&mut [0])
+        .expect("the reply reaches the client");
+    drop(socket);
+    assert_eq!(replay.submit(sim_action(Action::Move(East))), Ok(()));
+
+    // R17: a client that received no change gets every one, in order, then
+    // the present state and its turn.
+    let mut socket = connect(address, LOST, 0);
+    let (changes, snapshot) = receive_turn(&mut socket);
+    assert_eq!(changes, wire_changes(&replay));
+    assert_eq!(snapshot, Some(expected_snapshot(&replay)));
+    assert_eq!(receive(&mut socket), Some(expected_awaited(&replay)));
 }

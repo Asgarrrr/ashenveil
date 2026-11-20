@@ -39,7 +39,7 @@ fn connect(address: SocketAddr, token: ResumeToken) -> Socket {
         .expect("a read timeout");
     let (mut socket, _) =
         tungstenite::client(format!("ws://{address}/"), stream).expect("a WebSocket handshake");
-    send(&mut socket, ClientMessage::Hello { token });
+    send(&mut socket, ClientMessage::Hello { token, received: 0 });
     socket
 }
 
