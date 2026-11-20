@@ -279,6 +279,11 @@ one world across connections).
   silently, and sockets have no read timeout, so closing the older
   connection (R20) needs a way to interrupt its blocking read (for example
   a cloned `TcpStream` and `shutdown`).
+- S5 (found in S5): S5 also touches `crates/ash-server/src/{connection,lib}.rs`
+  and `crates/ash-protocol/` (messages `Quarantined` and `ControllerTaken`,
+  with their round-trip and decoder tests). The old connection receives
+  `ControllerTaken` before it closes, so a client knows not to reconnect.
+  No acceptance criterion changes.
 - S7 (found in the S4 review): the out-of-turn guard and the R18 guard of
   `ash-server` cannot be reached with one entity; S7 adds a negative test
   for each. Each world gets its own seed, kept in the registry, so worlds
