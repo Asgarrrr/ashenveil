@@ -42,43 +42,47 @@ Next time, the player waits 50 and lets it pass.
 
 4. The skeleton has two actions: move one tile in one of eight
    directions, and wait.
-5. Each action has an action cost: move 100, wait 50. A diagonal move
+5. Each action has a base cost: move 100, wait 50. A diagonal move
    costs the same as a straight one (provisional).
-6. An action takes effect at once. Its cost is the time the entity must
+6. Each entity has a speed. Its action cost is the base cost divided by
+   its speed. The player's character has speed 1. The skeleton creature
+   has speed 2: it moves for 50 and waits for 25.
+7. An action takes effect at once. Its cost is the time the entity must
    then spend before it acts again.
-7. Entities act in order of the time they are due. When two are due at
+8. Entities act in order of the time they are due. When two are due at
    the same time, the one that became due first acts first.
-8. The player sees the cost of each action before choosing it.
+9. The player sees the cost their character pays for each action before
+   choosing it.
 
 ### Moving
 
-9. A move into a tile the character perceives as impassable is refused.
-   A refused move is not an action: it costs nothing and the clock does
-   not advance.
-10. A diagonal move is refused when either orthogonal neighbor it passes
+10. A move into a tile the character perceives as impassable is refused.
+    A refused move is not an action: it costs nothing and the clock does
+    not advance.
+11. A diagonal move is refused when either orthogonal neighbor it passes
     between is a wall. Corners cannot be cut.
-11. A move into an obstacle the character does not perceive costs the
+12. A move into an obstacle the character does not perceive costs the
     move. The character stays in place and now perceives the obstacle.
-12. A move into a tile occupied by another entity is a bump. The mover
+13. A move into a tile occupied by another entity is a bump. The mover
     stays in place and pays the move. Both entities perceive the bump.
     A bump has no other effect.
-13. A controller chooses only among actions that will not be refused.
+14. A controller chooses only among actions that will not be refused.
     Waiting is always possible.
 
 ### Perception
 
-14. The player learns everything outside their character through what
+15. The player learns everything outside their character through what
     the character perceives.
-15. In the skeleton, the character perceives the whole map and every
+16. In the skeleton, the character perceives the whole map and every
     entity on it.
-16. The player sees each perceived change in the order it happened,
+17. The player sees each perceived change in the order it happened,
     stamped with its time.
-17. The character never perceives another entity's speed, cost, or next
+18. The character never perceives another entity's speed, cost, or next
     turn as a number. Only its actions are perceived.
 
 ### The world between sessions
 
-18. When the player disconnects, their world keeps its state. Time stops
+19. When the player disconnects, their world keeps its state. Time stops
     while the character waits for its controller (rule 2). On return,
     everything is where it was.
 
@@ -90,11 +94,11 @@ hook with a placeholder rule; the named future design replaces it.
 | Hook | Skeleton rule | Future design that replaces it |
 |---|---|---|
 | New actions | Move and wait only. | Every system that adds a verb (combat, work, magic, speech). Each new action declares its cost and when it takes effect. |
-| Action cost | Fixed per action. | Fatigue, encumbrance, skills, terrain. They change costs, never rule 7. |
+| Action cost | Base cost per action, divided by the entity's speed. | Fatigue, encumbrance, skills, terrain. They change costs, never rule 8. |
 | Bump | Fails, costs the move, perceived by both. | Combat and social designs decide which verb a bump resolves to, if any. |
-| Perception | Whole map, every entity (rule 15). | Perception design: sight, light, hearing, traces. Rules 9, 11, 14, 16 and 17 already hold under it. |
-| Controller | The player, or a random wander for the creature. | Creature behavior design. Rule 13 binds every controller. |
-| Map | One small fixed map with walls. | Terrain and world generation. Rule 10 binds every map. |
+| Perception | Whole map, every entity (rule 16). | Perception design: sight, light, hearing, traces. Rules 10, 12, 15, 17 and 18 already hold under it. |
+| Controller | The player, or a random wander for the creature. | Creature behavior design. Rule 14 binds every controller. |
+| Map | One small fixed map with walls. | Terrain and world generation. Rule 11 binds every map. |
 | Between sessions | State kept while the server runs. | Persistence and catch-up designs. |
 
 ## Out of scope
