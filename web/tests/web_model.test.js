@@ -72,6 +72,32 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.mayReconnect(), true);
 });
 
+test("a perceived move steps the mover toward its direction", () => {
+  // x grows to the east, y to the south.
+  const steps = {
+    north: [2, 1],
+    northeast: [3, 1],
+    east: [3, 2],
+    southeast: [3, 3],
+    south: [2, 3],
+    southwest: [1, 3],
+    west: [1, 2],
+    northwest: [1, 1],
+  };
+  for (const [direction, [x, y]] of Object.entries(steps)) {
+    const world = new PerceivedWorld();
+    world.apply({
+      kind: "snapshot",
+      time: 0,
+      width: 5,
+      terrain: Array(25).fill("floor"),
+      entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 } }],
+    });
+    world.apply({ kind: "perceived", time: 0, entity: 4, action: move(direction) });
+    assert.deepEqual(world.positions.get(4), { x, y, z: 0 }, direction);
+  }
+});
+
 test("a refused command advances nothing and keeps the offer", () => {
   const beforeRefusal = replay(walk.slice(0, 4));
   const refused = replay(walk.slice(0, 5));
