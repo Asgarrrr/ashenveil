@@ -273,6 +273,15 @@ one world across connections).
   resume token (`u128`); tokens are not secrets in phase 1. `Awaited`
   carries the clock, so the client can show it. No acceptance criterion
   changes.
+- S5 (found in the S4 review): today two connections with one token both
+  drive the world, a panic poisons the world lock and later `Hello`s close
+  silently, and sockets have no read timeout, so closing the older
+  connection (R20) needs a way to interrupt its blocking read (for example
+  a cloned `TcpStream` and `shutdown`).
+- S7 (found in the S4 review): the out-of-turn guard and the R18 guard of
+  `ash-server` cannot be reached with one entity; S7 adds a negative test
+  for each. Each world gets its own seed, kept in the registry, so worlds
+  differ and replays stay possible.
 - S6 (found in S4): `cargo xtask play` needs a server binary:
   `crates/ash-server/src/main.rs` joins S6's files.
 - S6 (found in the S1 review): `accept` resolves Cargo integration targets
