@@ -1,46 +1,92 @@
 //! `cargo xtask accept <test>`: runs one named acceptance test across the
 //! workspace (methodology, section 9: the proof of a slice).
+//!
+//! An acceptance test is an integration-test target, named after its file:
+//! `walk` is `crates/<crate>/tests/walk.rs`. The name must match exactly one
+//! such target in the workspace, and `cargo test` runs that target alone.
 
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
+use serde_json::Value;
+
+use crate::verify::toolchain::{cargo, unexpected_metadata, workspace_metadata};
+
 pub fn run(root: &Path, test: &str) -> ExitCode {
-    let mut command = match command(root, test) {
-        Ok(command) => command,
-        Err(message) => {
-            eprintln!("accept: {message}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let args: Vec<_> = command
-        .get_args()
-        .map(|arg| arg.to_string_lossy())
-        .collect();
-    println!("accept: cargo {}", args.join(" "));
-    match command.status() {
-        Ok(status) if status.success() => {
+    match command(root, test).and_then(|mut command| execute(&mut command)) {
+        Ok(()) => {
             println!("accept: ok");
             ExitCode::SUCCESS
         }
-        Ok(_) => {
-            eprintln!("accept: failed: {test}");
-            ExitCode::FAILURE
-        }
-        Err(error) => {
-            eprintln!("accept: cannot run cargo: {error}");
+        Err(message) => {
+            eprintln!("accept: {message}");
             ExitCode::FAILURE
         }
     }
 }
 
+/// Prints and runs `command`; an error unless it succeeds.
+fn execute(command: &mut Command) -> Result<(), String> {
+    let args: Vec<_> = command
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    let shown = format!("cargo {}", args.join(" "));
+    println!("accept: {shown}");
+    let status = command
+        .status()
+        .map_err(|error| format!("cannot run cargo: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("failed: {shown} ({status})"))
+    }
+}
+
 /// The `cargo test` call that runs `test` alone, or why there is none.
 fn command(root: &Path, test: &str) -> Result<Command, String> {
-    let _ = (root, test);
-    Err("spec 0001, slice S1".to_owned())
+    let metadata = workspace_metadata(root).map_err(|error| error.to_string())?;
+    let packages = metadata["packages"]
+        .as_array()
+        .ok_or_else(|| unexpected_metadata().to_string())?;
+    let owners: Vec<&str> = packages
+        .iter()
+        .filter(|package| has_test_target(package, test))
+        .filter_map(|package| package["name"].as_str())
+        .collect();
+    match owners.as_slice() {
+        [] => Err(format!(
+            "no integration test named `{test}`: expected `crates/<crate>/tests/{test}.rs`"
+        )),
+        [package] => {
+            let mut command = Command::new(cargo());
+            command
+                .args(["test", "--package", package, "--test", test])
+                .current_dir(root);
+            Ok(command)
+        }
+        _ => Err(format!(
+            "`{test}` names an integration test in several packages: {}",
+            owners.join(", ")
+        )),
+    }
+}
+
+fn has_test_target(package: &Value, test: &str) -> bool {
+    package["targets"].as_array().is_some_and(|targets| {
+        targets.iter().any(|target| {
+            target["name"] == test
+                && target["kind"]
+                    .as_array()
+                    .is_some_and(|kinds| kinds.iter().any(|kind| kind == "test"))
+        })
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::process::Stdio;
+
     use super::super::verify::test_repo::TestRepo;
     use super::*;
 
@@ -80,17 +126,15 @@ mod tests {
         repo
     }
 
-    /// Runs `accept` on `repo`; the error holds why it refused or failed.
+    /// Runs `accept` on `repo`, silenced, in its own target directory even
+    /// when the environment sets a shared one.
     fn accept(repo: &TestRepo, test: &str) -> Result<(), String> {
-        let output = command(repo.root(), test)?
+        let mut command = command(repo.root(), test)?;
+        command
             .env("CARGO_TARGET_DIR", repo.root().join("target"))
-            .output()
-            .unwrap();
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err(String::from_utf8_lossy(&output.stdout).into_owned())
-        }
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        execute(&mut command)
     }
 
     #[test]
