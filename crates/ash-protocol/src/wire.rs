@@ -1,5 +1,6 @@
 //! The binary encoding: a tag byte for each choice, then fixed-width
-//! little-endian fields. A list is a `u32` count, then its items.
+//! little-endian fields. A list is a `u32` count, then its items. An
+//! optional value is a tag byte, 0 for none or 1, then the value.
 
 use alloc::vec::Vec;
 
@@ -83,6 +84,26 @@ impl<T: Wire> Wire for Vec<T> {
             items.push(T::read(input)?);
         }
         Ok(items)
+    }
+}
+
+impl<T: Wire> Wire for Option<T> {
+    fn write(&self, out: &mut Vec<u8>) {
+        match self {
+            None => 0_u8.write(out),
+            Some(value) => {
+                1_u8.write(out);
+                value.write(out);
+            }
+        }
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(None),
+            1 => T::read(input).map(Some),
+            _ => Err(DecodeError),
+        }
     }
 }
 

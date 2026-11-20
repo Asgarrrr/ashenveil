@@ -12,13 +12,18 @@ use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
 
-/// Phase 1 worlds draw nothing from their RNG, so one seed serves them all.
-const WORLD_SEED: u64 = 0;
+/// The seed of the world `token` starts. The registry keeps every world
+/// under its token, so it keeps the seed too: with the world's command log,
+/// it replays the world.
+pub fn world_seed(token: ResumeToken) -> u64 {
+    let _ = token;
+    0
+}
 
-/// The world a new resume token starts. A replay of a world's accepted
-/// commands starts from it too.
-pub fn create_world() -> World {
-    World::new(WORLD_SEED, Speed::new(1))
+/// The world a new resume token starts, from `seed`. A replay of a world's
+/// accepted commands starts from it too.
+pub fn create_world(seed: u64) -> World {
+    World::new(seed, Speed::new(1))
 }
 
 /// One player connection. The registry keeps a clone of its stream, so a
@@ -98,7 +103,7 @@ impl Registry {
     pub fn world(&self, token: ResumeToken) -> Arc<HostedWorld> {
         // Built before the lock, so no simulation code runs while it is
         // held; dropped unused when the token already has a world.
-        let world = create_world();
+        let world = create_world(world_seed(token));
         // R8: the character is created first, so it is the first awaited.
         let candidate = HostedWorld {
             character: world.awaited(),
@@ -134,7 +139,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
         let (older, newer) = (controller(&listener), controller(&listener));
         let mut controlled = Controlled {
-            world: create_world(),
+            world: create_world(0),
             controller: None,
         };
         controlled.take(&older);
@@ -150,10 +155,11 @@ mod tests {
     }
 
     #[test]
-    fn a_quarantined_world_stays_registered_with_its_command_log() {
+    fn a_quarantined_world_stays_registered_and_replays_from_its_seed_and_log() {
         let registry = Registry::default();
         let token = ResumeToken(7);
         let faulted = registry.world(token).run(|controlled| {
+            assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
             assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
             ash_core::invariant!("a test fault");
         });
@@ -164,6 +170,29 @@ mod tests {
         let Err(poisoned) = hosted.controlled.lock() else {
             panic!("the quarantined world was replaced");
         };
-        assert_eq!(poisoned.into_inner().world.command_log(), [Action::Wait]);
+        let world = poisoned.into_inner().world.clone();
+        assert_eq!(world.command_log(), [Action::Wait, Action::Wait]);
+        let mut replay = create_world(world_seed(token));
+        for &action in world.command_log() {
+            assert_eq!(replay.submit(action), Ok(()));
+        }
+        assert_eq!(replay, world);
+    }
+
+    #[test]
+    fn worlds_of_different_tokens_differ() {
+        let registry = Registry::default();
+        let [first, second] = [ResumeToken(1), ResumeToken(2)].map(|token| {
+            let hosted = registry.world(token);
+            let stream = hosted.run(|controlled| {
+                for _ in 0..10 {
+                    assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
+                }
+                controlled.world.perceived_changes().to_vec()
+            });
+            (world_seed(token), stream.ok())
+        });
+        assert_ne!(first.0, second.0, "two worlds share a seed");
+        assert_ne!(first.1, second.1, "two worlds behave the same");
     }
 }

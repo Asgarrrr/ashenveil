@@ -83,11 +83,13 @@ fn message_json(message: &ServerMessage) -> String {
             time,
             entity,
             action,
+            bumped,
         }) => format!(
-            r#"{{"kind":"perceived","time":{},"entity":{},"action":{}}}"#,
+            r#"{{"kind":"perceived","time":{},"entity":{},"action":{},"bumped":{}}}"#,
             time.units(),
             entity.get(),
-            action_json(*action)
+            action_json(*action),
+            bumped.map_or_else(|| "null".to_owned(), |bumped| bumped.get().to_string())
         ),
         ServerMessage::Refused => r#"{"kind":"refused"}"#.to_owned(),
         ServerMessage::Quarantined => r#"{"kind":"quarantined"}"#.to_owned(),

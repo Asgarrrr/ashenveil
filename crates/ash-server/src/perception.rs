@@ -60,6 +60,7 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
             time: change.time,
             entity: change.entity,
             action: action::to_wire(change.action),
+            bumped: change.bumped,
         })
     })
 }

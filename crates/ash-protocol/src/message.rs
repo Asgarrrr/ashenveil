@@ -53,6 +53,9 @@ pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
     pub action: Action,
+    /// The entity a move bumped into (R13): the mover stayed in place. None
+    /// for a move that stepped, and for a wait.
+    pub bumped: Option<EntityId>,
 }
 
 /// Everything the character perceives at `time` (R16).
@@ -205,6 +208,7 @@ impl Wire for PerceivedChange {
         self.time.write(out);
         self.entity.write(out);
         self.action.write(out);
+        self.bumped.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -212,6 +216,7 @@ impl Wire for PerceivedChange {
             time: Time::read(input)?,
             entity: EntityId::read(input)?,
             action: Action::read(input)?,
+            bumped: Option::read(input)?,
         })
     }
 }

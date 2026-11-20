@@ -85,6 +85,13 @@ fn server_messages() -> Vec<ServerMessage> {
             time: Time::new(100),
             entity: EntityId::new(2),
             action: Action::Move(Direction::South),
+            bumped: None,
+        }),
+        ServerMessage::Perceived(PerceivedChange {
+            time: Time::new(150),
+            entity: EntityId::new(1),
+            action: Action::Move(Direction::West),
+            bumped: Some(EntityId::new(u32::MAX)),
         }),
         ServerMessage::Refused,
         ServerMessage::Quarantined,

@@ -8,10 +8,12 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction, Refused};
+use crate::controller::Controller;
 use crate::map::Map;
 pub use crate::map::Terrain;
 use crate::perception::PerceivedChange;
 use crate::scheduler::Scheduler;
+use crate::wander;
 
 /// Where the character stands when the world begins: a floor tile of the
 /// fixed map.
@@ -22,6 +24,7 @@ struct Entity {
     id: EntityId,
     speed: Speed,
     position: TilePosition,
+    controller: Controller,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,7 +40,8 @@ pub struct World {
 }
 
 impl World {
-    /// The fixed map holding one character, due at time zero.
+    /// The fixed map holding one character, due at time zero. A player
+    /// connection controls it.
     pub fn new(seed: u64, character_speed: Speed) -> Self {
         let character = EntityId::new(0);
         let mut world = Self {
@@ -47,6 +51,7 @@ impl World {
                 id: character,
                 speed: character_speed,
                 position: CHARACTER_START,
+                controller: Controller::Player,
             }],
             scheduler: Scheduler::default(),
             awaited: character,
@@ -57,6 +62,32 @@ impl World {
         world.scheduler.schedule(character, Time::ZERO);
         world.advance();
         world
+    }
+
+    /// Creates an entity at `position`, due now: after every entity created
+    /// before it (R8). A position off the floor, or already occupied,
+    /// crashes through `invariant!`.
+    pub fn create_entity(
+        &mut self,
+        speed: Speed,
+        position: TilePosition,
+        controller: Controller,
+    ) -> EntityId {
+        let Ok(raw) = u32::try_from(self.entities.len()) else {
+            ash_core::invariant!("the world holds more entities than ids")
+        };
+        let id = EntityId::new(raw);
+        if self.map.terrain(position) != Terrain::Floor || self.occupant(position).is_some() {
+            ash_core::invariant!("{id:?} cannot be created on {position:?}");
+        }
+        self.entities.push(Entity {
+            id,
+            speed,
+            position,
+            controller,
+        });
+        self.scheduler.schedule(id, self.clock);
+        id
     }
 
     pub fn clock(&self) -> Time {
@@ -72,8 +103,13 @@ impl World {
     /// The actions the awaited character can take, with their costs (R9).
     /// A move the rules would refuse is not offered (R14).
     pub fn available_actions(&self) -> Vec<AvailableAction> {
-        let speed = self.speed(self.awaited);
-        let from = self.position(self.awaited);
+        self.actions_of(self.awaited)
+    }
+
+    /// The actions the rules allow `entity`, with their costs (R9, R14).
+    fn actions_of(&self, entity: EntityId) -> Vec<AvailableAction> {
+        let speed = self.speed(entity);
+        let from = self.position(entity);
         let moves = Direction::ALL
             .into_iter()
             .filter(|&direction| self.map.allows_move(from, direction))
@@ -110,10 +146,32 @@ impl World {
         self.entity(entity).position
     }
 
-    /// The awaited character takes `action`, then time runs to the next due
-    /// character. A refused move changes nothing (R10, R11).
+    /// The awaited character takes `action`, then time runs to the next
+    /// character that awaits a player connection. A refused move changes
+    /// nothing (R10, R11).
     pub fn submit(&mut self, action: Action) -> Result<(), Refused> {
-        let entity = self.awaited;
+        self.act(self.awaited, action)?;
+        self.command_log.push(action);
+        self.advance();
+        Ok(())
+    }
+
+    /// Every change, in the order it happened (R17). Under whole-map
+    /// perception (R16), every character perceives every change.
+    pub fn perceived_changes(&self) -> &[PerceivedChange] {
+        &self.perceived_changes
+    }
+
+    /// The accepted commands of player connections, in order: replaying them
+    /// on a world with the same seed and entities gives the same state. The
+    /// wander needs no log: the RNG replays it.
+    pub fn command_log(&self) -> &[Action] {
+        &self.command_log
+    }
+
+    /// `entity` takes `action` under the rules every controller follows
+    /// (R3), and becomes due once its cost is paid.
+    fn act(&mut self, entity: EntityId, action: Action) -> Result<(), Refused> {
         if let Action::Move(direction) = action {
             let from = self.position(entity);
             if !self.map.allows_move(from, direction) {
@@ -126,36 +184,43 @@ impl World {
             time: self.clock,
             entity,
             action,
+            bumped: None,
         });
-        self.command_log.push(action);
         let due = self.clock.after(action.cost(self.speed(entity)));
         self.scheduler.schedule(entity, due);
-        self.advance();
         Ok(())
     }
 
-    /// Every change, in the order it happened (R17). Under whole-map
-    /// perception (R16), every character perceives every change.
-    pub fn perceived_changes(&self) -> &[PerceivedChange] {
-        &self.perceived_changes
-    }
-
-    /// The accepted commands, in order: replaying them on a world with the
-    /// same seed gives the same state.
-    pub fn command_log(&self) -> &[Action] {
-        &self.command_log
-    }
-
-    /// Runs the clock to the next due entity and waits for its controller
-    /// (R2). Every entity of this slice is a character.
+    /// Runs the clock entity by entity. A wandering entity acts at once; the
+    /// clock stops at the first entity a player connection controls (R2).
     fn advance(&mut self) {
-        match self.scheduler.pop() {
-            Some((due, entity)) => {
-                self.clock = due;
-                self.awaited = entity;
+        loop {
+            let Some((due, entity)) = self.scheduler.pop() else {
+                ash_core::invariant!("no entity is scheduled")
+            };
+            self.clock = due;
+            match self.entity(entity).controller {
+                Controller::Player => {
+                    self.awaited = entity;
+                    return;
+                }
+                Controller::Wander => {
+                    let offered = self.actions_of(entity);
+                    let action = wander::choose(&mut self.rng, &offered);
+                    if self.act(entity, action).is_err() {
+                        ash_core::invariant!("the wander of {entity:?} chose a refused action");
+                    }
+                }
             }
-            None => ash_core::invariant!("no entity is scheduled"),
         }
+    }
+
+    /// The entity standing at `position`, if any.
+    fn occupant(&self, position: TilePosition) -> Option<EntityId> {
+        self.entities
+            .iter()
+            .find(|entity| entity.position == position)
+            .map(|entity| entity.id)
     }
 
     fn speed(&self, entity: EntityId) -> Speed {

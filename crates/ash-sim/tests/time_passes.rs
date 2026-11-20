@@ -15,6 +15,7 @@ fn waited(time: u64, entity: EntityId) -> PerceivedChange {
         time: Time::new(time),
         entity,
         action: Action::Wait,
+        bumped: None,
     }
 }
 

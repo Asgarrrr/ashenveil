@@ -95,7 +95,7 @@ fn greeting(socket: &mut Socket) -> (TilePosition, Time) {
 }
 
 /// `character` moves toward `direction` at `time`: the server sends the
-/// perceived move, then the next turn.
+/// perceived move, then the changes of the creature, then the next turn.
 fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u64) {
     let action = Action::Move(direction);
     send(
@@ -111,9 +111,14 @@ fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u6
             time: Time::new(time),
             entity: character,
             action,
+            bumped: None,
         }))
     );
-    match receive(socket) {
+    let mut next = receive(socket);
+    while let Some(ServerMessage::Perceived(_)) = next {
+        next = receive(socket);
+    }
+    match next {
         Some(ServerMessage::Awaited { entity, .. }) => assert_eq!(entity, character),
         other => panic!("expected the next turn, got {other:?}"),
     }
@@ -122,7 +127,7 @@ fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u6
 #[test]
 fn a_fault_quarantines_one_world_and_a_new_connection_takes_the_controller() {
     let address = start_server();
-    let character = ash_server::create_world().awaited();
+    let character = ash_server::create_world(ash_server::world_seed(FIRST)).awaited();
 
     let mut first = connect(address, FIRST);
     assert_eq!(greeting(&mut first), (at(1, 1), Time::ZERO));

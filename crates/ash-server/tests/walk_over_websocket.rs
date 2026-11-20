@@ -70,6 +70,18 @@ fn receive(socket: &mut Socket) -> Option<ServerMessage> {
     }
 }
 
+/// The perceived changes the server sends in a row, then the message after
+/// them.
+fn receive_turn(socket: &mut Socket) -> (Vec<PerceivedChange>, Option<ServerMessage>) {
+    let mut changes = Vec::new();
+    loop {
+        match receive(socket) {
+            Some(ServerMessage::Perceived(change)) => changes.push(change),
+            other => return (changes, other),
+        }
+    }
+}
+
 fn command(entity: EntityId, action: Action) -> ClientMessage {
     ClientMessage::Command { entity, action }
 }
@@ -137,9 +149,20 @@ fn expected_awaited(world: &World) -> ServerMessage {
     }
 }
 
-fn snapshot_parts(message: &Option<ServerMessage>) -> (Time, Vec<PerceivedEntity>) {
+/// The time of a snapshot, and the entry of `entity` in it.
+fn snapshot_parts(
+    message: &Option<ServerMessage>,
+    entity: EntityId,
+) -> (Time, Option<PerceivedEntity>) {
     match message {
-        Some(ServerMessage::Snapshot(snapshot)) => (snapshot.time, snapshot.entities.clone()),
+        Some(ServerMessage::Snapshot(snapshot)) => (
+            snapshot.time,
+            snapshot
+                .entities
+                .iter()
+                .find(|perceived| perceived.entity == entity)
+                .copied(),
+        ),
         other => panic!("expected a snapshot, got {other:?}"),
     }
 }
@@ -147,7 +170,7 @@ fn snapshot_parts(message: &Option<ServerMessage>) -> (Time, Vec<PerceivedEntity
 #[test]
 fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let address = start_server();
-    let start = ash_server::create_world();
+    let start = ash_server::create_world(ash_server::world_seed(TOKEN));
     let character = start.awaited();
     let mut socket = connect(address, TOKEN);
 
@@ -156,13 +179,13 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let snapshot = receive(&mut socket);
     assert_eq!(snapshot, Some(expected_snapshot(&start)));
     assert_eq!(
-        snapshot_parts(&snapshot),
+        snapshot_parts(&snapshot, character),
         (
             Time::ZERO,
-            vec![PerceivedEntity {
+            Some(PerceivedEntity {
                 entity: character,
                 position: at(1, 1),
-            }]
+            })
         )
     );
 
@@ -183,7 +206,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     );
 
     // R17: each accepted command comes back as a perceived change stamped
-    // with its time, then the next turn.
+    // with its time, then the changes of the creature, then the next turn.
     let mut received_changes = Vec::new();
     let mut accepted = Vec::new();
     let mut last_awaited = None;
@@ -193,16 +216,17 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
             time: Time::new(time),
             entity: character,
             action,
+            bumped: None,
         };
-        assert_eq!(receive(socket), Some(ServerMessage::Perceived(change)));
-        let awaited = receive(socket);
+        let (changes, awaited) = receive_turn(socket);
+        assert_eq!(changes.first(), Some(&change));
         match &awaited {
             Some(ServerMessage::Awaited { time, entity, .. }) => {
                 assert_eq!((*time, *entity), (Time::new(then), character));
             }
             other => panic!("expected the next turn, got {other:?}"),
         }
-        received_changes.push(change);
+        received_changes.extend(changes);
         accepted.push(action);
         last_awaited = awaited;
     };
@@ -225,20 +249,20 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
 
     let snapshot = receive(&mut socket);
     assert_eq!(
-        snapshot_parts(&snapshot),
+        snapshot_parts(&snapshot, character),
         (
             Time::new(250),
-            vec![PerceivedEntity {
+            Some(PerceivedEntity {
                 entity: character,
                 position: at(3, 1),
-            }]
+            })
         )
     );
     let pending_turn = receive(&mut socket);
     assert_eq!(pending_turn, last_awaited);
 
     // The hosted world equals a replay of the accepted commands.
-    let mut replay = ash_server::create_world();
+    let mut replay = ash_server::create_world(ash_server::world_seed(TOKEN));
     for &action in &accepted {
         assert_eq!(replay.submit(sim_action(action)), Ok(()));
     }
@@ -251,21 +275,24 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
             time: change.time,
             entity: change.entity,
             action: wire_action(change.action),
+            bumped: change.bumped,
         })
         .collect();
     assert_eq!(received_changes, replayed_changes);
 
     // The stream goes on from the pending turn: no change is sent twice.
     send(&mut socket, command(character, Action::Wait));
+    let (changes, awaited) = receive_turn(&mut socket);
     assert_eq!(
-        receive(&mut socket),
-        Some(ServerMessage::Perceived(PerceivedChange {
+        changes.first(),
+        Some(&PerceivedChange {
             time: Time::new(250),
             entity: character,
             action: Action::Wait,
-        }))
+            bumped: None,
+        })
     );
-    match receive(&mut socket) {
+    match awaited {
         Some(ServerMessage::Awaited { time, entity, .. }) => {
             assert_eq!((time, entity), (Time::new(300), character));
         }

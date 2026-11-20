@@ -33,6 +33,7 @@ fn moved(time: u64, entity: EntityId, direction: Direction) -> PerceivedChange {
         time: Time::new(time),
         entity,
         action: Action::Move(direction),
+        bumped: None,
     }
 }
 
