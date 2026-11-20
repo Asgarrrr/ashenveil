@@ -10,6 +10,7 @@ mod file_names;
 mod line_caps;
 pub mod lint_inheritance;
 mod sections;
+mod sim_purity;
 pub mod toolchain;
 
 /// Build output and installed dependencies, never written by us.
@@ -32,6 +33,7 @@ pub fn verify(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = line_caps::check(root)?;
     violations.extend(sections::check(root)?);
     violations.extend(file_names::check(root)?);
+    violations.extend(sim_purity::check(root)?);
     Ok(violations)
 }
 
