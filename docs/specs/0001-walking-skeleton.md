@@ -334,4 +334,6 @@ one world across connections).
   that a player connection controls.
 - S7 (found in S7): `cargo xtask accept creature` runs
   `crates/ash-sim/tests/creature.rs` only. The over-WebSocket half is its own
-  target: `cargo xtask accept creature_over_websocket`.
+  target: `cargo xtask accept creature_over_websocket`. This changes the
+  acceptance command of S7 from one command to two, so it is an acceptance
+  change for the human to approve.
