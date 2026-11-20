@@ -107,24 +107,41 @@ fn ran_a_cargo_test(stdout: &str) -> bool {
         })
 }
 
-/// True when the TAP output of `node --test <file>` has a passed test that
-/// was not skipped. A suite does not count, and neither does `file` itself:
-/// Node reports a file that declares no test as one passed test of its name.
+/// True when the TAP output of `node --test <file>` fails no test and has a
+/// passed test that was not skipped. A suite does not count, and neither
+/// does `file` itself: Node reports a file that declares no test as one
+/// passed test of its name.
 fn ran_a_node_test(stdout: &str, file: &str) -> bool {
     let mut passed = None;
+    let mut counted = false;
     for line in stdout.lines().map(str::trim) {
         if let Some(result) = line.strip_prefix("ok ") {
-            passed = result
-                .split_once(" - ")
-                .map(|(_, name)| name)
-                .filter(|name| !name.ends_with(" # SKIP") && !name.ends_with(" # TODO"));
+            passed = result.split_once(" - ").and_then(|(_, rest)| {
+                // Node escapes a `#` in a test name, so the first ` # `
+                // starts the directive.
+                match rest.split_once(" # ") {
+                    Some((_, directive)) if skips(directive) => None,
+                    Some((name, _)) => Some(name),
+                    None => Some(rest),
+                }
+            });
         } else if line.starts_with("not ok ") {
             passed = None;
         } else if line == "type: 'test'" && passed.is_some_and(|name| name != file) {
-            return true;
+            counted = true;
+        } else if line.starts_with("# fail ") && line != "# fail 0" {
+            return false;
         }
     }
-    false
+    counted
+}
+
+/// True for a TAP `SKIP` or `TODO` directive, with or without a reason.
+fn skips(directive: &str) -> bool {
+    directive
+        .split_whitespace()
+        .next()
+        .is_some_and(|word| word.eq_ignore_ascii_case("skip") || word.eq_ignore_ascii_case("todo"))
 }
 
 /// The acceptance test `test` names, or why there is none.
@@ -309,25 +326,71 @@ mod tests {
     }
 
     #[test]
-    fn web_test_file_without_tests_is_refused() {
-        let repo = web_workspace("web_model", "");
-        assert!(accept(&repo, "web_model").is_err());
-    }
-
-    #[test]
-    fn web_test_with_only_skipped_tests_is_refused() {
-        let repo = web_workspace(
-            "web_model",
-            "import { describe, it } from \"node:test\";\n\
-             describe(\"suite\", () => {\n  it.skip(\"skipped\", () => {});\n  \
-             it.todo(\"todo\");\n});\n",
-        );
-        assert!(accept(&repo, "web_model").is_err());
-    }
-
-    #[test]
     fn name_of_a_web_test_and_a_cargo_test_is_refused() {
         let repo = web_workspace("walk", NODE_PASS);
         assert!(accept(&repo, "walk").is_err());
+    }
+
+    /// The TAP output of Node 24 for `file` holding one test named `x` whose
+    /// result line is `result`, duration lines dropped.
+    fn tap(result: &str, summary: &str) -> String {
+        format!(
+            "TAP version 13\n# Subtest: x\n{result}\n  ---\n  type: 'test'\n  ...\n1..1\n\
+             # tests 1\n{summary}\n"
+        )
+    }
+
+    const FILE: &str = "web/tests/web_model.test.js";
+
+    #[test]
+    fn node_test_that_passed_counts() {
+        let stdout = tap("ok 1 - x", "# pass 1\n# fail 0\n# skipped 0\n# todo 0");
+        assert!(ran_a_node_test(&stdout, FILE));
+    }
+
+    #[test]
+    fn node_test_skipped_with_a_reason_does_not_count() {
+        let stdout = tap(
+            "ok 1 - x # SKIP later",
+            "# pass 0\n# fail 0\n# skipped 1\n# todo 0",
+        );
+        assert!(!ran_a_node_test(&stdout, FILE));
+    }
+
+    #[test]
+    fn node_test_todo_with_a_reason_does_not_count() {
+        let stdout = tap(
+            "ok 1 - x # TODO soon",
+            "# pass 0\n# fail 0\n# skipped 0\n# todo 1",
+        );
+        assert!(!ran_a_node_test(&stdout, FILE));
+    }
+
+    #[test]
+    fn node_test_that_failed_does_not_count() {
+        let stdout = tap("not ok 1 - x", "# pass 0\n# fail 1\n# skipped 0\n# todo 0");
+        assert!(!ran_a_node_test(&stdout, FILE));
+    }
+
+    #[test]
+    fn node_test_file_without_tests_does_not_count() {
+        let stdout = tap(&format!("ok 1 - {FILE}"), "# pass 1\n# fail 0")
+            .replace("# Subtest: x", &format!("# Subtest: {FILE}"));
+        assert!(!ran_a_node_test(&stdout, FILE));
+    }
+
+    #[test]
+    fn node_suite_of_skipped_tests_does_not_count() {
+        let stdout = "TAP version 13\n# Subtest: suite\n    # Subtest: skipped\n    \
+                      ok 1 - skipped # SKIP\n      ---\n      type: 'test'\n      ...\n    \
+                      1..1\nok 1 - suite\n  ---\n  type: 'suite'\n  ...\n1..1\n# tests 1\n\
+                      # pass 0\n# fail 0\n# skipped 1\n# todo 0\n";
+        assert!(!ran_a_node_test(stdout, FILE));
+    }
+
+    #[test]
+    fn node_output_with_a_failure_does_not_count_its_passed_tests() {
+        let stdout = tap("ok 1 - x", "# pass 1\n# fail 1\n# skipped 0\n# todo 0");
+        assert!(!ran_a_node_test(&stdout, FILE));
     }
 }
