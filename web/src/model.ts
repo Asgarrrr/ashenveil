@@ -4,6 +4,7 @@
 import type {
   Action,
   AvailableAction,
+  Direction,
   Position,
   ServerMessage,
   Terrain,
@@ -18,6 +19,21 @@ export interface LogEntry {
 
 /** Why the server ended the connection for good. */
 export type End = "quarantined" | "controller_taken";
+
+/**
+ * One step toward each direction, as the change of x (east) and of y
+ * (south). A perceived move carries no position: the client steps it.
+ */
+const STEPS: Record<Direction, [number, number]> = {
+  north: [0, -1],
+  northeast: [1, -1],
+  east: [1, 0],
+  southeast: [1, 1],
+  south: [0, 1],
+  southwest: [-1, 1],
+  west: [-1, 0],
+  northwest: [-1, -1],
+};
 
 export class PerceivedWorld {
   /** The clock: the latest time the server sent. */
@@ -37,27 +53,71 @@ export class PerceivedWorld {
   ended: End | undefined;
 
   apply(message: ServerMessage): void {
-    void message;
+    this.refused = false;
+    switch (message.kind) {
+      case "snapshot":
+        this.time = message.time;
+        this.width = message.width;
+        this.terrain = message.terrain;
+        this.positions.clear();
+        for (const { entity, position } of message.entities) {
+          this.positions.set(entity, position);
+        }
+        break;
+      case "awaited":
+        this.time = message.time;
+        this.controlled = message.entity;
+        this.offer = message.actions;
+        break;
+      case "perceived":
+        this.time = message.time;
+        this.log.push({ time: message.time, entity: message.entity, action: message.action });
+        this.perceive(message.entity, message.action);
+        break;
+      case "refused":
+        this.refused = true;
+        break;
+      case "quarantined":
+      case "controller_taken":
+        this.ended = message.kind;
+        this.offer = [];
+        break;
+    }
   }
 
   get height(): number {
-    return 0;
+    return this.width === 0 ? 0 : this.terrain.length / this.width;
   }
 
   terrainAt(x: number, y: number): Terrain | undefined {
-    void x;
-    void y;
-    return undefined;
+    if (x < 0 || x >= this.width || y < 0) {
+      return undefined;
+    }
+    return this.terrain[y * this.width + x];
   }
 
   /** The cost the controlled entity would pay for `action`, if offered. */
   costOf(action: Action): number | undefined {
-    void action;
-    return undefined;
+    return this.offer.find((offered) => sameAction(offered.action, action))?.cost;
   }
 
   /** False once the server ended the connection for good. */
   mayReconnect(): boolean {
-    return true;
+    return this.ended === undefined;
   }
+
+  private perceive(entity: number, action: Action): void {
+    if (entity === this.controlled) {
+      this.offer = [];
+    }
+    const position = this.positions.get(entity);
+    if (action.kind === "move" && position !== undefined) {
+      const [east, south] = STEPS[action.direction];
+      this.positions.set(entity, { ...position, x: position.x + east, y: position.y + south });
+    }
+  }
+}
+
+function sameAction(a: Action, b: Action): boolean {
+  return a.kind === "move" && b.kind === "move" ? a.direction === b.direction : a.kind === b.kind;
 }

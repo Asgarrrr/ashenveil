@@ -63,9 +63,8 @@ export async function loadCodec(wasm?: BufferSource): Promise<void> {
 
 /** The message `bytes` hold; `undefined` when they do not decode. */
 export function decodeServerMessage(bytes: Uint8Array): ServerMessage | undefined {
-  void bytes;
-  void decode_server_message;
-  return undefined;
+  const json = decode_server_message(bytes);
+  return json === undefined ? undefined : (JSON.parse(json) as ServerMessage);
 }
 
 export function encodeHello(token: bigint): Uint8Array {
@@ -73,9 +72,12 @@ export function encodeHello(token: bigint): Uint8Array {
 }
 
 export function encodeCommand(entity: number, action: Action): Uint8Array {
-  void entity;
-  void action;
-  void encode_move;
-  void encode_wait;
-  return new Uint8Array();
+  if (action.kind === "wait") {
+    return encode_wait(entity);
+  }
+  const bytes = encode_move(entity, action.direction);
+  if (bytes === undefined) {
+    throw new Error(`the codec knows no direction ${action.direction}`);
+  }
+  return bytes;
 }
