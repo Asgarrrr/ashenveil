@@ -6,7 +6,7 @@
 //! such target in the workspace, and `cargo test` runs that target alone.
 
 use std::path::Path;
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 
 use serde_json::Value;
 
@@ -25,7 +25,8 @@ pub fn run(root: &Path, test: &str) -> ExitCode {
     }
 }
 
-/// Prints and runs `command`; an error unless it succeeds.
+/// Prints and runs `command`; an error unless it succeeds and runs at least
+/// one test. An empty or all-ignored target would otherwise prove nothing.
 fn execute(command: &mut Command) -> Result<(), String> {
     let args: Vec<_> = command
         .get_args()
@@ -33,14 +34,33 @@ fn execute(command: &mut Command) -> Result<(), String> {
         .collect();
     let shown = format!("cargo {}", args.join(" "));
     println!("accept: {shown}");
-    let status = command
-        .status()
+    let output = command
+        .stdout(Stdio::piped())
+        .output()
         .map_err(|error| format!("cannot run cargo: {error}"))?;
-    if status.success() {
-        Ok(())
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    print!("{stdout}");
+    if !output.status.success() {
+        Err(format!("failed: {shown} ({})", output.status))
+    } else if !ran_a_test(&stdout) {
+        Err(format!("ran no test: {shown}"))
     } else {
-        Err(format!("failed: {shown} ({status})"))
+        Ok(())
     }
+}
+
+/// True when a libtest summary line, such as
+/// `test result: ok. 3 passed; 0 failed; ...`, counts a passed test.
+fn ran_a_test(stdout: &str) -> bool {
+    stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("test result: "))
+        .any(|summary| {
+            let words: Vec<&str> = summary.split_whitespace().collect();
+            words
+                .windows(2)
+                .any(|pair| pair[1] == "passed;" && pair[0] != "0")
+        })
 }
 
 /// The `cargo test` call that runs `test` alone, or why there is none.
@@ -62,7 +82,8 @@ fn command(root: &Path, test: &str) -> Result<Command, String> {
             let mut command = Command::new(cargo());
             command
                 .args(["test", "--package", package, "--test", test])
-                .current_dir(root);
+                .current_dir(root)
+                .stderr(Stdio::inherit());
             Ok(command)
         }
         _ => Err(format!(
@@ -85,8 +106,6 @@ fn has_test_target(package: &Value, test: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::process::Stdio;
-
     use super::super::verify::test_repo::TestRepo;
     use super::*;
 
@@ -132,7 +151,6 @@ mod tests {
         let mut command = command(repo.root(), test)?;
         command
             .env("CARGO_TARGET_DIR", repo.root().join("target"))
-            .stdout(Stdio::null())
             .stderr(Stdio::null());
         execute(&mut command)
     }
@@ -152,6 +170,21 @@ mod tests {
     #[test]
     fn failing_test_is_refused() {
         let repo = workspace(&[("alpha", &[("walk", FAIL)])]);
+        assert!(accept(&repo, "walk").is_err());
+    }
+
+    #[test]
+    fn empty_test_is_refused() {
+        let repo = workspace(&[("alpha", &[("walk", "")])]);
+        assert!(accept(&repo, "walk").is_err());
+    }
+
+    #[test]
+    fn test_with_only_ignored_tests_is_refused() {
+        let repo = workspace(&[(
+            "alpha",
+            &[("walk", "#[test]\n#[ignore]\nfn ignored() {}\n")],
+        )]);
         assert!(accept(&repo, "walk").is_err());
     }
 
