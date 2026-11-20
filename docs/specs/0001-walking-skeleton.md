@@ -309,3 +309,29 @@ one world across connections).
   perception (R16) the model could infer it from the occupied target tile,
   but that inference breaks once perception narrows. So S7 should let the
   change carry the mover's position, or say that it bumped.
+- S7 (found in S7): a perceived change carries `bumped`, the entity a move
+  bumped into (R13), not the mover's position. A bump names both entities
+  without whole-map inference; the web model still steps the mover with its
+  own copy of the direction offsets. S7 also touches
+  `crates/ash-sim/src/{lib,map,perception,world}.rs` (`World::create_entity`;
+  the world runs every wandering entity until a player connection must
+  choose), `crates/ash-sim/tests/{time_passes,walk}.rs`, `crates/ash-protocol/`
+  (`PerceivedChange::bumped`, with its round-trip and decoder tests),
+  `crates/ash-server/src/{lib,perception,registry,connection}.rs`,
+  `crates/ash-server/tests/{walk_over_websocket,quarantine}.rs` (each turn
+  now reads the creature's changes before the next `Awaited`),
+  `crates/ash-wasm/src/lib.rs`, `web/src/{protocol,model,draw}.ts`,
+  `web/tests/web_model.test.js`, and `web/tests/fixtures/{walk,bump}.json`,
+  both recorded from a real server. No acceptance criterion changes.
+- S7 (found in S7): the seed of a world derives from its resume token, so
+  the registry keeps it under the token, with no separate field. A replay
+  needs only the token and the command log. A client that knows its token
+  can therefore predict the wander. Tokens are not secrets in phase 1; the
+  seed must come from the server before they become one.
+- S7 (found in S7): the creature never waits for a controller, so in a
+  production world the out-of-turn guard and the R18 guard of `ash-server`
+  still never fire. Their negative tests build a world with a second entity
+  that a player connection controls.
+- S7 (found in S7): `cargo xtask accept creature` runs
+  `crates/ash-sim/tests/creature.rs` only. The over-WebSocket half is its own
+  target: `cargo xtask accept creature_over_websocket`.
