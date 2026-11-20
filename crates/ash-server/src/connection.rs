@@ -39,6 +39,8 @@ pub fn run(stream: TcpStream, registry: &Registry) {
             End::ControllerTaken => farewell(socket, ServerMessage::ControllerTaken),
         }
     }
+    // The registry may still hold a clone of the stream: dropping the socket
+    // alone would leave the connection open.
     controller.close();
 }
 
