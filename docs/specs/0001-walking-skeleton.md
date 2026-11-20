@@ -253,7 +253,8 @@ Both gaps found by the second-model review were decided by the human on
 For the human at the milestone: **bump** (a move into an occupied tile),
 **perception** (what a character learns of the world; the only channel to
 the client), **speed** (the divisor of an entity's base costs), **base cost**
-(an action's cost at speed 1), **resume token** (identifies one controller of
+(an action's cost at speed 1), **map** (the fixed terrain of a world:
+floor and wall tiles), **resume token** (identifies one controller of
 one world across connections).
 
 ## Proposed amendments
@@ -261,8 +262,10 @@ one world across connections).
 - S3 (found in the slice): the file list also needs `crates/ash-sim/src/world.rs`,
   both `lib.rs` files, and `crates/ash-sim/tests/time_passes.rs` (its `submit`
   calls now handle a `Result`). No acceptance criterion changes.
-- S4 (found in S3): `available_actions` offers only wait. S4 offers the moves
-  with their costs (R9) and updates the S2 assertion on the offered actions.
-  No acceptance criterion changes.
+- S3 (found in the S3 review): `available_actions` offered only wait once
+  moves existed. S3 now offers wait and every move the map allows, with
+  their costs (R9, and R14 for S7). No acceptance criterion changes.
+- S4 (found in the S3 review): the snapshot needs the terrain (R16), and
+  `ash-sim` has no accessor for it. S4 may add one to `crates/ash-sim/src/`.
 - S6 (found in the S1 review): `accept` resolves Cargo integration targets
   only; S6 extends it to the Node `web_model` test. Added to S6's files.
