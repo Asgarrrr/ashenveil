@@ -86,6 +86,13 @@ pub enum ServerMessage {
     Perceived(PerceivedChange),
     /// The last command was refused. Nothing advanced (R10).
     Refused,
+    /// The world hit a violated invariant: it is in quarantine and never
+    /// steps again. The server closes the connection after this message,
+    /// and answers every later `Hello` for the world with it.
+    Quarantined,
+    /// A newer connection took the controller of this character (R20). The
+    /// server closes this connection after this message.
+    ControllerTaken,
 }
 
 /// The bytes are not one well-formed message.
@@ -281,6 +288,8 @@ impl Wire for ServerMessage {
                 change.write(out);
             }
             Self::Refused => 3_u8.write(out),
+            Self::Quarantined => 4_u8.write(out),
+            Self::ControllerTaken => 5_u8.write(out),
         }
     }
 

@@ -13,6 +13,8 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
 
+use ash_protocol::message::ResumeToken;
+
 pub use registry::create_world;
 
 use registry::Registry;
@@ -20,7 +22,18 @@ use registry::Registry;
 /// Serves every connection `listener` accepts, each on its own thread.
 /// Never returns.
 pub fn serve(listener: TcpListener) {
-    let registry = Arc::new(Registry::default());
+    serve_registry(listener, Registry::default());
+}
+
+/// `serve`, except that the world of `token` violates an invariant once it
+/// accepts its first command. Tests use it to prove the quarantine.
+pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
+    let _ = token;
+    serve_registry(listener, Registry::default());
+}
+
+fn serve_registry(listener: TcpListener, registry: Registry) {
+    let registry = Arc::new(registry);
     for stream in listener.incoming() {
         // A failed accept concerns that one connection only.
         let Ok(stream) = stream else { continue };

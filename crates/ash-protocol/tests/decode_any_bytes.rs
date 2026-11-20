@@ -87,6 +87,8 @@ fn server_messages() -> Vec<ServerMessage> {
             action: Action::Move(Direction::South),
         }),
         ServerMessage::Refused,
+        ServerMessage::Quarantined,
+        ServerMessage::ControllerTaken,
     ]
 }
 
