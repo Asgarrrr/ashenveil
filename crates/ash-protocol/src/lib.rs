@@ -10,3 +10,4 @@
 extern crate alloc;
 
 pub mod message;
+mod wire;

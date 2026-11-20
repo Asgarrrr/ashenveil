@@ -108,18 +108,26 @@ fn every_message_survives_a_round_trip() {
     }
 }
 
+/// Every strict prefix of `bytes`, and `bytes` with one more byte.
+fn truncated_or_extended(bytes: Vec<u8>) -> impl Iterator<Item = Vec<u8>> {
+    let mut extended = bytes.clone();
+    extended.push(0);
+    (0..bytes.len())
+        .map(move |length| bytes[..length].to_vec())
+        .chain([extended])
+}
+
 #[test]
 fn a_truncated_or_extended_message_is_refused() {
-    for bytes in valid_encodings() {
-        for length in 0..bytes.len() {
-            let prefix = &bytes[..length];
-            assert!(ClientMessage::decode(prefix).is_err(), "{prefix:?}");
-            assert!(ServerMessage::decode(prefix).is_err(), "{prefix:?}");
+    for message in client_messages() {
+        for bytes in truncated_or_extended(message.encode()) {
+            assert!(ClientMessage::decode(&bytes).is_err(), "{bytes:?}");
         }
-        let mut extended = bytes.clone();
-        extended.push(0);
-        assert!(ClientMessage::decode(&extended).is_err(), "{extended:?}");
-        assert!(ServerMessage::decode(&extended).is_err(), "{extended:?}");
+    }
+    for message in server_messages() {
+        for bytes in truncated_or_extended(message.encode()) {
+            assert!(ServerMessage::decode(&bytes).is_err(), "{bytes:?}");
+        }
     }
 }
 
