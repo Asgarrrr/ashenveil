@@ -29,3 +29,14 @@ impl Speed {
         self.0.get()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn zero_speed_crashes() {
+        let _ = Speed::new(0);
+    }
+}
