@@ -15,6 +15,8 @@ the reasons behind the choices and the challenge findings.
 | Disconnect and return | The world stays in memory while the server runs. |
 | Shape of the design | One document per founding system, named after it. Other systems appear as hooks. |
 | Corner cutting | Forbidden. |
+| First turn order at time 0 (found by the spec review) | Creation order, the character first. |
+| Two connections on one character (found by the spec review) | The newest connection takes the controller; the older one is closed. |
 
 Diagonal moves cost the same as straight ones. The human did not decide this;
 it is provisional.
