@@ -305,6 +305,7 @@ one world across connections).
   server listens on `127.0.0.1:8001`. No acceptance criterion changes.
 - S7 (found in S6): a perceived change carries no position, so the web
   model steps the mover with its own copy of the direction offsets. A bump
-  (R13) is a perceived move where the mover stays, and the model cannot
-  tell it from a move. S7 must let the change say where the mover stands,
-  or say that it bumped, before the browser shows the creature.
+  (R13) is a perceived move where the mover stays. Under whole-map
+  perception (R16) the model could infer it from the occupied target tile,
+  but that inference breaks once perception narrows. So S7 should let the
+  change carry the mover's position, or say that it bumped.
