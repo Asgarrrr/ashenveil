@@ -10,6 +10,10 @@ impl EntityId {
     pub const fn new(raw: u32) -> Self {
         Self(raw)
     }
+
+    pub const fn get(self) -> u32 {
+        self.0
+    }
 }
 
 /// R6: the divisor of an entity's base costs. Never zero.

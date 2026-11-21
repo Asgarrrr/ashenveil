@@ -1,0 +1,25 @@
+# Outside the Cargo workspace, so `cargo deny` never sees libfuzzer-sys
+# (NCSA). Build with `cargo +nightly fuzz build` from the repository root.
+
+[package]
+name = "ash-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+ash-protocol = { path = "../crates/ash-protocol" }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+# Its own workspace root: the repository workspace does not list it.
+[workspace]

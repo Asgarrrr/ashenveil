@@ -1,0 +1,11 @@
+[package]
+name = "ash-protocol"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ash-core = { path = "../ash-core" }
+
+[lints]
+workspace = true
