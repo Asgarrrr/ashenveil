@@ -5,6 +5,8 @@
 // Each fixture holds the binary messages a real server sent, in hex. The
 // client said Hello, then commanded entity 0, which starts at (1, 1). The
 // creature, entity 1, starts at (7, 4) and wanders.
+// `crates/ash-server/tests/web_fixtures.rs` records both sessions again and
+// fails when the server no longer sends these bytes.
 //
 // `fixtures/walk.json`: move east, move north (into the wall: refused),
 // wait, move southeast. A second connection with the same token then took

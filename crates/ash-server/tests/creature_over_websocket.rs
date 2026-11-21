@@ -18,6 +18,9 @@ use ash_protocol::message::{
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
+#[path = "websocket/action.rs"]
+mod action;
+
 type Socket = WebSocket<TcpStream>;
 
 const TOKEN: ResumeToken = ResumeToken(0xc0ff_ee00_5eed_0007);
@@ -73,20 +76,6 @@ fn receive_turn(socket: &mut Socket) -> (Vec<PerceivedChange>, Option<ServerMess
     }
 }
 
-fn wire_action(action: ash_sim::action::Action) -> Action {
-    match action {
-        ash_sim::action::Action::Move(direction) => Action::Move(direction),
-        ash_sim::action::Action::Wait => Action::Wait,
-    }
-}
-
-fn sim_action(action: Action) -> ash_sim::action::Action {
-    match action {
-        Action::Move(direction) => ash_sim::action::Action::Move(direction),
-        Action::Wait => ash_sim::action::Action::Wait,
-    }
-}
-
 /// The changes of `world` after the first `seen`, as the server must send
 /// them.
 fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
@@ -95,7 +84,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
         .map(|change| PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: wire_action(change.action),
+            action: action::to_wire(change.action),
             bumped: change.bumped,
         })
         .collect()
@@ -207,7 +196,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
             },
         );
         let seen = replay.perceived_changes().len();
-        assert_eq!(replay.submit(sim_action(action)), Ok(()));
+        assert_eq!(replay.submit(action::to_sim(action)), Ok(()));
         // R17: the changes since the command, in the order they happened.
         let (changes, then) = receive_turn(&mut socket);
         assert_eq!(changes, changes_since(&replay, seen));

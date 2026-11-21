@@ -22,12 +22,15 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
-    ServerMessage, Snapshot, Terrain,
+    ServerMessage, Snapshot,
 };
-use ash_sim::world::{Terrain as SimTerrain, World};
+use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
 use Direction::{East, North, South, SouthEast};
+
+#[path = "websocket/action.rs"]
+mod action;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -99,20 +102,6 @@ fn offer(action: Action, cost: u64) -> AvailableAction {
     }
 }
 
-fn wire_action(action: ash_sim::action::Action) -> Action {
-    match action {
-        ash_sim::action::Action::Move(direction) => Action::Move(direction),
-        ash_sim::action::Action::Wait => Action::Wait,
-    }
-}
-
-fn sim_action(action: Action) -> ash_sim::action::Action {
-    match action {
-        Action::Move(direction) => ash_sim::action::Action::Move(direction),
-        Action::Wait => ash_sim::action::Action::Wait,
-    }
-}
-
 /// Every perceived change of `world`, as the server sends it.
 fn wire_changes(world: &World) -> Vec<PerceivedChange> {
     world
@@ -121,7 +110,7 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
         .map(|change| PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: wire_action(change.action),
+            action: action::to_wire(change.action),
             bumped: change.bumped,
         })
         .collect()
@@ -132,14 +121,7 @@ fn expected_snapshot(world: &World) -> ServerMessage {
     ServerMessage::Snapshot(Snapshot {
         time: world.clock(),
         width: world.terrain_width(),
-        terrain: world
-            .terrain()
-            .iter()
-            .map(|tile| match tile {
-                SimTerrain::Floor => Terrain::Floor,
-                SimTerrain::Wall => Terrain::Wall,
-            })
-            .collect(),
+        terrain: world.terrain().to_vec(),
         entities: world
             .entities()
             .map(|entity| PerceivedEntity {
@@ -158,7 +140,7 @@ fn expected_awaited(world: &World) -> ServerMessage {
             .available_actions()
             .into_iter()
             .map(|offered| AvailableAction {
-                action: wire_action(offered.action),
+                action: action::to_wire(offered.action),
                 cost: offered.cost,
             })
             .collect(),
@@ -281,7 +263,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     // The hosted world equals a replay of the accepted commands.
     let mut replay = ash_server::create_world(ash_server::world_seed(TOKEN));
     for &action in &accepted {
-        assert_eq!(replay.submit(sim_action(action)), Ok(()));
+        assert_eq!(replay.submit(action::to_sim(action)), Ok(()));
     }
     assert_eq!(snapshot, Some(expected_snapshot(&replay)));
     assert_eq!(pending_turn, Some(expected_awaited(&replay)));
@@ -325,7 +307,7 @@ fn a_turn_the_client_never_read_reaches_it_on_reconnect() {
         .peek(&mut [0])
         .expect("the reply reaches the client");
     drop(socket);
-    assert_eq!(replay.submit(sim_action(Action::Move(East))), Ok(()));
+    assert_eq!(replay.submit(action::to_sim(Action::Move(East))), Ok(()));
 
     // R17: a client that received no change gets every one, in order, then
     // the present state and its turn.

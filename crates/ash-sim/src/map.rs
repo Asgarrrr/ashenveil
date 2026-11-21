@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use ash_core::tile::{Direction, TilePosition};
+use ash_core::tile::{Direction, Terrain, TilePosition};
 
 const WIDTH: usize = 9;
 
@@ -16,12 +16,6 @@ const SKELETON: [&[u8; WIDTH]; 6] = [
     b"#.......#",
     b"#########",
 ];
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Terrain {
-    Floor,
-    Wall,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Map {
