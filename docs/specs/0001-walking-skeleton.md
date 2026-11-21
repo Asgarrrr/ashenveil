@@ -279,6 +279,11 @@ one world across connections).
   silently, and sockets have no read timeout, so closing the older
   connection (R20) needs a way to interrupt its blocking read (for example
   a cloned `TcpStream` and `shutdown`).
+- S5 (found in S5): S5 also touches `crates/ash-server/src/{connection,lib}.rs`
+  and `crates/ash-protocol/` (messages `Quarantined` and `ControllerTaken`,
+  with their round-trip and decoder tests). The old connection receives
+  `ControllerTaken` before it closes, so a client knows not to reconnect.
+  No acceptance criterion changes.
 - S7 (found in the S4 review): the out-of-turn guard and the R18 guard of
   `ash-server` cannot be reached with one entity; S7 adds a negative test
   for each. Each world gets its own seed, kept in the registry, so worlds
@@ -287,3 +292,20 @@ one world across connections).
   `crates/ash-server/src/main.rs` joins S6's files.
 - S6 (found in the S1 review): `accept` resolves Cargo integration targets
   only; S6 extends it to the Node `web_model` test. Added to S6's files.
+- S6 (found in S6): S6 also touches `crates/ash-protocol/src/message.rs`,
+  which re-exports `EntityId` and `Direction`: a command needs both, and the
+  matrix lets `ash-wasm` depend on `ash-protocol` only. Other files:
+  `web/package-lock.json`, `xtask/src/play/{client,files}.rs`, and
+  `web/tests/web_model.test.js` with `web/tests/fixtures/walk.json`, a
+  stream recorded from a real server. The test is plain JavaScript:
+  type-checking it would need `@types/node`. `accept` resolves a name to
+  `web/tests/<name>.test.js`, so `cargo test -p xtask` and `cargo xtask
+  verify` now need `node`. Decoded messages cross from WASM as JSON; times
+  stay exact up to 2^53 units. The page loads on `127.0.0.1:8000`, the
+  server listens on `127.0.0.1:8001`. No acceptance criterion changes.
+- S7 (found in S6): a perceived change carries no position, so the web
+  model steps the mover with its own copy of the direction offsets. A bump
+  (R13) is a perceived move where the mover stays. Under whole-map
+  perception (R16) the model could infer it from the occupied target tile,
+  but that inference breaks once perception narrows. So S7 should let the
+  change carry the mover's position, or say that it bumped.

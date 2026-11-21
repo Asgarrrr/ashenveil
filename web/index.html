@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Ashenveil</title>
+    <style>
+      body { display: flex; gap: 24px; margin: 16px; background: #111; color: #ddd; font: 14px monospace; }
+      aside { min-width: 280px; }
+      h2 { margin: 16px 0 4px; font-size: 14px; color: #999; }
+      ul, ol { margin: 0; padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="map"></canvas>
+    <aside>
+      <p id="status"></p>
+      <p>Clock: <span id="clock">0</span></p>
+      <h2>Actions and their cost</h2>
+      <ul id="actions"></ul>
+      <h2>Keys</h2>
+      <p>Numpad or vi keys: 7 8 9 / y k u, 4 6 / h l, 1 2 3 / b j n. Wait: 5 or <kbd>.</kbd></p>
+      <h2>Perceived, newest first</h2>
+      <ol id="log"></ol>
+    </aside>
+    <script type="module" src="build/main.js"></script>
+  </body>
+</html>
