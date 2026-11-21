@@ -9,6 +9,9 @@ version = "0.0.0"
 [[package]]
 name = "ash-sim"
 version = "0.0.0"
+dependencies = [
+ "ash-core",
+]
 
 [[package]]
 name = "itoa"
