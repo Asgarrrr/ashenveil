@@ -7,11 +7,14 @@
 mod action;
 mod connection;
 mod perception;
+mod quarantine;
 mod registry;
 
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
+
+use ash_protocol::message::ResumeToken;
 
 pub use registry::create_world;
 
@@ -20,7 +23,23 @@ use registry::Registry;
 /// Serves every connection `listener` accepts, each on its own thread.
 /// Never returns.
 pub fn serve(listener: TcpListener) {
-    let registry = Arc::new(Registry::default());
+    serve_registry(listener, Registry::default());
+}
+
+/// `serve`, except that the world of `token` violates an invariant once it
+/// accepts its first command. Tests use it to prove the quarantine.
+///
+/// The fault cannot reach production. `serve` never sets it, and no message
+/// can. `#[cfg(test)]` would hide this function from the integration tests.
+/// A Cargo feature would need a self dev-dependency to reach them, and the
+/// dependency matrix, part of the constitution, allows no such edge.
+#[doc(hidden)]
+pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
+    serve_registry(listener, Registry::with_fault(token));
+}
+
+fn serve_registry(listener: TcpListener, registry: Registry) {
+    let registry = Arc::new(registry);
     for stream in listener.incoming() {
         // A failed accept concerns that one connection only.
         let Ok(stream) = stream else { continue };

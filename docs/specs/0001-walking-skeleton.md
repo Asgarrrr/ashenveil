@@ -200,8 +200,9 @@ The design gaps found by the review are resolved in the design (R8, R20).
 
 ### - [ ] S6 — The character walks in the browser
 
-- Files: `crates/ash-wasm/` (new), `xtask/src/play.rs`, `xtask/src/main.rs`
-  (protected: label), `web/` (new: `index.html`, `src/*.ts`, `package.json`,
+- Files: `crates/ash-wasm/` (new), `xtask/src/play.rs`, `xtask/src/accept.rs`
+  (resolve `web_model` to the Node test), `xtask/src/main.rs` (protected:
+  label), `web/` (new: `index.html`, `src/*.ts`, `package.json`,
   `tsconfig.json`), `.gitignore`.
 - Behavior: `cargo xtask play` builds the WASM package and the TypeScript,
   serves `web/`, and starts the server. The page draws the map and every
@@ -252,9 +253,37 @@ Both gaps found by the second-model review were decided by the human on
 For the human at the milestone: **bump** (a move into an occupied tile),
 **perception** (what a character learns of the world; the only channel to
 the client), **speed** (the divisor of an entity's base costs), **base cost**
-(an action's cost at speed 1), **resume token** (identifies one controller of
+(an action's cost at speed 1), **map** (the fixed terrain of a world:
+floor and wall tiles), **resume token** (identifies one controller of
 one world across connections).
 
 ## Proposed amendments
 
-(empty)
+- S3 (found in the slice): the file list also needs `crates/ash-sim/src/world.rs`,
+  both `lib.rs` files, and `crates/ash-sim/tests/time_passes.rs` (its `submit`
+  calls now handle a `Result`). No acceptance criterion changes.
+- S3 (found in the S3 review): `available_actions` offered only wait once
+  moves existed. S3 now offers wait and every move the map allows, with
+  their costs (R9, and R14 for S7). No acceptance criterion changes.
+- S4 (found in the S3 review): the snapshot needs the terrain (R16), and
+  `ash-sim` has no accessor for it. S4 may add one to `crates/ash-sim/src/`.
+- S4 (found in S4): S4 also touches `crates/ash-core/src/{entity,time}.rs`
+  (raw-value accessors for the codec) and `crates/ash-sim/src/{map,world}.rs`
+  (`World::terrain`, `World::terrain_width`, `World::entities`; the map module
+  stays private). The client chooses its
+  resume token (`u128`); tokens are not secrets in phase 1. `Awaited`
+  carries the clock, so the client can show it. No acceptance criterion
+  changes.
+- S5 (found in the S4 review): today two connections with one token both
+  drive the world, a panic poisons the world lock and later `Hello`s close
+  silently, and sockets have no read timeout, so closing the older
+  connection (R20) needs a way to interrupt its blocking read (for example
+  a cloned `TcpStream` and `shutdown`).
+- S7 (found in the S4 review): the out-of-turn guard and the R18 guard of
+  `ash-server` cannot be reached with one entity; S7 adds a negative test
+  for each. Each world gets its own seed, kept in the registry, so worlds
+  differ and replays stay possible.
+- S6 (found in S4): `cargo xtask play` needs a server binary:
+  `crates/ash-server/src/main.rs` joins S6's files.
+- S6 (found in the S1 review): `accept` resolves Cargo integration targets
+  only; S6 extends it to the Node `web_model` test. Added to S6's files.
