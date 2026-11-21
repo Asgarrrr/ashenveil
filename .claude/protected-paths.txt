@@ -32,6 +32,10 @@ deny.toml
 rust-toolchain.toml
 rust-toolchain
 
+# The required crate attributes of `ash-core` and `ash-sim`: their `lib.rs`
+# cannot be listed, since every new module edits it.
+xtask/src/verify/sim_purity.rs
+
 # Hooks: the commit-time and Claude Code hook logic, setup, the installed
 # launchers (.git/hooks/) and the Claude Code settings (.claude/). Not
 # covered: the shared cargo runner of verify. Only review guards it; CI does
