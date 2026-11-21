@@ -1,4 +1,6 @@
 [toolchain]
 channel = "1.100.0"
 components = ["rustfmt", "clippy"]
+# The web client loads ash-protocol through the ash-wasm crate.
+targets = ["wasm32-unknown-unknown"]
 profile = "minimal"
