@@ -3,23 +3,16 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot, Terrain,
+    AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
 };
-use ash_sim::world::{Terrain as SimTerrain, World};
+use ash_sim::world::World;
 
 use crate::action;
 
 /// R16: the whole map and every entity, stamped with the clock. Positions
 /// only: no speed, cost or next turn (R18).
 pub fn snapshot(world: &World) -> ServerMessage {
-    let terrain = world
-        .terrain()
-        .iter()
-        .map(|tile| match tile {
-            SimTerrain::Floor => Terrain::Floor,
-            SimTerrain::Wall => Terrain::Wall,
-        })
-        .collect();
+    let terrain = world.terrain().to_vec();
     let entities = world
         .entities()
         .map(|entity| PerceivedEntity {

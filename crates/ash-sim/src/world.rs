@@ -4,13 +4,12 @@ use alloc::vec::Vec;
 
 use ash_core::entity::{EntityId, Speed};
 use ash_core::rng::Rng;
-use ash_core::tile::{Direction, TilePosition};
+use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction, Refused};
 use crate::controller::Controller;
 use crate::map::Map;
-pub use crate::map::Terrain;
 use crate::perception::PerceivedChange;
 use crate::scheduler::Scheduler;
 use crate::wander;

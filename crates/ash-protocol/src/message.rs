@@ -10,7 +10,7 @@ use ash_core::time::{ActionCost, Time};
 
 // A client builds commands from these, and may depend on this crate alone.
 pub use ash_core::entity::EntityId;
-pub use ash_core::tile::Direction;
+pub use ash_core::tile::{Direction, Terrain};
 
 use crate::wire::{self, Reader, Wire};
 
@@ -18,13 +18,6 @@ use crate::wire::{self, Reader, Wire};
 /// chooses it; an unknown token starts a new world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResumeToken(pub u128);
-
-/// What a tile is made of.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Terrain {
-    Floor,
-    Wall,
-}
 
 /// An action an entity can take (R4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
