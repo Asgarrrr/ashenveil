@@ -194,10 +194,10 @@ test("bytes that are not a message decode to nothing", () => {
   assert.equal(decodeServerMessage(walk[0].subarray(1)), undefined);
 });
 
-test("the numpad and vi keys map to the eight moves and wait", () => {
+test("the letter block and the numpad map to the eight moves and wait", () => {
   const layouts = [
-    ["7", "8", "9", "4", "5", "6", "1", "2", "3"],
-    ["y", "k", "u", "h", ".", "l", "b", "j", "n"],
+    ["KeyQ", "KeyW", "KeyE", "KeyA", "KeyS", "KeyD", "KeyZ", "KeyX", "KeyC"],
+    ["Numpad7", "Numpad8", "Numpad9", "Numpad4", "Numpad5", "Numpad6", "Numpad1", "Numpad2", "Numpad3"],
   ];
   const commands = [
     move("northwest"),
@@ -213,7 +213,11 @@ test("the numpad and vi keys map to the eight moves and wait", () => {
   for (const keys of layouts) {
     assert.deepEqual(keys.map(commandForKey), commands);
   }
-  assert.equal(commandForKey("q"), undefined);
+  assert.deepEqual(
+    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].map(commandForKey),
+    [move("north"), move("south"), move("west"), move("east"), wait],
+  );
+  assert.equal(commandForKey("KeyP"), undefined);
 
   const encoded = commands.map((command) => Buffer.from(encodeCommand(0, command)).toString("hex"));
   assert.equal(new Set(encoded).size, 9, `the codec merges commands: ${encoded}`);
