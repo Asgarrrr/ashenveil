@@ -18,3 +18,11 @@ jobs:
         with:
           tool: cargo-deny@0.20.2
       - run: cargo xtask verify
+
+  # The fuzz crate lives outside the workspace, so verify never builds it.
+  fuzz-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install nightly --profile minimal
+      - run: cargo +nightly check --locked --manifest-path fuzz/Cargo.toml
