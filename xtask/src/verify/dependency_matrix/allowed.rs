@@ -5,6 +5,12 @@
 
 pub const ALLOWED: &[(&str, &[&str])] = &[
     ("ash-core", &[]),
+    ("ash-protocol", &["ash-core"]),
+    (
+        "ash-server",
+        &["ash-core", "ash-sim", "ash-protocol", "tungstenite"],
+    ),
     ("ash-sim", &["ash-core"]),
+    ("ash-wasm", &["ash-protocol", "wasm-bindgen"]),
     ("xtask", &["serde_json"]),
 ];

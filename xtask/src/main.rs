@@ -3,12 +3,14 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+mod accept;
 mod hook;
 mod protected_path_check;
 mod setup;
 mod verify;
 
-const USAGE: &str = "usage: cargo xtask verify [--fast]\n       cargo xtask setup\n       \
+const USAGE: &str = "usage: cargo xtask verify [--fast]\n       cargo xtask accept <test>\n       \
+                     cargo xtask setup\n       \
                      cargo xtask hook constitution | commit-msg <message-file> | pre-commit\n       \
                      cargo xtask constitution --base <sha> --head <sha> [--approved]";
 
@@ -18,6 +20,7 @@ fn main() -> ExitCode {
     match args.as_slice() {
         ["verify"] => run_verify(),
         ["verify", "--fast"] | ["hook", "pre-commit"] => run_verify_fast(),
+        ["accept", test] => accept::run(repo_root(), test),
         ["setup"] => run_setup(),
         ["hook", "constitution"] => run_constitution_hook(),
         ["hook", "commit-msg", message_file] => run_commit_msg_hook(Path::new(message_file)),

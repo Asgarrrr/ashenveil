@@ -18,9 +18,8 @@ allow_attributes_without_reason = "deny"
 as_conversions = "deny"
 mod_module_files = "deny"
 
-# An overflow in the simulation is a violated invariant, in release too.
-[profile.release.package.ash-core]
-overflow-checks = true
-
-[profile.release.package.ash-sim]
+# An overflow in the simulation is a violated invariant, in release too. Set
+# for the whole profile: generic code of `ash-core` or `ash-sim` takes the
+# settings of the crate that instantiates it, so per-package overrides leak.
+[profile.release]
 overflow-checks = true
