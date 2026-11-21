@@ -33,6 +33,9 @@ document.addEventListener("keydown", (event) => {
   }
   event.preventDefault();
   socket?.send(encodeCommand(world.controlled, action));
+  // A second key before the next turn must not send a command for this one.
+  world.offer = [];
+  redraw();
 });
 
 function connect(): void {
@@ -40,7 +43,9 @@ function connect(): void {
   opened.binaryType = "arraybuffer";
   opened.onopen = () => {
     socket = opened;
-    opened.send(encodeHello(token));
+    // R17: the log holds every perceived change received, so the server
+    // sends only the others.
+    opened.send(encodeHello(token, world.log.length));
   };
   opened.onmessage = (event: MessageEvent<ArrayBuffer>) => {
     const message = decodeServerMessage(new Uint8Array(event.data));

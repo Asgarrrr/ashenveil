@@ -8,7 +8,7 @@ use ash_sim::world::World;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
-use crate::registry::{Controller, HostedWorld, Registry};
+use crate::registry::{HostedWorld, PlayerConnection, Registry};
 use crate::{action, perception};
 
 type Socket = WebSocket<TcpStream>;
@@ -26,14 +26,16 @@ enum End {
 /// Serves one client until the connection ends. The world keeps its state
 /// (R19).
 pub fn run(stream: TcpStream, registry: &Registry) {
-    let Ok(controller) = Controller::new(&stream) else {
+    let Ok(controller) = PlayerConnection::new(&stream) else {
         return;
     };
     if let Ok(mut socket) = tungstenite::accept(stream)
-        && let Some(ClientMessage::Hello { token }) = receive(&mut socket)
+        && let Some(ClientMessage::Hello { token, received }) = receive(&mut socket)
     {
         let hosted = registry.world(token);
-        match control(&mut socket, &hosted, &controller) {
+        // A count past every change sends none.
+        let received = usize::try_from(received).unwrap_or(usize::MAX);
+        match control(&mut socket, &hosted, &controller, received) {
             End::Left => {}
             End::Quarantined => farewell(socket, ServerMessage::Quarantined),
             End::ControllerTaken => farewell(socket, ServerMessage::ControllerTaken),
@@ -44,11 +46,22 @@ pub fn run(stream: TcpStream, registry: &Registry) {
     controller.close();
 }
 
-fn control(socket: &mut Socket, hosted: &HostedWorld, controller: &Controller) -> End {
+/// Greets the client, then serves its commands. The greeting holds the
+/// changes after the first `received`, then the snapshot and the pending
+/// turn. Only the client knows what it received: a reply the server wrote
+/// may never have been read (R17).
+fn control(
+    socket: &mut Socket,
+    hosted: &HostedWorld,
+    controller: &PlayerConnection,
+    received: usize,
+) -> End {
     let greeting = hosted.run(|controlled| {
         controlled.take(controller);
-        let mut greeting = vec![perception::snapshot(&controlled.world)];
-        greeting.extend(perception::awaited(&controlled.world, hosted.character));
+        let world = &controlled.world;
+        let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
+        greeting.push(perception::snapshot(world));
+        greeting.extend(perception::awaited(world, hosted.character));
         greeting
     });
     let Ok(greeting) = greeting else {
@@ -141,4 +154,25 @@ fn send(socket: &mut Socket, messages: Vec<ServerMessage>) -> Result<(), Gone> {
             .map_err(|_| Gone)?;
     }
     socket.flush().map_err(|_| Gone)
+}
+
+#[cfg(test)]
+mod tests {
+    use ash_protocol::message::ResumeToken;
+
+    use super::*;
+    use crate::perception::tests::world_awaiting_another_player;
+
+    #[test]
+    fn a_command_while_the_world_awaits_another_entity_is_refused() {
+        let (mut world, character, _) = world_awaiting_another_player();
+        let hosted = Registry::default().world(ResumeToken(1));
+        assert_eq!(hosted.character, character);
+        let before = world.clone();
+
+        let replies = step(&mut world, &hosted, character, Action::Wait);
+
+        assert_eq!(replies, [ServerMessage::Refused]);
+        assert_eq!(world, before);
+    }
 }

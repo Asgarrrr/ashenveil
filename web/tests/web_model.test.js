@@ -2,10 +2,16 @@
 // client, fed through the real WASM codec. `cargo xtask accept web_model`
 // builds the client, then runs this file with Node's test runner.
 //
-// `fixtures/walk.json` holds the binary messages a real server sent, in hex.
-// The client said Hello, then commanded entity 0, which starts at (1, 1):
-// move east, move north (into the wall: refused), wait, move southeast.
-// A second connection with the same token then took the controller.
+// Each fixture holds the binary messages a real server sent, in hex. The
+// client said Hello, then commanded entity 0, which starts at (1, 1). The
+// creature, entity 1, starts at (7, 4) and wanders.
+//
+// `fixtures/walk.json`: move east, move north (into the wall: refused),
+// wait, move southeast. A second connection with the same token then took
+// the controller.
+//
+// `fixtures/bump.json`: the client chased the creature until a move of
+// entity 0 bumped into it (R13).
 //
 //   012345678
 // 0 #########
@@ -25,10 +31,23 @@ import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol
 
 await loadCodec(readFileSync(new URL("../pkg/ash_wasm_bg.wasm", import.meta.url)));
 
-const walk = JSON.parse(
-  readFileSync(new URL("fixtures/walk.json", import.meta.url), "utf8"),
-).map((hex) => Uint8Array.from(Buffer.from(hex, "hex")));
+/** The messages `name` holds, as bytes. */
+function fixture(name) {
+  return JSON.parse(readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8")).map(
+    (hex) => Uint8Array.from(Buffer.from(hex, "hex")),
+  );
+}
+
+const walk = fixture("walk.json");
+const bump = fixture("bump.json");
 const controllerTaken = walk.length - 1;
+
+/** The index of the first message of `stream` that `found` accepts. */
+function indexOf(stream, found) {
+  const index = stream.findIndex((bytes) => found(decodeServerMessage(bytes)));
+  assert.notEqual(index, -1, "no such message");
+  return index;
+}
 
 /** A model fed the messages `stream` holds, each decoded by the codec. */
 function replay(stream) {
@@ -56,17 +75,32 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.terrainAt(9, 0), undefined);
 
   assert.equal(world.controlled, 0);
-  assert.deepEqual([...world.positions], [[0, { x: 3, y: 2, z: 0 }]]);
+  // R16: the creature is one more perceived entity, stepped like the
+  // character: west, west, north, west from (7, 4).
+  assert.deepEqual(
+    [...world.positions],
+    [
+      [0, { x: 3, y: 2, z: 0 }],
+      [1, { x: 4, y: 3, z: 0 }],
+    ],
+  );
   assert.equal(world.time, 250);
 
   assert.equal(world.offer.length, 9, "every move is open at (3, 2), and wait");
   assert.equal(world.costOf(wait), 50);
   assert.equal(world.costOf(move("northwest")), 100);
 
+  const stepped = (time, entity, action) => ({ time, entity, action, bumped: null });
   assert.deepEqual(world.log, [
-    { time: 0, entity: 0, action: move("east") },
-    { time: 100, entity: 0, action: wait },
-    { time: 150, entity: 0, action: move("southeast") },
+    stepped(0, 0, move("east")),
+    stepped(0, 1, move("west")),
+    stepped(50, 1, move("west")),
+    stepped(100, 0, wait),
+    stepped(100, 1, move("north")),
+    stepped(150, 0, move("southeast")),
+    stepped(150, 1, wait),
+    stepped(175, 1, move("west")),
+    stepped(225, 1, wait),
   ]);
   assert.equal(world.refused, false);
   assert.equal(world.mayReconnect(), true);
@@ -93,14 +127,36 @@ test("a perceived move steps the mover toward its direction", () => {
       terrain: Array(25).fill("floor"),
       entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 } }],
     });
-    world.apply({ kind: "perceived", time: 0, entity: 4, action: move(direction) });
+    world.apply({ kind: "perceived", time: 0, entity: 4, action: move(direction), bumped: null });
     assert.deepEqual(world.positions.get(4), { x, y, z: 0 }, direction);
   }
 });
 
+test("a bump leaves the mover in place and logs whom it bumped into", () => {
+  const at = indexOf(bump, (message) => message.kind === "perceived" && message.bumped !== null);
+  const before = replay(bump.slice(0, at));
+  const bumped = replay(bump.slice(0, at + 1));
+
+  assert.deepEqual(bumped.positions, before.positions, "the bump moved an entity");
+  assert.deepEqual(bumped.log.at(-1), {
+    time: 200,
+    entity: 0,
+    action: move("southeast"),
+    bumped: 1,
+  });
+  assert.deepEqual(
+    [...replay(bump).positions],
+    [
+      [0, { x: 3, y: 2, z: 0 }],
+      [1, { x: 6, y: 4, z: 0 }],
+    ],
+  );
+});
+
 test("a refused command advances nothing and keeps the offer", () => {
-  const beforeRefusal = replay(walk.slice(0, 4));
-  const refused = replay(walk.slice(0, 5));
+  const refusal = indexOf(walk, (message) => message.kind === "refused");
+  const beforeRefusal = replay(walk.slice(0, refusal));
+  const refused = replay(walk.slice(0, refusal + 1));
 
   assert.equal(refused.refused, true);
   assert.equal(refused.time, beforeRefusal.time);
@@ -108,7 +164,7 @@ test("a refused command advances nothing and keeps the offer", () => {
   assert.deepEqual(refused.offer, beforeRefusal.offer);
   assert.equal(refused.costOf(move("north")), undefined, "north is a wall");
 
-  assert.equal(replay(walk.slice(0, 6)).refused, false);
+  assert.equal(replay(walk.slice(0, refusal + 2)).refused, false);
 });
 
 test("the offer leaves once the controlled entity acts", () => {

@@ -7,26 +7,41 @@ use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ash_core::entity::{EntityId, Speed};
+use ash_core::tile::TilePosition;
 use ash_protocol::message::ResumeToken;
+use ash_sim::controller::Controller;
 use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
 
-/// Phase 1 worlds draw nothing from their RNG, so one seed serves them all.
-const WORLD_SEED: u64 = 0;
+/// The seed of the world `token` starts. The registry keeps every world
+/// under its token, so it keeps the seed too: with the world's command log,
+/// it replays the world.
+pub fn world_seed(token: ResumeToken) -> u64 {
+    let bytes = token.0.to_le_bytes();
+    let half = |start: usize| u64::from_le_bytes(std::array::from_fn(|byte| bytes[start + byte]));
+    half(0) ^ half(8)
+}
 
-/// The world a new resume token starts. A replay of a world's accepted
+/// Where the creature stands when a world begins: a floor tile of the fixed
+/// map, across the room from the character.
+const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+
+/// The world a new resume token starts, from `seed`: the character, then a
+/// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
 /// commands starts from it too.
-pub fn create_world() -> World {
-    World::new(WORLD_SEED, Speed::new(1))
+pub fn create_world(seed: u64) -> World {
+    let mut world = World::new(seed, Speed::new(1));
+    world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
+    world
 }
 
 /// One player connection. The registry keeps a clone of its stream, so a
 /// newer connection can interrupt its blocking read (R20).
 #[derive(Clone)]
-pub struct Controller(Arc<TcpStream>);
+pub struct PlayerConnection(Arc<TcpStream>);
 
-impl Controller {
+impl PlayerConnection {
     pub fn new(stream: &TcpStream) -> io::Result<Self> {
         stream.try_clone().map(|clone| Self(Arc::new(clone)))
     }
@@ -41,19 +56,19 @@ impl Controller {
 /// A world and the connection that controls its character.
 pub struct Controlled {
     pub world: World,
-    controller: Option<Controller>,
+    controller: Option<PlayerConnection>,
 }
 
 impl Controlled {
     /// `controller` takes the controller of the character (R20). The read
     /// of the older connection ends; it can still write its farewell.
-    pub fn take(&mut self, controller: &Controller) {
+    pub fn take(&mut self, controller: &PlayerConnection) {
         if let Some(older) = self.controller.replace(controller.clone()) {
             let _ = older.0.shutdown(Shutdown::Read);
         }
     }
 
-    pub fn is_controlled_by(&self, controller: &Controller) -> bool {
+    pub fn is_controlled_by(&self, controller: &PlayerConnection) -> bool {
         self.controller
             .as_ref()
             .is_some_and(|current| Arc::ptr_eq(&current.0, &controller.0))
@@ -98,7 +113,7 @@ impl Registry {
     pub fn world(&self, token: ResumeToken) -> Arc<HostedWorld> {
         // Built before the lock, so no simulation code runs while it is
         // held; dropped unused when the token already has a world.
-        let world = create_world();
+        let world = create_world(world_seed(token));
         // R8: the character is created first, so it is the first awaited.
         let candidate = HostedWorld {
             character: world.awaited(),
@@ -123,10 +138,10 @@ mod tests {
 
     use super::*;
 
-    fn controller(listener: &TcpListener) -> Controller {
+    fn controller(listener: &TcpListener) -> PlayerConnection {
         let address = listener.local_addr().expect("a bound address");
         let stream = TcpStream::connect(address).expect("the listener accepts");
-        Controller::new(&stream).expect("a clone of the stream")
+        PlayerConnection::new(&stream).expect("a clone of the stream")
     }
 
     #[test]
@@ -134,7 +149,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
         let (older, newer) = (controller(&listener), controller(&listener));
         let mut controlled = Controlled {
-            world: create_world(),
+            world: create_world(0),
             controller: None,
         };
         controlled.take(&older);
@@ -150,10 +165,11 @@ mod tests {
     }
 
     #[test]
-    fn a_quarantined_world_stays_registered_with_its_command_log() {
+    fn a_quarantined_world_stays_registered_and_replays_from_its_seed_and_log() {
         let registry = Registry::default();
         let token = ResumeToken(7);
         let faulted = registry.world(token).run(|controlled| {
+            assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
             assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
             ash_core::invariant!("a test fault");
         });
@@ -164,6 +180,29 @@ mod tests {
         let Err(poisoned) = hosted.controlled.lock() else {
             panic!("the quarantined world was replaced");
         };
-        assert_eq!(poisoned.into_inner().world.command_log(), [Action::Wait]);
+        let world = poisoned.into_inner().world.clone();
+        assert_eq!(world.command_log(), [Action::Wait, Action::Wait]);
+        let mut replay = create_world(world_seed(token));
+        for &action in world.command_log() {
+            assert_eq!(replay.submit(action), Ok(()));
+        }
+        assert_eq!(replay, world);
+    }
+
+    #[test]
+    fn worlds_of_different_tokens_differ() {
+        let registry = Registry::default();
+        let [first, second] = [ResumeToken(1), ResumeToken(2)].map(|token| {
+            let hosted = registry.world(token);
+            let stream = hosted.run(|controlled| {
+                for _ in 0..10 {
+                    assert_eq!(controlled.world.submit(Action::Wait), Ok(()));
+                }
+                controlled.world.perceived_changes().to_vec()
+            });
+            (world_seed(token), stream.ok())
+        });
+        assert_ne!(first.0, second.0, "two worlds share a seed");
+        assert_ne!(first.1, second.1, "two worlds behave the same");
     }
 }

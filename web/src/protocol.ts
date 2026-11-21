@@ -48,7 +48,7 @@ export type ServerMessage =
       entities: PerceivedEntity[];
     }
   | { kind: "awaited"; time: number; entity: number; actions: AvailableAction[] }
-  | { kind: "perceived"; time: number; entity: number; action: Action }
+  | { kind: "perceived"; time: number; entity: number; action: Action; bumped: number | null }
   | { kind: "refused" }
   | { kind: "quarantined" }
   | { kind: "controller_taken" };
@@ -71,8 +71,9 @@ export function decodeServerMessage(bytes: Uint8Array): ServerMessage | undefine
 // `WebSocket.send` requires.
 type Bytes = Uint8Array<ArrayBuffer>;
 
-export function encodeHello(token: bigint): Bytes {
-  return encode_hello(token) as Bytes;
+/** `received`: the perceived changes of the world the client already has. */
+export function encodeHello(token: bigint, received: number): Bytes {
+  return encode_hello(token, BigInt(received)) as Bytes;
 }
 
 export function encodeCommand(entity: number, action: Action): Bytes {

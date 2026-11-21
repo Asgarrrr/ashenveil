@@ -12,4 +12,7 @@ pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
     pub action: Action,
+    /// The entity a move bumped into (R13): the mover stayed in place. None
+    /// for a move that stepped, and for a wait.
+    pub bumped: Option<EntityId>,
 }

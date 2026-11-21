@@ -53,6 +53,9 @@ pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
     pub action: Action,
+    /// The entity a move bumped into (R13): the mover stayed in place. None
+    /// for a move that stepped, and for a wait.
+    pub bumped: Option<EntityId>,
 }
 
 /// Everything the character perceives at `time` (R16).
@@ -70,8 +73,10 @@ pub struct Snapshot {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClientMessage {
     /// The first message of a connection: take the controller of the world
-    /// this token names.
-    Hello { token: ResumeToken },
+    /// this token names. `received` counts the perceived changes of that
+    /// world the client has received, so the server sends it the others
+    /// (R17).
+    Hello { token: ResumeToken, received: u64 },
     /// `entity` takes `action`.
     Command { entity: EntityId, action: Action },
 }
@@ -205,14 +210,22 @@ impl Wire for PerceivedChange {
         self.time.write(out);
         self.entity.write(out);
         self.action.write(out);
+        self.bumped.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        Ok(Self {
+        let change = Self {
             time: Time::read(input)?,
             entity: EntityId::read(input)?,
             action: Action::read(input)?,
-        })
+            bumped: Option::read(input)?,
+        };
+        // Only a move bumps, and never into its own mover (R13).
+        match (change.action, change.bumped) {
+            (_, None) => Ok(change),
+            (Action::Move(_), Some(bumped)) if bumped != change.entity => Ok(change),
+            _ => Err(DecodeError),
+        }
     }
 }
 
@@ -243,9 +256,10 @@ impl Wire for Snapshot {
 impl Wire for ClientMessage {
     fn write(&self, out: &mut Vec<u8>) {
         match self {
-            Self::Hello { token } => {
+            Self::Hello { token, received } => {
                 0_u8.write(out);
                 token.write(out);
+                received.write(out);
             }
             Self::Command { entity, action } => {
                 1_u8.write(out);
@@ -259,6 +273,7 @@ impl Wire for ClientMessage {
         match u8::read(input)? {
             0 => Ok(Self::Hello {
                 token: ResumeToken::read(input)?,
+                received: u64::read(input)?,
             }),
             1 => Ok(Self::Command {
                 entity: EntityId::read(input)?,

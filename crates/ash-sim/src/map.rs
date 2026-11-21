@@ -79,7 +79,7 @@ impl Map {
 
     /// The terrain at `position`. A position outside the map crashes through
     /// `invariant!`.
-    fn terrain(&self, position: TilePosition) -> Terrain {
+    pub fn terrain(&self, position: TilePosition) -> Terrain {
         let index = (position.z == 0 && position.x < self.width)
             .then(|| position.y.checked_mul(self.width)?.checked_add(position.x))
             .flatten()

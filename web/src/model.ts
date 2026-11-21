@@ -15,6 +15,8 @@ export interface LogEntry {
   time: number;
   entity: number;
   action: Action;
+  /** The entity a move bumped into (R13): the mover stayed in place. */
+  bumped: number | null;
 }
 
 /** Why the server ended the connection for good. */
@@ -22,7 +24,8 @@ export type End = "quarantined" | "controller_taken";
 
 /**
  * One step toward each direction, as the change of x (east) and of y
- * (south). A perceived move carries no position: the client steps it.
+ * (south). A perceived move carries no position: the client steps it,
+ * unless the move bumped (R13).
  */
 const STEPS: Record<Direction, [number, number]> = {
   north: [0, -1],
@@ -71,8 +74,13 @@ export class PerceivedWorld {
         break;
       case "perceived":
         this.time = message.time;
-        this.log.push({ time: message.time, entity: message.entity, action: message.action });
-        this.perceive(message.entity, message.action);
+        this.log.push({
+          time: message.time,
+          entity: message.entity,
+          action: message.action,
+          bumped: message.bumped,
+        });
+        this.perceive(message.entity, message.action, message.bumped);
         break;
       case "refused":
         this.refused = true;
@@ -106,12 +114,12 @@ export class PerceivedWorld {
     return this.ended === undefined;
   }
 
-  private perceive(entity: number, action: Action): void {
+  private perceive(entity: number, action: Action, bumped: number | null): void {
     if (entity === this.controlled) {
       this.offer = [];
     }
     const position = this.positions.get(entity);
-    if (action.kind === "move" && position !== undefined) {
+    if (action.kind === "move" && bumped === null && position !== undefined) {
       const [east, south] = STEPS[action.direction];
       this.positions.set(entity, { ...position, x: position.x + east, y: position.y + south });
     }
