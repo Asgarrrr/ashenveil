@@ -1,6 +1,7 @@
 //! An action as the protocol names it and as the simulation names it, for
 //! the tests that build what the server must send from the simulation alone.
-//! The server's own mapping is private to it.
+//! It repeats the server's mapping on purpose: an oracle that called the
+//! server's code would not catch a bug in it.
 
 use ash_protocol::message::Action as WireAction;
 use ash_sim::action::Action as SimAction;

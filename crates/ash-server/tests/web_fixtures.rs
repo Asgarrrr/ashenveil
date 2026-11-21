@@ -102,7 +102,9 @@ fn fixture(name: &str) -> Vec<String> {
 }
 
 // The fixtures do not hold the Hello, so the recorded tokens are lost. Each
-// token below is one whose world sends the fixture byte for byte.
+// token below was found by trying tokens until its world sent the fixture
+// byte for byte. To re-record after a deliberate change, paste the left side
+// of the failing `assert_eq!` into the fixture file: it prints valid JSON.
 
 #[test]
 fn the_walk_fixture_is_what_the_server_sends() {
