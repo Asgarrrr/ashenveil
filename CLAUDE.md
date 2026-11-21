@@ -27,8 +27,9 @@ The full methodology and its rationale: `docs/plans/0000-methodology.md`.
 
 - `cargo xtask verify` — the definition of done. It runs every step, then lists
   the failed ones by label: `files` (instruction-file line caps, spec and ADR
-  sections, catch-all file names), `dependency matrix`, `lint inheritance`,
-  `fmt`, `clippy` (`-D warnings`), `test` (workspace), `cargo-deny`.
+  sections, catch-all file names, simulation crate attributes and
+  `extern crate std`), `dependency matrix`, `lint inheritance`, `fmt`,
+  `clippy` (`-D warnings`), `test` (workspace), `cargo-deny`.
 - `cargo test -p xtask` — tests of the project commands.
 - `cargo xtask constitution --base <sha> --head <sha> [--approved]` — the CI
   protected-path check. Only the human applies the `constitution-approved`
