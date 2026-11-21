@@ -1,4 +1,12 @@
-//! Tiles: the cells of the 3D grid, and the directions between neighbors.
+//! Tiles: the cells of the 3D grid, what they are made of, and the
+//! directions between neighbors.
+
+/// What a tile is made of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Terrain {
+    Floor,
+    Wall,
+}
 
 /// The coordinates of one tile. x grows to the east, y to the south, z
 /// upward.

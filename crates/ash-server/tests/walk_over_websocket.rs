@@ -22,9 +22,9 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
-    ServerMessage, Snapshot, Terrain,
+    ServerMessage, Snapshot,
 };
-use ash_sim::world::{Terrain as SimTerrain, World};
+use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
 use Direction::{East, North, South, SouthEast};
@@ -132,14 +132,7 @@ fn expected_snapshot(world: &World) -> ServerMessage {
     ServerMessage::Snapshot(Snapshot {
         time: world.clock(),
         width: world.terrain_width(),
-        terrain: world
-            .terrain()
-            .iter()
-            .map(|tile| match tile {
-                SimTerrain::Floor => Terrain::Floor,
-                SimTerrain::Wall => Terrain::Wall,
-            })
-            .collect(),
+        terrain: world.terrain().to_vec(),
         entities: world
             .entities()
             .map(|entity| PerceivedEntity {
