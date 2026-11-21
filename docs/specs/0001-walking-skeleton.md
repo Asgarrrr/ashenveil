@@ -2,9 +2,7 @@
 
 ## Status
 
-Approved (2026-11-20). S1 and S4 to S7 wait for the constitution PR (S0).
-S2 and S3 run before S1, so their acceptance runs through `cargo test`
-until `cargo xtask accept` exists.
+Delivered (2026-11-21). The human validated the milestone by playing.
 
 ## Context
 
@@ -110,7 +108,7 @@ the `researcher`, the `advisor` or the toolchain spike.
 Sequential. Each slice ends in a behavior a test or a human can observe.
 The design gaps found by the review are resolved in the design (R8, R20).
 
-### - [ ] S1 — The acceptance command
+### - [x] S1 — The acceptance command
 
 - Files: `xtask/src/accept.rs`, `xtask/src/main.rs` (protected: label).
 - Invariants: `cargo xtask accept <test>` runs exactly the named test across
@@ -120,7 +118,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
 - Acceptance: `cargo test -p xtask accept` — negative tests: a failing test,
   a missing test and an ambiguous filter each make `accept` exit non-zero.
 
-### - [ ] S2 — Time passes; replay is green
+### - [x] S2 — Time passes; replay is green
 
 - Files: `crates/ash-core/src/{lib,time,entity,rng,invariant}.rs`,
   `crates/ash-sim/src/{lib,world,scheduler,action,perception}.rs`,
@@ -142,7 +140,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
   resolves in due order; a second run of the same seed and command log gives
   an identical stream and final state.
 
-### - [ ] S3 — The character walks
+### - [x] S3 — The character walks
 
 - Files: `crates/ash-core/src/tile.rs`, `crates/ash-sim/src/map.rs`,
   `crates/ash-sim/src/action.rs`, `crates/ash-sim/tests/walk.rs`.
@@ -158,7 +156,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
   positions and clock; a wall move and a blocked diagonal leave clock, log
   and stream unchanged; the walk replays identically.
 
-### - [ ] S4 — The character walks over WebSocket
+### - [x] S4 — The character walks over WebSocket
 
 - Files: `crates/ash-protocol/` (new), `crates/ash-server/` (new),
   `crates/ash-server/tests/walk_over_websocket.rs`, `fuzz/` (outside the
@@ -181,7 +179,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
   feeding random bytes to the decoder, and the fuzz target building on
   nightly.
 
-### - [ ] S5 — Quarantine and takeover
+### - [x] S5 — Quarantine and takeover
 
 - Files: `crates/ash-server/src/{registry,quarantine}.rs`,
   `crates/ash-server/tests/quarantine.rs`.
@@ -198,7 +196,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
   walking. A second connection with the first token takes the controller, and the
   first connection is closed.
 
-### - [ ] S6 — The character walks in the browser
+### - [x] S6 — The character walks in the browser
 
 - Files: `crates/ash-wasm/` (new), `xtask/src/play.rs`, `xtask/src/accept.rs`
   (resolve `web_model` to the Node test), `xtask/src/main.rs` (protected:
@@ -220,7 +218,7 @@ The design gaps found by the review are resolved in the design (R8, R20).
   clock, offered costs and timestamped log; a key-mapping test checks the
   9 commands. Then the human plays.
 
-### - [ ] S7 — The creature
+### - [x] S7 — The creature
 
 - Files: `crates/ash-sim/src/{controller,wander}.rs`,
   `crates/ash-sim/tests/creature.rs`,
@@ -250,12 +248,10 @@ Both gaps found by the second-model review were decided by the human on
 
 ## Glossary proposals
 
-For the human at the milestone: **bump** (a move into an occupied tile),
-**perception** (what a character learns of the world; the only channel to
-the client), **speed** (the divisor of an entity's base costs), **base cost**
-(an action's cost at speed 1), **map** (the fixed terrain of a world:
-floor and wall tiles), **resume token** (identifies one controller of
-one world across connections).
+Approved by the human at the milestone (2026-11-21) and added to
+`CONTEXT.md`, together with the terms of issue #21: bump, perception,
+speed, base cost, map, resume token, character, creature, perceived
+change, terrain, wander, snapshot, awaited.
 
 ## Proposed amendments
 
