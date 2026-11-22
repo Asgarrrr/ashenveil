@@ -150,6 +150,8 @@ fn list<T>(items: &[T], json: impl Fn(&T) -> String) -> String {
 
 #[cfg(test)]
 mod tests {
+    use ash_protocol::message::TilePosition;
+
     use super::*;
 
     #[test]
@@ -176,6 +178,44 @@ mod tests {
             );
         }
         assert_eq!(encode_move(7, "up"), None);
+    }
+
+    /// The web client steps a perceived move with its own copy of the
+    /// offsets, `STEPS` in `web/src/model.ts`. A copy that drifts would
+    /// draw every mover off its true tile.
+    #[test]
+    fn the_web_client_steps_each_direction_by_the_same_offset() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/src/model.ts");
+        let model = std::fs::read_to_string(path).expect("the web model is readable");
+        let table = model
+            .split_once("const STEPS")
+            .and_then(|(_, rest)| rest.split_once("};"))
+            .map(|(table, _)| table)
+            .expect("the web model declares STEPS");
+        // One `name: [east, south],` per line.
+        let mut steps: Vec<(String, (i64, i64))> = table
+            .lines()
+            .filter_map(|line| {
+                let (name, offset) = line.trim().split_once(": [")?;
+                let (east, south) = offset.strip_suffix("],")?.split_once(", ")?;
+                Some((name.to_owned(), (east.parse().ok()?, south.parse().ok()?)))
+            })
+            .collect();
+        steps.sort();
+        let origin = TilePosition { x: 1, y: 1, z: 0 };
+        let mut expected: Vec<(String, (i64, i64))> = Direction::ALL
+            .into_iter()
+            .map(|direction| {
+                let to = origin.step(direction);
+                let offset = (
+                    i64::from(to.x) - i64::from(origin.x),
+                    i64::from(to.y) - i64::from(origin.y),
+                );
+                (direction_name(direction).to_owned(), offset)
+            })
+            .collect();
+        expected.sort();
+        assert_eq!(steps, expected);
     }
 
     #[test]
