@@ -220,6 +220,22 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_types_are_rejected_in_simulation_crates() {
+        let uses = [
+            "pub fn read(cell: &core::cell::RefCell<u8>) -> u8 {\n    *cell.borrow()\n}\n",
+            "pub fn erase<T: core::any::Any>(_: T) {}\n",
+            "pub fn id() -> core::any::TypeId {\n    core::any::TypeId::of::<u8>()\n}\n",
+        ];
+        for krate in SIMULATION_CRATES {
+            for code in uses {
+                let repo = scratch_workspace();
+                repo.append(&lib_rs(krate), code);
+                assert_clippy_rejects(&repo, &clippy_lint("disallowed_types"));
+            }
+        }
+    }
+
+    #[test]
     fn as_conversion_is_rejected() {
         let repo = scratch_workspace();
         repo.append(

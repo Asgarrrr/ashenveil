@@ -31,6 +31,8 @@ trigger, never a local exception.
   `unwrap_or_default`.
 - Typed grid indices instead of an indexing ban.
 - `unsafe` is forbidden. An exception needs an ADR.
+- No `RefCell`, `Any` or `TypeId`: `clippy::disallowed_types` is denied
+  (ADR 0001, F1).
 - Silence a lint only with `#[expect(lint, reason = "...")]`.
 
 ## Structure
@@ -51,7 +53,8 @@ trigger, never a local exception.
   must stay possible.
 - 3D tile grid split into chunks, sparse storage. Rendering is independent of
   the data.
-- The data model (ADR 0001) and deterministic parallelism (ADR 0002) are not
-  decided. Phase 1 uses simple, replaceable implementations (`Vec` storage,
-  single-threaded scheduler) behind the crate boundaries. Do not settle either
-  question in code.
+- The data model follows the contract of ADR 0001: choose, resolve, apply;
+  `apply` is the only write path; layout is never observable. Storage
+  mechanisms wait for the game slice that measures them.
+- Deterministic parallelism (ADR 0002) is not decided. Keep the
+  single-threaded scheduler; do not settle the question in code.

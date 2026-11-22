@@ -2,3 +2,11 @@
 # `clippy::arithmetic_side_effects`. Each entry names its overflow behavior in
 # its own docs.
 arithmetic-side-effects-allowed = []
+
+# ADR 0001, F1: the schema is closed and every borrow is checked by the
+# compiler. Runtime borrow checks panic; type erasure hides the schema.
+disallowed-types = [
+    { path = "core::cell::RefCell", reason = "ADR 0001 F1: borrows are checked at compile time" },
+    { path = "core::any::Any", reason = "ADR 0001 F1: the component set is closed" },
+    { path = "core::any::TypeId", reason = "ADR 0001 F1: the component set is closed" },
+]
