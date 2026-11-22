@@ -37,8 +37,10 @@ trigger, never a local exception.
 
 ## Structure
 
-- `ash-core`: coordinates, game time, ids, deterministic RNG, fixed-point,
-  integer helpers (sqrt, atan2, exp). `ash-sim`: world, scheduler, systems.
+- `ash-core`: the vocabulary shared by the simulation and the wire, with no
+  game rule: coordinates, tiles and terrain, game time and costs, ids,
+  deterministic RNG, fixed-point, integer helpers (sqrt, atan2, exp).
+  `ash-sim`: world, scheduler, systems.
 - Dependencies point down: `ash-sim` uses `ash-core`; `ash-core` uses no
   workspace crate. A new dependency for either crate requires an ADR.
 - Game systems start as modules of `ash-sim`. A module becomes a crate only
