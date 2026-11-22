@@ -1,5 +1,6 @@
-//! Coordinates, game time, ids, deterministic RNG, fixed-point and integer
-//! helpers. Every other crate depends on it; it depends on nothing.
+//! The vocabulary shared by the simulation and the wire, with no game rule:
+//! coordinates, tiles and terrain, game time and costs, ids, deterministic
+//! RNG. Every other crate depends on it; it depends on nothing.
 
 // No I/O and no clock in the simulation: std is allowed in tests only.
 #![cfg_attr(not(test), no_std)]
