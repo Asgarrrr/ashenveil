@@ -5,6 +5,7 @@ They rank first in the authority order: pillars > ADR > design > spec > code.
 
 Status: provisional, approved on 2026-11-17 to start. Revisit them at the
 first playable milestone: playing shows whether they settle real disputes.
+Amended on 2026-11-22: pillar 3, combat is common, not rare.
 
 ## 1. Death costs time, never the world: you play a lineage
 
@@ -35,7 +36,8 @@ manage what you carry. Social life, work and family give adventures their
 purpose and produce the heirs.
 
 - Prefer a tense turn over a fast one.
-- Combat is rare enough to matter and deadly enough to cost a generation.
+- Most of the world is hostile: combat is common. Every fight is a tactical
+  decision, and any fight can cost a generation.
 
 ## 4. Every consequence leaves a trace the character can follow
 
