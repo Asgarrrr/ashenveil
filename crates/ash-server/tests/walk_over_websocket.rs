@@ -118,15 +118,17 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
 
 /// What the server must send for `world`, built from the simulation alone.
 fn expected_snapshot(world: &World) -> ServerMessage {
+    let snapshot = ash_sim::perception::snapshot(world);
     ServerMessage::Snapshot(Snapshot {
-        time: world.clock(),
-        width: world.terrain_width(),
-        terrain: world.terrain().to_vec(),
-        entities: world
-            .entities()
-            .map(|entity| PerceivedEntity {
-                entity,
-                position: world.position(entity),
+        time: snapshot.time,
+        width: snapshot.width,
+        terrain: snapshot.terrain,
+        entities: snapshot
+            .entities
+            .iter()
+            .map(|perceived| PerceivedEntity {
+                entity: perceived.entity,
+                position: perceived.position,
             })
             .collect(),
     })

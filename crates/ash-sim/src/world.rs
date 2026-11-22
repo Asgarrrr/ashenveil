@@ -136,19 +136,19 @@ impl World {
     }
 
     /// The number of tiles in each row of the terrain.
-    pub fn terrain_width(&self) -> u32 {
+    pub(crate) fn terrain_width(&self) -> u32 {
         self.map.width()
     }
 
     /// Every tile of level 0, row by row from the north, each row from the
     /// west. Under whole-map perception (R16), every character perceives it.
-    pub fn terrain(&self) -> &[Terrain] {
+    pub(crate) fn terrain(&self) -> &[Terrain] {
         self.map.tiles()
     }
 
     /// Every entity, in creation order. Under whole-map perception (R16),
     /// every character perceives each of them.
-    pub fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
+    pub(crate) fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.iter().map(|entity| entity.id)
     }
 

@@ -158,14 +158,26 @@ fn send(socket: &mut Socket, messages: Vec<ServerMessage>) -> Result<(), Gone> {
 
 #[cfg(test)]
 mod tests {
+    use ash_core::entity::Speed;
+    use ash_core::tile::TilePosition;
     use ash_protocol::message::ResumeToken;
+    use ash_sim::controller::Controller;
 
     use super::*;
-    use crate::perception::tests::world_awaiting_another_player;
 
     #[test]
     fn a_command_while_the_world_awaits_another_entity_is_refused() {
-        let (mut world, character, _) = world_awaiting_another_player();
+        // The character has acted, so the world awaits a second entity that
+        // another player connection controls.
+        let mut world = World::new(0, Speed::new(1));
+        let character = world.awaited();
+        let other = world.create_entity(
+            Speed::new(2),
+            TilePosition { x: 3, y: 1, z: 0 },
+            Controller::Player,
+        );
+        assert_eq!(world.submit(ash_sim::action::Action::Wait), Ok(()));
+        assert_eq!(world.awaited(), other);
         let hosted = Registry::default().world(ResumeToken(1));
         assert_eq!(hosted.character, character);
         let before = world.clone();
