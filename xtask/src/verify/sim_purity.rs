@@ -14,10 +14,14 @@ const SIM_CRATES: &[&str] = &["crates/ash-core", "crates/ash-sim"];
 /// whitespace.
 const REQUIRED_ATTRIBUTES: &[&str] = &[
     "#![cfg_attr(not(test), no_std)]",
-    "#![deny(clippy::float_arithmetic, clippy::arithmetic_side_effects)]",
+    "#![deny(clippy::float_arithmetic, clippy::arithmetic_side_effects, clippy::disallowed_types)]",
 ];
 
-const BANNED_LINTS: &[&str] = &["float_arithmetic", "arithmetic_side_effects"];
+const BANNED_LINTS: &[&str] = &[
+    "float_arithmetic",
+    "arithmetic_side_effects",
+    "disallowed_types",
+];
 
 pub fn check(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = Vec::new();
@@ -197,7 +201,7 @@ mod tests {
         let repo = sim_crates();
         repo.replace(
             "crates/ash-core/src/lib.rs",
-            "clippy::float_arithmetic, ",
+            "    clippy::float_arithmetic,\n",
             "",
         );
         let messages: Vec<String> = messages(&repo).into_iter().map(|(_, m)| m).collect();
@@ -215,6 +219,18 @@ mod tests {
         );
         let messages = messages(&repo);
         assert_eq!(messages.len(), 1);
+        assert!(messages[0].1.ends_with("overrides a simulation ban"));
+    }
+
+    #[test]
+    fn crate_level_allow_of_disallowed_types_fails() {
+        let repo = sim_crates();
+        repo.append(
+            "crates/ash-core/src/lib.rs",
+            "#![allow(clippy::disallowed_types, reason = \"x\")]\n",
+        );
+        let messages = messages(&repo);
+        assert_eq!(messages.len(), 1, "{messages:?}");
         assert!(messages[0].1.ends_with("overrides a simulation ban"));
     }
 
