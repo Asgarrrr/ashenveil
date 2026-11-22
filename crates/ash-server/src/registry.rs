@@ -6,10 +6,8 @@ use std::io;
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ash_core::entity::{EntityId, Speed};
-use ash_core::tile::TilePosition;
+use ash_core::entity::EntityId;
 use ash_protocol::message::ResumeToken;
-use ash_sim::controller::Controller;
 use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
@@ -21,19 +19,6 @@ pub fn world_seed(token: ResumeToken) -> u64 {
     let bytes = token.0.to_le_bytes();
     let half = |start: usize| u64::from_le_bytes(std::array::from_fn(|byte| bytes[start + byte]));
     half(0) ^ half(8)
-}
-
-/// Where the creature stands when a world begins: a floor tile of the fixed
-/// map, across the room from the character.
-const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
-
-/// The world a new resume token starts, from `seed`: the character, then a
-/// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
-/// commands starts from it too.
-pub fn create_world(seed: u64) -> World {
-    let mut world = World::new(seed, Speed::new(1));
-    world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
-    world
 }
 
 /// One player connection. The registry keeps a clone of its stream, so a
@@ -113,7 +98,7 @@ impl Registry {
     pub fn world(&self, token: ResumeToken) -> Arc<HostedWorld> {
         // Built before the lock, so no simulation code runs while it is
         // held; dropped unused when the token already has a world.
-        let world = create_world(world_seed(token));
+        let world = World::skeleton(world_seed(token));
         // R8: the character is created first, so it is the first awaited.
         let candidate = HostedWorld {
             character: world.awaited(),
@@ -149,7 +134,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
         let (older, newer) = (controller(&listener), controller(&listener));
         let mut controlled = Controlled {
-            world: create_world(0),
+            world: World::skeleton(0),
             controller: None,
         };
         controlled.take(&older);
@@ -182,7 +167,7 @@ mod tests {
         };
         let world = poisoned.into_inner().world.clone();
         assert_eq!(world.command_log(), [Action::Wait, Action::Wait]);
-        let mut replay = create_world(world_seed(token));
+        let mut replay = World::skeleton(world_seed(token));
         for &action in world.command_log() {
             assert_eq!(replay.submit(action), Ok(()));
         }

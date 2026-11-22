@@ -131,7 +131,7 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Action, Option<EntityId>
 #[test]
 fn the_client_perceives_the_creature_only_through_positions_and_actions() {
     let address = start_server();
-    let mut replay = ash_server::create_world(ash_server::world_seed(TOKEN));
+    let mut replay = World::skeleton(ash_server::world_seed(TOKEN));
     let character = replay.awaited();
     let mut socket = connect(address, TOKEN);
 

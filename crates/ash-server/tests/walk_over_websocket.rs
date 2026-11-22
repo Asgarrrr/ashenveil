@@ -168,7 +168,7 @@ fn snapshot_parts(
 #[test]
 fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let address = start_server();
-    let start = ash_server::create_world(ash_server::world_seed(TOKEN));
+    let start = World::skeleton(ash_server::world_seed(TOKEN));
     let character = start.awaited();
     let mut socket = connect(address, TOKEN, 0);
 
@@ -261,7 +261,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     assert_eq!(pending_turn, last_awaited);
 
     // The hosted world equals a replay of the accepted commands.
-    let mut replay = ash_server::create_world(ash_server::world_seed(TOKEN));
+    let mut replay = World::skeleton(ash_server::world_seed(TOKEN));
     for &action in &accepted {
         assert_eq!(replay.submit(action::to_sim(action)), Ok(()));
     }
@@ -293,7 +293,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
 fn a_turn_the_client_never_read_reaches_it_on_reconnect() {
     const LOST: ResumeToken = ResumeToken(0x1057);
     let address = start_server();
-    let mut replay = ash_server::create_world(ash_server::world_seed(LOST));
+    let mut replay = World::skeleton(ash_server::world_seed(LOST));
     let character = replay.awaited();
     let mut socket = connect(address, LOST, 0);
     assert_eq!(receive(&mut socket), Some(expected_snapshot(&replay)));

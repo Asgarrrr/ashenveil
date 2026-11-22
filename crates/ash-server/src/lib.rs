@@ -16,7 +16,7 @@ use std::thread;
 
 use ash_protocol::message::ResumeToken;
 
-pub use registry::{create_world, world_seed};
+pub use registry::world_seed;
 
 use registry::Registry;
 
