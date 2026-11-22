@@ -29,3 +29,8 @@ Seeded from the product decisions in `docs/plans/0000-methodology.md`.
 | Snapshot | The whole perceived state, sent when a controller connects. |
 | Awaited | The entity whose turn it is. Time stops until its controller chooses. |
 | Resume token | Identifies one controller of one world across connections. |
+| Identity | The permanent, never-reused id of an entity. It outlives the entity's embodiment (ADR 0001). |
+| Embodiment | The presence of an entity in a store, with its components. |
+| Store | The world's tables that hold embodied entities and their components. Its layout is never observable. |
+| Effect | One change a rule returns. Only `apply` writes effects to the store. |
+| Total lookup | A lookup by id that returns "embodied here" or "issued but not embodied here", never a bare absence. |
