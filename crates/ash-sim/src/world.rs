@@ -18,6 +18,10 @@ use crate::wander;
 /// fixed map.
 const CHARACTER_START: TilePosition = TilePosition { x: 1, y: 1, z: 0 };
 
+/// Where the creature stands when the world begins: a floor tile of the
+/// fixed map, across the room from the character.
+const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Entity {
     id: EntityId,
@@ -60,6 +64,15 @@ impl World {
         };
         world.scheduler.schedule(character, Time::ZERO);
         world.advance();
+        world
+    }
+
+    /// The world of the skeleton, from `seed`: the character, then a
+    /// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
+    /// commands starts from it too.
+    pub fn skeleton(seed: u64) -> Self {
+        let mut world = Self::new(seed, Speed::new(1));
+        world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
         world
     }
 
@@ -123,19 +136,19 @@ impl World {
     }
 
     /// The number of tiles in each row of the terrain.
-    pub fn terrain_width(&self) -> u32 {
+    pub(crate) fn terrain_width(&self) -> u32 {
         self.map.width()
     }
 
     /// Every tile of level 0, row by row from the north, each row from the
     /// west. Under whole-map perception (R16), every character perceives it.
-    pub fn terrain(&self) -> &[Terrain] {
+    pub(crate) fn terrain(&self) -> &[Terrain] {
         self.map.tiles()
     }
 
     /// Every entity, in creation order. Under whole-map perception (R16),
     /// every character perceives each of them.
-    pub fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
+    pub(crate) fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.iter().map(|entity| entity.id)
     }
 

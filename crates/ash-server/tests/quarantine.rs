@@ -13,6 +13,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_protocol::message::{Action, ClientMessage, PerceivedChange, ResumeToken, ServerMessage};
+use ash_sim::world::World;
 use tungstenite::{Error, Message, WebSocket};
 
 use Direction::{East, South};
@@ -133,7 +134,7 @@ fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u6
 #[test]
 fn a_fault_quarantines_one_world_and_a_new_connection_takes_the_controller() {
     let address = start_server();
-    let character = ash_server::create_world(ash_server::world_seed(FIRST)).awaited();
+    let character = World::skeleton(ash_server::world_seed(FIRST)).awaited();
 
     let mut first = connect(address, FIRST);
     assert_eq!(greeting(&mut first), (at(1, 1), Time::ZERO));

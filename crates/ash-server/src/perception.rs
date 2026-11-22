@@ -1,42 +1,39 @@
-//! What the controller of a character learns, as protocol messages (R15 to
-//! R18). The only channel from a world to its client.
+//! What the controller of a character learns, as protocol messages: the
+//! perception `ash_sim::perception` computes (R15 to R18), translated.
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
     AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
 };
+use ash_sim::perception;
 use ash_sim::world::World;
 
 use crate::action;
 
-/// R16: the whole map and every entity, stamped with the clock. Positions
-/// only: no speed, cost or next turn (R18).
+/// R16: what every character perceives, as a protocol message.
 pub fn snapshot(world: &World) -> ServerMessage {
-    let terrain = world.terrain().to_vec();
-    let entities = world
-        .entities()
-        .map(|entity| PerceivedEntity {
-            entity,
-            position: world.position(entity),
-        })
-        .collect();
+    let snapshot = perception::snapshot(world);
     ServerMessage::Snapshot(Snapshot {
-        time: world.clock(),
-        width: world.terrain_width(),
-        terrain,
-        entities,
+        time: snapshot.time,
+        width: snapshot.width,
+        terrain: snapshot.terrain,
+        entities: snapshot
+            .entities
+            .into_iter()
+            .map(|perceived| PerceivedEntity {
+                entity: perceived.entity,
+                position: perceived.position,
+            })
+            .collect(),
     })
 }
 
-/// R9: the turn of `character`, with each available action and its cost.
-/// `None` when the world awaits another entity: its costs go only to its
-/// own controller (R18).
+/// R9: the turn of `character`, for its controller only (R18).
 pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
-    (world.awaited() == character).then(|| ServerMessage::Awaited {
+    perception::turn(world, character).map(|actions| ServerMessage::Awaited {
         time: world.clock(),
         entity: character,
-        actions: world
-            .available_actions()
+        actions: actions
             .into_iter()
             .map(|offered| AvailableAction {
                 action: action::to_wire(offered.action),

@@ -25,7 +25,7 @@ export type End = "quarantined" | "controller_taken";
 /**
  * One step toward each direction, as the change of x (east) and of y
  * (south). A perceived move carries no position: the client steps it,
- * unless the move bumped (R13). A test in `crates/ash-core/src/tile.rs`
+ * unless the move bumped (R13). A test in `crates/ash-wasm/src/lib.rs`
  * holds this table to the server's offsets.
  */
 const STEPS: Record<Direction, [number, number]> = {
