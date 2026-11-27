@@ -36,21 +36,21 @@ const COMMANDS = new Map<string, Action>([
   ["Space", wait],
 ]);
 
-/** Turns key presses, given as `KeyboardEvent.code`, into commands. */
+/** Turns key presses into commands. */
 export class Keyboard {
   /** The attack key was the last key pressed. */
   private attacking = false;
 
   /**
-   * The command the key at `code` completes, if any. After the attack key, a
+   * The command the press `key` completes, if any. After the attack key, a
    * direction key attacks toward its direction; any other key cancels.
    */
-  press(code: string): Action | undefined {
-    if (code === ATTACK) {
+  press(key: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey">): Action | undefined {
+    if (key.code === ATTACK) {
       this.attacking = true;
       return undefined;
     }
-    const command = COMMANDS.get(code);
+    const command = COMMANDS.get(key.code);
     if (!this.attacking) {
       return command;
     }

@@ -28,7 +28,7 @@ let socket: WebSocket | undefined;
 
 connect();
 document.addEventListener("keydown", (event) => {
-  const action = keyboard.press(event.code);
+  const action = keyboard.press(event);
   // R14: only an offered action is sent, so none is refused.
   if (action === undefined || world.controlled === undefined || world.costOf(action) === undefined) {
     return;
