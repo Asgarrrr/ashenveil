@@ -350,6 +350,108 @@ mod tests {
         assert_eq!(named, names.map(|(name, _)| name));
     }
 
+    /// The JSON of the server message these fields hold, each field already
+    /// encoded. This crate cannot name a `Time`, so a message starts from
+    /// its bytes.
+    fn json(fields: &[&[u8]]) -> String {
+        decode_server_message(&fields.concat()).expect("the message decodes")
+    }
+
+    #[test]
+    fn wait_encodes_the_wait_of_its_entity() {
+        assert_eq!(
+            ClientMessage::decode(&encode_wait(7)),
+            Ok(ClientMessage::Command {
+                entity: EntityId::new(7),
+                action: Action::Wait,
+            })
+        );
+    }
+
+    /// R9: the web client reads the offered actions and their costs from
+    /// this shape (`web/src/protocol.ts`).
+    #[test]
+    fn an_awaited_message_crosses_as_its_json() {
+        let awaited = json(&[
+            // Awaited at time 7, for entity 3, with three actions.
+            &[1],
+            &7_u64.to_le_bytes(),
+            &3_u32.to_le_bytes(),
+            &3_u32.to_le_bytes(),
+            // Wait for 50, move northeast for 100, attack west for 100.
+            &[0],
+            &50_u64.to_le_bytes(),
+            &[1, 1],
+            &100_u64.to_le_bytes(),
+            &[2, 6],
+            &100_u64.to_le_bytes(),
+        ]);
+        assert_eq!(
+            awaited,
+            concat!(
+                r#"{"kind":"awaited","time":7,"entity":3,"actions":["#,
+                r#"{"action":{"kind":"wait"},"cost":50},"#,
+                r#"{"action":{"kind":"move","direction":"northeast"},"cost":100},"#,
+                r#"{"action":{"kind":"attack","direction":"west"},"cost":100}]}"#,
+            )
+        );
+    }
+
+    /// R17, A11: the web client reads each perceived change from these
+    /// shapes (`web/src/protocol.ts`).
+    #[test]
+    fn each_perceived_change_crosses_as_its_json() {
+        let (time, entity, other) = (
+            25_u64.to_le_bytes(),
+            2_u32.to_le_bytes(),
+            5_u32.to_le_bytes(),
+        );
+        // Tag 2 is a perceived change; its next tag is the kind of change.
+        let changes: [(&[&[u8]], &str); 7] = [
+            (
+                &[&[2, 0], &time, &entity, &[0, 4]],
+                r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"stepped","direction":"south"}}"#,
+            ),
+            (
+                &[&[2, 0], &time, &entity, &[1]],
+                r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"waited"}}"#,
+            ),
+            (
+                &[&[2, 0], &time, &entity, &[2], &other],
+                r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"bumped","target":5}}"#,
+            ),
+            (
+                &[&[2, 0], &time, &entity, &[3], &other],
+                r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"hit","target":5}}"#,
+            ),
+            (
+                &[&[2, 0], &time, &entity, &[4], &other],
+                r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"missed","target":5}}"#,
+            ),
+            (
+                &[&[2, 1], &time, &entity],
+                r#"{"kind":"death","time":25,"entity":2}"#,
+            ),
+            (
+                &[&[2, 2], &time, &entity, &[2]],
+                r#"{"kind":"condition","time":25,"entity":2,"condition":"badly_wounded"}"#,
+            ),
+        ];
+        for (fields, change) in changes {
+            assert_eq!(
+                json(fields),
+                format!(r#"{{"kind":"perceived","change":{change}}}"#)
+            );
+        }
+    }
+
+    #[test]
+    fn a_message_without_fields_crosses_as_its_kind() {
+        assert_eq!(json(&[&[3]]), r#"{"kind":"refused"}"#);
+        assert_eq!(json(&[&[4]]), r#"{"kind":"quarantined"}"#);
+        assert_eq!(json(&[&[5]]), r#"{"kind":"controller_taken"}"#);
+    }
+
     #[test]
     fn hello_carries_the_whole_token_and_count() {
         let token = u128::MAX - 1;
