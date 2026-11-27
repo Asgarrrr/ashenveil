@@ -12,7 +12,7 @@
 extern crate alloc;
 
 pub mod action;
-mod combat;
+pub mod combat;
 pub mod controller;
 mod effect;
 mod map;

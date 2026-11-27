@@ -8,6 +8,7 @@ use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{self, Action, AvailableAction, Refused};
+use crate::combat::Disposition;
 use crate::controller::Controller;
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
@@ -64,7 +65,11 @@ impl World {
     /// commands starts from it too.
     pub fn skeleton(seed: u64) -> Self {
         let mut world = Self::new(seed, Speed::new(1));
-        world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            CREATURE_START,
+            Controller::Wander(Disposition::Neutral),
+        );
         world
     }
 
@@ -180,9 +185,9 @@ impl World {
     fn advance(&mut self) {
         loop {
             let entity = self.turn().1;
-            match self.entity(entity).controller {
+            match self.controller(entity) {
                 Controller::Player => return,
-                Controller::Wander => {
+                Controller::Wander(_) => {
                     let offered = self.actions_of(entity);
                     let (action, rng) = wander::choose(&self.rng, &offered);
                     let perception = Perception::whole_map(self);
@@ -260,6 +265,12 @@ impl World {
         self.entity(entity).speed
     }
 
+    /// What drives `entity`: a player connection for a character, the
+    /// simulation for a creature.
+    pub(crate) fn controller(&self, entity: EntityId) -> Controller {
+        self.entity(entity).controller
+    }
+
     fn entity(&self, entity: EntityId) -> &Entity {
         match self
             .entities
@@ -293,7 +304,11 @@ mod tests {
     #[should_panic(expected = "invariant violated")]
     fn an_entity_created_on_another_crashes() {
         let mut world = World::new(0, Speed::new(1));
-        world.create_entity(Speed::new(2), CHARACTER_START, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            CHARACTER_START,
+            Controller::Wander(Disposition::Neutral),
+        );
     }
 
     #[test]
@@ -301,7 +316,11 @@ mod tests {
     fn an_entity_created_on_a_wall_crashes() {
         let mut world = World::new(0, Speed::new(1));
         let wall = TilePosition { x: 0, y: 0, z: 0 };
-        world.create_entity(Speed::new(2), wall, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            wall,
+            Controller::Wander(Disposition::Neutral),
+        );
     }
 
     #[test]
@@ -310,7 +329,11 @@ mod tests {
         // the attack aside itself (A13).
         let mut world = World::new(0, Speed::new(1));
         let east = TilePosition { x: 2, y: 1, z: 0 };
-        let creature = world.create_entity(Speed::new(2), east, Controller::Wander);
+        let creature = world.create_entity(
+            Speed::new(2),
+            east,
+            Controller::Wander(Disposition::Neutral),
+        );
         let attacks: Vec<Action> = world
             .actions_of(creature)
             .into_iter()

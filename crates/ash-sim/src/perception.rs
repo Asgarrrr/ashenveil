@@ -7,6 +7,7 @@ use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::AvailableAction;
+use crate::combat::Disposition;
 use crate::map::Map;
 use crate::world::World;
 
@@ -37,8 +38,8 @@ pub enum Outcome {
 
 /// What a character perceives of the world: the only view a refusal reads
 /// (R10, F4). It shows no entity's speed, cost or next turn (R18). Under
-/// whole-map perception (R16), every character perceives the whole map and
-/// where every entity stands.
+/// whole-map perception (R16), every character perceives the whole map,
+/// where every entity stands and the disposition of every creature (A4).
 pub(crate) struct Perception<'w> {
     world: &'w World,
 }
@@ -63,13 +64,28 @@ impl<'w> Perception<'w> {
     pub(crate) fn occupant(&self, position: TilePosition) -> Option<EntityId> {
         self.world.occupant(position)
     }
+
+    /// The disposition of `entity` when it is a creature (A4, R16). `None`
+    /// for a character: it has no disposition.
+    #[expect(
+        unused_variables,
+        clippy::unused_self,
+        reason = "S2 signatures: read from the world in the next commit"
+    )]
+    pub(crate) fn disposition(&self, entity: EntityId) -> Option<Disposition> {
+        None
+    }
 }
 
-/// An entity a character perceives, and where it stands.
+/// An entity a character perceives: where it stands and, for a creature,
+/// its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedEntity {
     pub entity: EntityId,
     pub position: TilePosition,
+    /// A4: a kind, never a number (R18). `None` for a character: it has no
+    /// disposition.
+    pub disposition: Option<Disposition>,
 }
 
 /// Everything a character perceives at `time` (R16).
@@ -85,8 +101,9 @@ pub struct Snapshot {
 }
 
 /// R16: the whole map and every entity, stamped with the clock. Positions
-/// only: no speed, cost or next turn (R18).
+/// and dispositions only: no speed, cost or next turn (R18).
 pub fn snapshot(world: &World) -> Snapshot {
+    let perception = Perception::whole_map(world);
     Snapshot {
         time: world.clock(),
         width: world.terrain_width(),
@@ -95,7 +112,8 @@ pub fn snapshot(world: &World) -> Snapshot {
             .entities()
             .map(|entity| PerceivedEntity {
                 entity,
-                position: world.position(entity),
+                position: perception.position(entity),
+                disposition: perception.disposition(entity),
             })
             .collect(),
     }

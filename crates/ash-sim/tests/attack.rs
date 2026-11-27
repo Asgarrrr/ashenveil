@@ -17,6 +17,7 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::ActionCost;
 use ash_sim::action::{Action, AvailableAction, Refused};
+use ash_sim::combat::Disposition;
 use ash_sim::controller::Controller;
 use ash_sim::perception::{Outcome, PerceivedChange};
 use ash_sim::world::World;
@@ -36,7 +37,11 @@ fn at(x: u32, y: u32) -> TilePosition {
 fn world_with_creature(seed: u64, start: TilePosition) -> (World, EntityId, EntityId) {
     let mut world = World::new(seed, Speed::new(1));
     let character = world.awaited();
-    let creature = world.create_entity(Speed::new(2), start, Controller::Wander);
+    let creature = world.create_entity(
+        Speed::new(2),
+        start,
+        Controller::Wander(Disposition::Neutral),
+    );
     (world, character, creature)
 }
 
@@ -129,7 +134,11 @@ fn an_attacker_of_speed_2_pays_50() {
     // A5: the base cost of 100 is divided by the attacker's speed.
     let mut world = World::new(SEED, Speed::new(2));
     let character = world.awaited();
-    world.create_entity(Speed::new(2), at(2, 1), Controller::Wander);
+    world.create_entity(
+        Speed::new(2),
+        at(2, 1),
+        Controller::Wander(Disposition::Neutral),
+    );
 
     let offered = offered_attack(&world).expect("the adjacent creature can be attacked");
     assert_eq!(offered.cost, ActionCost::new(50));
