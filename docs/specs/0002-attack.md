@@ -275,3 +275,41 @@ hostile, neutral, condition, death, outcome.
 - 2026-11-27, proposed for the milestone glossary batch (found in S2): the
   entry "Bump" in `CONTEXT.md` gains an exception: a character's move into
   a creature it perceives as hostile is an attack, not a bump (A1).
+- 2026-11-27, recorded (found in S3): the S3 acceptance runs as four
+  commands: `cargo xtask accept death`, `accept death_over_websocket`,
+  `accept decode_any_bytes` and `accept web_model`.
+- 2026-11-27, recorded (found in S3): S3 changed files outside its list.
+  `crates/ash-sim/src/action.rs` returns the effects of a hit. The enum
+  shape of a perceived change reaches the existing simulation and server
+  tests and `web_fixtures.rs`. The test helper `outcome.rs` is renamed
+  `change.rs`.
+- 2026-11-27, recorded (found in S3): a dead creature's scheduler entry
+  stays until it reaches the head. `advance` then returns an `Unschedule`
+  effect and `apply` drops the entry: the skip is a write, so it goes
+  through `apply` (F4). One death leaves no permanent entry.
+- 2026-11-27, recorded (found in S3): `EntityIds` lives in `ash-core`
+  beside `EntityId`, so the bits of an id stay private to that module.
+  `apply` issues the id; a creation effect carries none. The counter holds
+  the number of ids issued, so the last value of `u32` is never issued.
+- 2026-11-27, recorded (found in S3): a character whose hit points reach
+  zero is a violated invariant, raised in `resolve` before any write. The
+  design holds no rule for the death of a character (A8 names a creature),
+  and only a character attacks (A13).
+- 2026-11-27, recorded (found in S3): the snapshot lists the entities in
+  creation order. That order equals the storage order today, and a test
+  pins it. A storage change must produce the order from a key, not from the
+  layout (ADR 0001, point 5).
+- 2026-11-27, recorded (found in S3, second-model read): the two-case
+  lookup of F3 is private to the world. The public read `World::position`
+  takes an embodied entity and crashes on a dead id. Only tests call it
+  from outside the crate, and no production code holds an id across a
+  death. The first such caller exposes the two cases.
+- 2026-11-27, open (found in S3, both reviews): a perceived change as a
+  struct `{ time, entity, kind }`, with the kinds act (outcome), death and
+  later condition, is shorter than an enum that repeats the time and the
+  entity in each variant. S3 Behavior says "becomes an enum", so the code
+  follows the enum. The change of shape needs the human's decision; S4
+  adds a third variant with the same two fields.
+- 2026-11-27, recorded (found in S3, second-model read): a creation during
+  play is not in the command log, so a replay omits the new entity. No
+  production code creates an entity during play. Issue #40 holds it.
