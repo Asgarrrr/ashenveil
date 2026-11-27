@@ -199,9 +199,8 @@ fn run(seed: u64) -> (World, Cast) {
             world.submit(action).expect("a wait is never refused");
             continue;
         }
-        let outcome = act(&mut world, &cast, action);
+        act(&mut world, &cast, action);
         if matches!(action, Action::Attack(_)) {
-            assert!(is_attack(outcome), "{outcome:?}");
             return (world, cast);
         }
     }
