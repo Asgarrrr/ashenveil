@@ -38,7 +38,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { drawMap, entityLine, logLine } from "../build/draw.js";
+import { draw, drawMap, entityLine, logLine } from "../build/draw.js";
 import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
@@ -491,6 +491,37 @@ test("the entity list shows the hit points of the character as numbers, and each
     entityLine(world, perceivedEntity(4, 1, 1, "hostile", inCondition("badly_wounded"))),
     "entity 4: badly wounded",
   );
+});
+
+test("the page lists each entity the world holds, with its line", () => {
+  // The page elements `draw` fills: a list keeps the text of its items.
+  const list = () => ({
+    lines: [],
+    replaceChildren(...items) {
+      this.lines = items.map((item) => item.textContent);
+    },
+  });
+  const view = {
+    map: { getContext: () => null },
+    status: {},
+    clock: {},
+    entities: list(),
+    actions: list(),
+    log: list(),
+  };
+  const world = replay(death.slice(0, indexOf(death, isConditionChange) + 1));
+  globalThis.document = { createElement: () => ({}) };
+  try {
+    draw(view, world, true);
+  } finally {
+    delete globalThis.document;
+  }
+
+  assert.deepEqual(view.entities.lines, [
+    "@: 10/10 hit points",
+    "entity 1: wounded",
+    "entity 2: unhurt",
+  ]);
 });
 
 test("each condition decodes to its name", () => {

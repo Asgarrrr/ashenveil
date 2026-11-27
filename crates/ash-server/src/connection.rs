@@ -46,10 +46,8 @@ pub fn run(stream: TcpStream, registry: &Registry) {
     controller.close();
 }
 
-/// Greets the client, then serves its commands. The greeting holds the
-/// changes after the first `received`, then the snapshot and the pending
-/// turn. Only the client knows what it received: a reply the server wrote
-/// may never have been read (R17).
+/// Greets the client, then serves its commands. Only the client knows what
+/// it `received`: a reply the server wrote may never have been read (R17).
 fn control(
     socket: &mut Socket,
     hosted: &HostedWorld,
@@ -58,11 +56,7 @@ fn control(
 ) -> End {
     let greeting = hosted.run(|controlled| {
         controlled.take(controller);
-        let world = &controlled.world;
-        let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
-        greeting.push(perception::snapshot(world, hosted.character));
-        greeting.extend(perception::awaited(world, hosted.character));
-        greeting
+        greeting(&controlled.world, hosted.character, received)
     });
     let Ok(greeting) = greeting else {
         return End::Quarantined;
@@ -93,6 +87,16 @@ fn control(
             Err(_) => return End::Quarantined,
         }
     }
+}
+
+/// What the controller of `character` gets on connection: the changes after
+/// the first `received`, then the snapshot of `character` and its pending
+/// turn (R17, R16, R9).
+fn greeting(world: &World, character: EntityId, received: usize) -> Vec<ServerMessage> {
+    let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
+    greeting.push(perception::snapshot(world, character));
+    greeting.extend(perception::awaited(world, character));
+    greeting
 }
 
 /// `entity` takes `action` for the controller of `hosted`'s character.
@@ -158,7 +162,7 @@ fn send(socket: &mut Socket, messages: Vec<ServerMessage>) -> Result<(), Gone> {
 
 #[cfg(test)]
 mod tests {
-    use ash_protocol::message::ResumeToken;
+    use ash_protocol::message::{PerceivedHealth, ResumeToken};
 
     use super::*;
     use crate::perception::tests::world_awaiting_another_player;
@@ -174,5 +178,26 @@ mod tests {
 
         assert_eq!(replies, [ServerMessage::Refused]);
         assert_eq!(world, before);
+    }
+
+    /// A9, R18: the snapshot is for the character of the connection, also
+    /// when the world awaits another one. No hosted world does yet.
+    #[test]
+    fn the_greeting_gives_hit_points_to_its_character_while_the_world_awaits_another() {
+        let (world, character, _) = world_awaiting_another_player();
+        let received = world.perceived_changes().len();
+
+        let greeting = greeting(&world, character, received);
+
+        let [ServerMessage::Snapshot(snapshot)] = &greeting[..] else {
+            panic!("expected a snapshot alone, got {greeting:?}");
+        };
+        let given: Vec<EntityId> = snapshot
+            .entities
+            .iter()
+            .filter(|perceived| matches!(perceived.health, PerceivedHealth::HitPoints { .. }))
+            .map(|perceived| perceived.entity)
+            .collect();
+        assert_eq!(given, [character]);
     }
 }

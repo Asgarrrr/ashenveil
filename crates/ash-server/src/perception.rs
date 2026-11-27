@@ -120,7 +120,7 @@ fn disposition_to_wire(disposition: SimDisposition) -> Disposition {
 #[cfg(test)]
 pub mod tests {
     use ash_core::entity::Speed;
-    use ash_core::tile::TilePosition;
+    use ash_core::tile::{Direction, TilePosition};
     use ash_sim::action::Action;
     use ash_sim::controller::Controller;
 
@@ -149,5 +149,65 @@ pub mod tests {
             awaited(&world, other),
             Some(ServerMessage::Awaited { entity, .. }) if entity == other
         ));
+    }
+
+    /// No hosted world shows these: nothing strikes its character (A13),
+    /// and a creature dies before it is badly wounded (A7).
+    #[test]
+    fn a_struck_character_gets_its_hit_points_and_shows_each_condition_to_another() {
+        let mut world = World::new(0, Speed::new(1));
+        let attacker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        let target = world.create_entity(Speed::new(2), east, Controller::Player);
+        let health = |world: &World, viewer: EntityId| match snapshot(world, viewer) {
+            ServerMessage::Snapshot(snapshot) => snapshot
+                .entities
+                .iter()
+                .find(|perceived| perceived.entity == target)
+                .map(|perceived| perceived.health),
+            _ => None,
+        };
+
+        // A6, A7, A10: 10 hit points, less 3 at each hit.
+        let hits = [
+            (7, Condition::Wounded),
+            (4, Condition::BadlyWounded),
+            (1, Condition::Dying),
+        ];
+        for (left, condition) in hits {
+            // The attacker strikes until a hit, which changes the condition.
+            let changed = loop {
+                if world.awaited() == target {
+                    assert_eq!(world.submit(Action::Wait), Ok(()));
+                    continue;
+                }
+                let (time, seen) = (world.clock(), world.perceived_changes().len());
+                assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
+                if let [_, ServerMessage::Perceived(change)] =
+                    changes_since(&world, seen).collect::<Vec<_>>()[..]
+                {
+                    break (time, change);
+                }
+            };
+            assert_eq!(
+                changed.1,
+                PerceivedChange::Condition {
+                    time: changed.0,
+                    entity: target,
+                    condition,
+                }
+            );
+            assert_eq!(
+                health(&world, target),
+                Some(PerceivedHealth::HitPoints {
+                    current: left,
+                    max: 10,
+                })
+            );
+            assert_eq!(
+                health(&world, attacker),
+                Some(PerceivedHealth::Condition(condition))
+            );
+        }
     }
 }
