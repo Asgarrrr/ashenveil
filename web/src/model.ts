@@ -3,7 +3,7 @@
 
 import type {
   Action,
-  AvailableAction,
+  Offer,
   Direction,
   PerceivedChange,
   PerceivedEntity,
@@ -42,8 +42,8 @@ export class PerceivedWorld {
   readonly entities = new Map<number, PerceivedEntity>();
   /** The entity this client controls, once the server awaits it. */
   controlled: number | undefined;
-  /** The actions offered to the controlled entity; empty when not awaited. */
-  offer: AvailableAction[] = [];
+  /** The offers of the controlled entity; empty when not awaited. */
+  offers: Offer[] = [];
   /** Every perceived change received, in order (R17). */
   readonly log: PerceivedChange[] = [];
   /** The last command was refused; nothing advanced (R10). */
@@ -65,7 +65,7 @@ export class PerceivedWorld {
       case "awaited":
         this.time = message.time;
         this.controlled = message.entity;
-        this.offer = message.actions;
+        this.offers = message.actions;
         break;
       case "perceived":
         this.time = message.change.time;
@@ -78,7 +78,7 @@ export class PerceivedWorld {
       case "quarantined":
       case "controller_taken":
         this.ended = message.kind;
-        this.offer = [];
+        this.offers = [];
         break;
     }
   }
@@ -96,7 +96,7 @@ export class PerceivedWorld {
 
   /** The cost the controlled entity would pay for `action`, if offered. */
   costOf(action: Action): number | undefined {
-    return this.offer.find((offered) => sameAction(offered.action, action))?.cost;
+    return this.offers.find((offer) => sameAction(offer.action, action))?.cost;
   }
 
   /** False once the server ended the connection for good. */
@@ -122,7 +122,7 @@ export class PerceivedWorld {
     }
     const { outcome } = change;
     if (entity === this.controlled) {
-      this.offer = [];
+      this.offers = [];
     }
     if (outcome.kind === "stepped" && perceived !== undefined) {
       const [east, south] = STEPS[outcome.direction];

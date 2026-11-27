@@ -103,10 +103,10 @@ fn first_outcome_of(mut world: World, creature: EntityId) -> Outcome {
 /// The cost the awaited character is offered `action` for (R9).
 fn offered_cost(world: &World, action: Action) -> Option<ActionCost> {
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .find(|offered| offered.action == action)
-        .map(|offered| offered.cost)
+        .find(|offer| offer.action == action)
+        .map(|offer| offer.cost)
 }
 
 /// Where the awaited character perceives `entity`; `None` once it died and
@@ -140,9 +140,9 @@ fn move_toward(world: &World, target: EntityId) -> Action {
             .max(position.y.abs_diff(target.y))
     };
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .filter_map(|offered| match offered.action {
+        .filter_map(|offer| match offer.action {
             Action::Move(direction) => Some(direction),
             Action::Wait | Action::Attack(_) => None,
         })

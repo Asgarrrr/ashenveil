@@ -44,9 +44,9 @@ fn world_with_creature(seed: u64, start: TilePosition) -> (World, EntityId, Enti
 /// north.
 fn first_offered_move(world: &World) -> Action {
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .map(|offered| offered.action)
+        .map(|offer| offer.action)
         .find(|action| matches!(action, Action::Move(_)))
         .expect("a move is offered")
 }
@@ -174,9 +174,9 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
     let into_creature = Action::Move(Direction::East);
     assert!(
         bumped
-            .available_actions()
+            .offers()
             .iter()
-            .any(|offered| offered.action == into_creature)
+            .any(|offer| offer.action == into_creature)
     );
     assert_eq!(bumped.submit(into_creature), Ok(()));
 

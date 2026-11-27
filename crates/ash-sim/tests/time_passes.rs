@@ -3,7 +3,7 @@
 use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::Direction;
 use ash_core::time::{ActionCost, Time};
-use ash_sim::action::{Action, AvailableAction};
+use ash_sim::action::{Action, Offer};
 use ash_sim::perception::{ChangeKind, Outcome, PerceivedChange};
 use ash_sim::scheduler::Scheduler;
 use ash_sim::world::World;
@@ -46,13 +46,13 @@ fn scripted_waits_give_the_expected_clock_and_perceived_changes() {
 fn speed_divides_the_cost_the_awaited_character_sees() {
     let mut world = World::new(SEED, Speed::new(2));
     let character = world.awaited();
-    let offer = |action, cost| AvailableAction {
+    let offer = |action, cost| Offer {
         action,
         cost: ActionCost::new(cost),
     };
     // From the start of the fixed map, only these three moves are allowed.
     assert_eq!(
-        world.available_actions(),
+        world.offers(),
         [
             offer(Action::Wait, 25),
             offer(Action::Move(Direction::East), 50),

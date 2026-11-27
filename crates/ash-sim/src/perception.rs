@@ -6,7 +6,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
-use crate::action::AvailableAction;
+use crate::action::Offer;
 use crate::combat::{Condition, Health};
 use crate::controller::{Controller, Disposition};
 use crate::map::Map;
@@ -159,11 +159,10 @@ pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
     }
 }
 
-/// R9: the actions `character` can take, with their costs. `None` when the
-/// world awaits another entity: its costs go only to its own controller
-/// (R18).
-pub fn turn(world: &World, character: EntityId) -> Option<Vec<AvailableAction>> {
-    (world.awaited() == character).then(|| world.available_actions())
+/// R9: the offers of `character`. `None` when the world awaits another
+/// entity: its costs go only to its own controller (R18).
+pub fn turn(world: &World, character: EntityId) -> Option<Vec<Offer>> {
+    (world.awaited() == character).then(|| world.offers())
 }
 
 #[cfg(test)]
@@ -187,7 +186,7 @@ mod tests {
         assert_eq!(world.awaited(), other);
 
         assert_eq!(turn(&world, character), None);
-        assert_eq!(turn(&world, other), Some(world.available_actions()));
+        assert_eq!(turn(&world, other), Some(world.offers()));
     }
 
     /// F3: a snapshot for an id the world never issued crashes as such. It

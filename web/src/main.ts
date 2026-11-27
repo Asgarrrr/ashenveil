@@ -42,7 +42,7 @@ document.addEventListener("keydown", (event) => {
   event.preventDefault();
   socket?.send(encodeCommand(world.controlled, action));
   // A second key before the next turn must not send a command for this one.
-  world.offer = [];
+  world.offers = [];
   redraw();
 });
 

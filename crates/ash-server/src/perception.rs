@@ -3,7 +3,7 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, ChangeKind, Condition, Disposition, Outcome, PerceivedChange, PerceivedEntity,
+    ChangeKind, Condition, Disposition, Offer, Outcome, PerceivedChange, PerceivedEntity,
     PerceivedHealth, ServerMessage, Snapshot,
 };
 use ash_sim::combat::Condition as SimCondition;
@@ -39,14 +39,14 @@ pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
 
 /// R9: the turn of `character`, for its controller only (R18).
 pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
-    perception::turn(world, character).map(|actions| ServerMessage::Awaited {
+    perception::turn(world, character).map(|offers| ServerMessage::Awaited {
         time: world.clock(),
         entity: character,
-        actions: actions
+        offers: offers
             .into_iter()
-            .map(|offered| AvailableAction {
-                action: action::to_wire(offered.action),
-                cost: offered.cost,
+            .map(|offer| Offer {
+                action: action::to_wire(offer.action),
+                cost: offer.cost,
             })
             .collect(),
     })

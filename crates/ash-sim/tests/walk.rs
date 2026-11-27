@@ -16,7 +16,7 @@
 use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
-use ash_sim::action::{Action, AvailableAction, Refused};
+use ash_sim::action::{Action, Offer, Refused};
 use ash_sim::perception::{ChangeKind, Outcome, PerceivedChange};
 use ash_sim::world::World;
 
@@ -45,10 +45,7 @@ fn walk(world: &mut World, directions: &[Direction]) {
 }
 
 fn offers(world: &World, action: Action) -> bool {
-    world
-        .available_actions()
-        .iter()
-        .any(|offered| offered.action == action)
+    world.offers().iter().any(|offer| offer.action == action)
 }
 
 /// R10, R11: a refused move is not an action. The whole world, its RNG
@@ -87,11 +84,11 @@ fn a_scripted_walk_gives_the_expected_positions_and_clock() {
     ];
     for (step, &(direction, expected)) in script.iter().enumerate() {
         // R9: the move is offered with its cost before it is chosen.
-        let offer = AvailableAction {
+        let offer = Offer {
             action: Action::Move(direction),
             cost: ActionCost::new(100),
         };
-        assert!(world.available_actions().contains(&offer), "move {step}");
+        assert!(world.offers().contains(&offer), "move {step}");
         assert_eq!(world.submit(Action::Move(direction)), Ok(()));
         assert_eq!(world.position(character), expected, "after move {step}");
     }

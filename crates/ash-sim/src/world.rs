@@ -7,7 +7,7 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
-use crate::action::{self, Action, AvailableAction, Refused};
+use crate::action::{self, Action, Offer, Refused};
 use crate::combat::Health;
 use crate::controller::{Controller, Disposition};
 use crate::effect::{Effect, Effects};
@@ -136,17 +136,18 @@ impl World {
         self.turn().1
     }
 
-    /// The actions the awaited character can take, with their costs (R9).
-    /// A move the rules would refuse is not offered (R14).
-    pub fn available_actions(&self) -> Vec<AvailableAction> {
-        self.actions_of(self.awaited())
+    /// The offers of the awaited character (R9). A move the rules would
+    /// refuse is not offered (R14).
+    pub fn offers(&self) -> Vec<Offer> {
+        self.offers_of(self.awaited())
     }
 
-    /// The actions the rules allow `entity`, with their costs (R9, R14).
-    fn actions_of(&self, entity: EntityId) -> Vec<AvailableAction> {
+    /// The offers of `entity`: the actions the rules allow it, with their
+    /// costs (R9, R14).
+    fn offers_of(&self, entity: EntityId) -> Vec<Offer> {
         let speed = self.speed(entity);
-        action::offers(&Perception::whole_map(self), entity)
-            .map(|action| AvailableAction {
+        action::offered(&Perception::whole_map(self), entity)
+            .map(|action| Offer {
                 action,
                 cost: action.cost(speed),
             })
@@ -222,8 +223,8 @@ impl World {
                 Lookup::Embodied(row) => match self.entities[row].controller {
                     Controller::Player => return,
                     Controller::Wander(_) => {
-                        let offered = self.actions_of(entity);
-                        let (action, rng) = wander::choose(&self.rng, &offered);
+                        let offers = self.offers_of(entity);
+                        let (action, rng) = wander::choose(&self.rng, &offers);
                         let perception = Perception::whole_map(self);
                         let Ok(effects) = action::resolve(self, &perception, entity, action, &rng)
                         else {
@@ -614,9 +615,9 @@ mod tests {
             Controller::Wander(Disposition::Neutral),
         );
         let attacks: Vec<Action> = world
-            .actions_of(creature)
+            .offers_of(creature)
             .into_iter()
-            .map(|offered| offered.action)
+            .map(|offer| offer.action)
             .filter(|action| matches!(action, Action::Attack(_)))
             .collect();
         assert_eq!(attacks, [Action::Attack(Direction::West)]);
