@@ -112,11 +112,12 @@ pub(crate) fn attack(
 /// character is out of scope: its zero hit points crash through
 /// `invariant!`.
 pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
+    let health = world.health(target).damaged(DAMAGE);
     let mut effects = alloc::vec![Effect::Damage {
         entity: target,
-        amount: DAMAGE,
+        health,
     }];
-    if world.health(target).damaged(DAMAGE).current == 0 {
+    if health.current == 0 {
         if world.controller(target) == Controller::Player {
             ash_core::invariant!("the character {target:?} reaches zero hit points");
         }

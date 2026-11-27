@@ -255,10 +255,7 @@ impl World {
                         ash_core::invariant!("no entity is scheduled");
                     }
                 }
-                Effect::Damage { entity, amount } => {
-                    let entity = self.entity_mut(entity);
-                    entity.health = entity.health.damaged(amount);
-                }
+                Effect::Damage { entity, health } => self.entity_mut(entity).health = health,
                 Effect::Remove { entity } => {
                     let row = self.row(entity);
                     self.entities.remove(row);
@@ -427,7 +424,7 @@ mod tests {
                 Effect::Remove { entity: dead },
                 Effect::Damage {
                     entity: wounded,
-                    amount: 3,
+                    health: Health { current: 3, max: 6 },
                 },
             ],
             rng_after: world.rng.clone(),
@@ -519,7 +516,7 @@ mod tests {
         world.apply(Effects {
             in_order: alloc::vec![Effect::Damage {
                 entity: EntityId::new(1),
-                amount: 3,
+                health: Health { current: 3, max: 6 },
             }],
             rng_after: world.rng.clone(),
         });
