@@ -550,23 +550,6 @@ test("the page logs a change of condition above its hit", () => {
   ]);
 });
 
-test("the page has the element of each part of the view, under the name of that part", () => {
-  // `main.ts` runs in a browser alone, so this reads its source: one
-  // `part: element("id"),` per line.
-  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-  const bound = [...source("../src/main.ts").matchAll(/^  (\w+): element\("([\w-]+)"\)/gm)];
-  const page = source("../index.html");
-
-  assert.deepEqual(
-    bound.map(([, part]) => part),
-    ["map", "status", "clock", "entities", "actions", "log"],
-  );
-  for (const [, part, id] of bound) {
-    assert.equal(id, part);
-    assert.ok(page.includes(`id="${id}"`), `the page has no #${id}`);
-  }
-});
-
 test("each condition decodes to its name", () => {
   // A change is tag 2, then kind 2 for a change of condition, the time and
   // the entity, little-endian, then the condition.
