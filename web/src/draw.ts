@@ -16,9 +16,15 @@ export interface View {
   log: HTMLElement;
 }
 
-export function draw(view: View, world: PerceivedWorld, connected: boolean): void {
+/** `attacking`: the attack key is armed, and the next direction key strikes. */
+export function draw(
+  view: View,
+  world: PerceivedWorld,
+  connected: boolean,
+  attacking: boolean,
+): void {
   drawMap(view.map, world);
-  view.status.textContent = status(world, connected);
+  view.status.textContent = status(world, connected, attacking);
   view.clock.textContent = String(world.time);
   view.entities.replaceChildren(
     ...[...world.entities.values()].map((perceived) => item(entityLine(world, perceived))),
@@ -94,7 +100,7 @@ export function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void 
   }
 }
 
-function status(world: PerceivedWorld, connected: boolean): string {
+function status(world: PerceivedWorld, connected: boolean, attacking: boolean): string {
   switch (world.ended) {
     case "quarantined":
       return "This world broke a rule of the simulation and is in quarantine.";
@@ -103,6 +109,9 @@ function status(world: PerceivedWorld, connected: boolean): string {
     case undefined:
       if (!connected) {
         return "Connecting…";
+      }
+      if (attacking) {
+        return "Attack: press a direction. Escape cancels.";
       }
       return world.refused ? "Refused: nothing happened." : "";
   }
