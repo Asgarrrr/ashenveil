@@ -221,7 +221,13 @@ fn strike_a_character(seed: u64, hits: usize) -> (World, EntityId) {
             })
             .count()
     };
+    let mut turns = 0;
     while landed(&world) < hits {
+        assert!(
+            turns < HUNT_TURNS,
+            "fewer than {hits} hits on {target:?} in {HUNT_TURNS} turns"
+        );
+        turns += 1;
         let action = if world.awaited() == attacker {
             Action::Attack(Direction::East)
         } else {
@@ -605,7 +611,13 @@ fn an_entity_created_after_a_death_gets_an_id_never_issued_before() {
 
         // The newcomers take their turns: the world runs past the entry of
         // the dead creature, to them.
+        let mut turns = 0;
         while world.clock().units() < 200 {
+            assert!(
+                turns < HUNT_TURNS,
+                "the clock is below 200 after {HUNT_TURNS} turns"
+            );
+            turns += 1;
             assert_eq!(world.submit(Action::Wait), Ok(()));
         }
         for creature in [newcomer, another] {
