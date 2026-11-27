@@ -238,9 +238,20 @@ hostile, neutral, condition, death, outcome.
     outcome)".
   - Consequence for S2: a witness cannot tell a strike made by a move from
     an explicit attack. The command log keeps the submitted action.
-- 2026-11-27, open, for the human before S2 (second-model read): S2 says a
-  move into a creature "the actor perceives as hostile" resolves to an
-  attack. A wandering creature that moves into a hostile creature would then
-  attack it, against A13 (only the character attacks). A1 speaks of the
-  character. S2 must say how the wander is kept from attacking through a
-  move.
+- 2026-11-27, accepted by the human (second-model read): S2 says a move
+  into a creature "the actor perceives as hostile" resolves to an attack. A
+  wandering creature that moves into a hostile creature would then attack
+  it, against A13 (only the character attacks). S2 Behavior now reads: only
+  a character's move into a creature it perceives as hostile resolves to an
+  attack (A1). A creature's move into any entity stays a bump (A13, R13).
+- 2026-11-27, recorded (found in S1): the world no longer stores the clock
+  and the awaited entity. It derives both from the scheduler head, so an
+  effect cannot disagree with the scheduler. The F6 table of
+  `docs/plans/0003-ecs-brainstorm.md` is updated: both are derivable.
+- 2026-11-27, recorded (found in S1): the S1 acceptance runs as four
+  commands: `cargo xtask accept attack`, `accept attack_over_websocket`,
+  `accept decode_any_bytes` and `accept web_model`.
+- 2026-11-27, open (found in S1): an attack on the diagonal across a wall
+  corner is allowed. A3 says "adjacent", and R11 forbids only moves past a
+  corner. S1 follows A3 as written. The human questions whether diagonals
+  stay at all; that belongs to a design brainstorm, not to this spec.
