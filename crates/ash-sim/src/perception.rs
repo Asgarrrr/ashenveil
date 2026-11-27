@@ -8,6 +8,7 @@ use ash_core::time::Time;
 
 use crate::action::AvailableAction;
 use crate::combat::Disposition;
+use crate::controller::Controller;
 use crate::map::Map;
 use crate::world::World;
 
@@ -67,13 +68,11 @@ impl<'w> Perception<'w> {
 
     /// The disposition of `entity` when it is a creature (A4, R16). `None`
     /// for a character: it has no disposition.
-    #[expect(
-        unused_variables,
-        clippy::unused_self,
-        reason = "S2 signatures: read from the world in the next commit"
-    )]
     pub(crate) fn disposition(&self, entity: EntityId) -> Option<Disposition> {
-        None
+        match self.world.controller(entity) {
+            Controller::Player => None,
+            Controller::Wander(disposition) => Some(disposition),
+        }
     }
 }
 

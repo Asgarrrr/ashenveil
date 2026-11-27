@@ -4,6 +4,7 @@ use ash_core::entity::EntityId;
 use ash_core::rng::Rng;
 use ash_core::tile::Direction;
 
+use crate::controller::Controller;
 use crate::perception::{Outcome, Perception};
 use crate::world::World;
 
@@ -23,17 +24,18 @@ pub enum Disposition {
 /// A1: whether the move of `mover` toward `direction` is an attack on the
 /// entity there: `mover` is a character, and it perceives that entity as a
 /// hostile creature. A creature's move never is (A13).
-#[expect(
-    unused_variables,
-    reason = "S2 signatures: the rule is written in the next commit"
-)]
 pub(crate) fn move_attacks(
     world: &World,
     perception: &Perception<'_>,
     mover: EntityId,
     direction: Direction,
 ) -> bool {
-    false
+    let to = perception.position(mover).step(direction);
+    world.controller(mover) == Controller::Player
+        && perception
+            .occupant(to)
+            .and_then(|occupant| perception.disposition(occupant))
+            == Some(Disposition::Hostile)
 }
 
 /// The outcome of `attacker` striking toward `direction`, which the rules
