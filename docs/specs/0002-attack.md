@@ -144,7 +144,7 @@ down the signatures with a failing acceptance test.
   the snapshot carries dispositions, and the decoder rejects an unknown
   disposition.
 
-### - [ ] S3 — The creature dies
+### - [x] S3 — The creature dies
 
 - Files: `crates/ash-sim/src/{world,combat,effect,perception,scheduler}.rs`,
   `crates/ash-core/src/entity.rs`, `crates/ash-sim/tests/death.rs` (new),
