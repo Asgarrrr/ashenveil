@@ -4,22 +4,12 @@ use ash_core::entity::EntityId;
 use ash_core::rng::Rng;
 use ash_core::tile::Direction;
 
-use crate::controller::Controller;
+use crate::controller::{Controller, Disposition};
 use crate::perception::{Outcome, Perception};
 use crate::world::World;
 
 /// A6: the percentage of attacks that hit.
 const HIT_CHANCE: u64 = 70;
-
-/// A4: how a creature stands toward characters. A kind, never a number
-/// (R18).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Disposition {
-    /// A character's move into the creature is an attack on it (A1).
-    Hostile,
-    /// A character's move into the creature is a bump (A2).
-    Neutral,
-}
 
 /// A1: whether the move of `mover` toward `direction` is an attack on the
 /// entity there: `mover` is a character, and it perceives that entity as a
@@ -67,7 +57,6 @@ mod tests {
     use ash_core::tile::TilePosition;
 
     use super::*;
-    use crate::controller::Controller;
 
     /// A6: an attack hits when `draw % 100 < 70`. The first draw of seed 182
     /// leaves 69, the first draw of seed 18 leaves 70.

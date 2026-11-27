@@ -8,8 +8,7 @@ use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{self, Action, AvailableAction, Refused};
-use crate::combat::Disposition;
-use crate::controller::Controller;
+use crate::controller::{Controller, Disposition};
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
 use crate::perception::{PerceivedChange, Perception};

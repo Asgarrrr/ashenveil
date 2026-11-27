@@ -18,8 +18,7 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, Refused};
-use ash_sim::combat::Disposition;
-use ash_sim::controller::Controller;
+use ash_sim::controller::{Controller, Disposition};
 use ash_sim::perception::{self, Outcome, PerceivedChange};
 use ash_sim::world::World;
 

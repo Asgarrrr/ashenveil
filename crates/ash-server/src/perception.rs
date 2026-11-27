@@ -6,7 +6,7 @@ use ash_protocol::message::{
     AvailableAction, Disposition, Outcome, PerceivedChange, PerceivedEntity, ServerMessage,
     Snapshot,
 };
-use ash_sim::combat::Disposition as SimDisposition;
+use ash_sim::controller::Disposition as SimDisposition;
 use ash_sim::perception::{self, Outcome as SimOutcome};
 use ash_sim::world::World;
 

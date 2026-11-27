@@ -7,8 +7,7 @@ use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::AvailableAction;
-use crate::combat::Disposition;
-use crate::controller::Controller;
+use crate::controller::{Controller, Disposition};
 use crate::map::Map;
 use crate::world::World;
 
