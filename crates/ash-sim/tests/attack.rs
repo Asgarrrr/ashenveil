@@ -125,6 +125,23 @@ fn an_adjacent_entity_can_be_attacked_for_100() {
 }
 
 #[test]
+fn an_attacker_of_speed_2_pays_50() {
+    // A5: the base cost of 100 is divided by the attacker's speed.
+    let mut world = World::new(SEED, Speed::new(2));
+    let character = world.awaited();
+    world.create_entity(Speed::new(2), at(2, 1), Controller::Wander);
+
+    let offered = offered_attack(&world).expect("the adjacent creature can be attacked");
+    assert_eq!(offered.cost, ActionCost::new(50));
+    let clock = world.clock();
+    assert_eq!(world.submit(offered.action), Ok(()));
+    assert_eq!(
+        (world.awaited(), world.clock().units() - clock.units()),
+        (character, 50)
+    );
+}
+
+#[test]
 fn explicit_attacks_on_the_creature_are_perceived_hits_and_misses() {
     let (world, character, creature) = fight(SEED);
     let outcomes: Vec<Outcome> = changes_of(&world, character)

@@ -32,3 +32,36 @@ pub(crate) fn attack(
     };
     (outcome, after)
 }
+
+#[cfg(test)]
+mod tests {
+    use ash_core::entity::Speed;
+    use ash_core::tile::TilePosition;
+
+    use super::*;
+    use crate::controller::Controller;
+
+    /// A6: an attack hits when `draw % 100 < 70`. The first draw of seed 182
+    /// leaves 69, the first draw of seed 18 leaves 70.
+    #[test]
+    fn an_attack_hits_when_its_one_draw_leaves_less_than_70() {
+        let mut world = World::new(0, Speed::new(1));
+        let attacker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        let target = world.create_entity(Speed::new(1), east, Controller::Wander);
+
+        for (seed, remainder, outcome) in [
+            (182, 69, Outcome::Hit(target)),
+            (18, 70, Outcome::Missed(target)),
+        ] {
+            let rng = Rng::new(seed);
+            let mut after_one_draw = rng.clone();
+            assert_eq!(after_one_draw.next_u64() % 100, remainder, "seed {seed}");
+            assert_eq!(
+                attack(&world, attacker, Direction::East, &rng),
+                (outcome, after_one_draw),
+                "seed {seed}"
+            );
+        }
+    }
+}

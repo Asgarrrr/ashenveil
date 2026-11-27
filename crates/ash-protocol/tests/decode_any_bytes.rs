@@ -195,10 +195,43 @@ fn a_change_the_simulation_cannot_make_is_refused() {
         ("a bump into its mover", perceived_bytes(&targeting(2, 2))),
         ("a hit on its attacker", perceived_bytes(&targeting(3, 2))),
         ("a miss of its attacker", perceived_bytes(&targeting(4, 2))),
-        ("an outcome tag of 5", perceived_bytes(&targeting(5, 1))),
+        ("an outcome tag of 5", perceived_bytes(&[5])),
+        (
+            "an outcome tag of 5 with a target",
+            perceived_bytes(&targeting(5, 1)),
+        ),
+        // Entity 2 acts: a missing target read as entity 0 is not its own
+        // actor, so only the missing bytes refuse these.
+        ("a bump with no target", perceived_bytes(&[2])),
+        ("a hit with no target", perceived_bytes(&[3])),
+        ("a miss with no target", perceived_bytes(&[4])),
         ("a step toward no direction", perceived_bytes(&[0, 8])),
     ];
     for (what, bytes) in refused {
         assert!(ServerMessage::decode(&bytes).is_err(), "{what} decodes");
+    }
+}
+
+/// The bytes of a command of entity 3, its action already encoded in
+/// `action`.
+fn command_bytes(action: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![1];
+    bytes.extend(3_u32.to_le_bytes());
+    bytes.extend(action);
+    bytes
+}
+
+#[test]
+fn an_unknown_action_tag_is_refused() {
+    // The controls: a wait, a move east and an attack east decode.
+    for action in [&[0][..], &[1, 2], &[2, 2]] {
+        assert!(ClientMessage::decode(&command_bytes(action)).is_ok());
+    }
+    // An action tag of 3, alone and with a direction.
+    for action in [&[3][..], &[3, 2]] {
+        assert!(
+            ClientMessage::decode(&command_bytes(action)).is_err(),
+            "{action:?} decodes"
+        );
     }
 }

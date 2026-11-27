@@ -285,6 +285,8 @@ impl World {
 
 #[cfg(test)]
 mod tests {
+    use ash_core::tile::Direction;
+
     use super::*;
 
     #[test]
@@ -300,5 +302,21 @@ mod tests {
         let mut world = World::new(0, Speed::new(1));
         let wall = TilePosition { x: 0, y: 0, z: 0 };
         world.create_entity(Speed::new(2), wall, Controller::Wander);
+    }
+
+    #[test]
+    fn a_wandering_creature_next_to_an_entity_is_offered_the_attack() {
+        // R3: the offers do not depend on the controller. The wander sets
+        // the attack aside itself (A13).
+        let mut world = World::new(0, Speed::new(1));
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        let creature = world.create_entity(Speed::new(2), east, Controller::Wander);
+        let attacks: Vec<Action> = world
+            .actions_of(creature)
+            .into_iter()
+            .map(|offered| offered.action)
+            .filter(|action| matches!(action, Action::Attack(_)))
+            .collect();
+        assert_eq!(attacks, [Action::Attack(Direction::West)]);
     }
 }
