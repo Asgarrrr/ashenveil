@@ -72,6 +72,18 @@ fn is_attack(outcome: Outcome) -> bool {
     matches!(outcome, Outcome::Hit(_) | Outcome::Missed(_))
 }
 
+/// A11: an attack on `target` is perceived as a hit or a miss of it.
+fn is_attack_on(outcome: Outcome, target: EntityId) -> bool {
+    outcome == Outcome::Hit(target) || outcome == Outcome::Missed(target)
+}
+
+/// What `creature` does on its first turn, which the wander draws: the
+/// character waits, so the creature acts.
+fn first_outcome_of(mut world: World, creature: EntityId) -> Outcome {
+    world.submit(Action::Wait).expect("a wait is never refused");
+    changes_of(&world, creature)[0].outcome
+}
+
 /// The cost the awaited character is offered `action` for (R9).
 fn offered_cost(world: &World, action: Action) -> Option<ActionCost> {
     world
@@ -133,9 +145,7 @@ fn act(world: &mut World, cast: &Cast, action: Action) -> Outcome {
         (Action::Move(_), Some(creature)) if creature == cast.neutral => {
             change.outcome == Outcome::Bumped(creature)
         }
-        (_, Some(creature)) => {
-            change.outcome == Outcome::Hit(creature) || change.outcome == Outcome::Missed(creature)
-        }
+        (_, Some(creature)) => is_attack_on(change.outcome, creature),
         (_, None) => change.outcome == Outcome::Stepped(direction),
     };
     assert!(expected, "{action:?} toward {ahead:?} gave {change:?}");
@@ -251,8 +261,7 @@ fn a_move_into_the_hostile_creature_is_the_attack_on_it() {
         let change = moved.perceived_changes()[0];
         assert_eq!((change.time, change.entity), (Time::ZERO, cast.character));
         assert!(
-            change.outcome == Outcome::Hit(cast.hostile)
-                || change.outcome == Outcome::Missed(cast.hostile),
+            is_attack_on(change.outcome, cast.hostile),
             "seed {seed}: {change:?}"
         );
         assert_eq!(moved.position(cast.character), at(1, 1));
@@ -293,6 +302,57 @@ fn a_move_into_the_hostile_creature_is_the_attack_on_it() {
 }
 
 #[test]
+fn a_diagonal_move_into_the_hostile_creature_is_the_attack_on_it() {
+    // A1 names no direction. (2, 1) and (1, 2) are floor: the move from
+    // (1, 1) to (2, 2) passes no wall corner (R11).
+    let (mut world, cast) = world_with_creatures(SEED, at(2, 2), at(7, 4));
+
+    assert_eq!(world.submit(Action::Move(Direction::SouthEast)), Ok(()));
+
+    let change = world.perceived_changes()[0];
+    assert_eq!(change.entity, cast.character);
+    assert!(is_attack_on(change.outcome, cast.hostile), "{change:?}");
+}
+
+#[test]
+fn a_move_into_the_hostile_creature_costs_the_attack_divided_by_speed() {
+    let mut world = World::new(SEED, Speed::new(2));
+    let character = world.awaited();
+    let hostile = world.create_entity(
+        Speed::new(2),
+        at(2, 1),
+        Controller::Wander(Disposition::Hostile),
+    );
+
+    assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
+
+    let change = world.perceived_changes()[0];
+    assert!(is_attack_on(change.outcome, hostile), "{change:?}");
+    // A5, R6: the attack's 100, divided by the character's speed of 2.
+    assert_eq!((world.awaited(), world.clock()), (character, Time::new(50)));
+}
+
+#[test]
+fn the_move_of_any_character_into_the_hostile_creature_is_the_attack_on_it() {
+    // A1: the mover is a character by its controller, not by its id. The
+    // second character acts before the first turn of the creature (R8).
+    let mut world = World::new(SEED, Speed::new(1));
+    let second = world.create_entity(Speed::new(1), at(4, 4), Controller::Player);
+    let hostile = world.create_entity(
+        Speed::new(2),
+        at(5, 4),
+        Controller::Wander(Disposition::Hostile),
+    );
+    world.submit(Action::Wait).expect("a wait is never refused");
+    assert_eq!(world.awaited(), second);
+
+    assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
+
+    let change = changes_of(&world, second)[0];
+    assert!(is_attack_on(change.outcome, hostile), "{change:?}");
+}
+
+#[test]
 fn a_move_into_another_character_is_a_bump() {
     // A2: a character has no disposition, so it is never perceived as
     // hostile.
@@ -313,27 +373,53 @@ fn a_move_into_another_character_is_a_bump() {
 }
 
 #[test]
-fn a_wandering_creature_bumps_a_hostile_creature_and_never_attacks_it() {
-    // A13: only the character attacks. The two creatures start side by side
-    // in the east corridor.
-    let (mut world, cast) = world_with_creatures(SEED, at(7, 2), at(7, 3));
-    for _ in 0..500 {
-        world.submit(Action::Wait).expect("a wait is never refused");
-    }
+fn the_move_of_a_creature_into_the_hostile_creature_is_a_bump() {
+    // A13: only the character attacks. The mover stands north of the
+    // hostile creature and acts before it (R8).
+    let mut bumps = 0;
+    for seed in 0..32 {
+        let mut world = World::new(seed, Speed::new(1));
+        let mover = world.create_entity(
+            Speed::new(2),
+            at(7, 2),
+            Controller::Wander(Disposition::Neutral),
+        );
+        let hostile = world.create_entity(
+            Speed::new(2),
+            at(7, 3),
+            Controller::Wander(Disposition::Hostile),
+        );
 
-    let neutral_changes = changes_of(&world, cast.neutral);
+        let outcome = first_outcome_of(world, mover);
+
+        assert!(!is_attack(outcome), "seed {seed}: {outcome:?}");
+        bumps += usize::from(outcome == Outcome::Bumped(hostile));
+    }
+    assert!(bumps > 0, "no seed moves the creature into the hostile one");
+}
+
+#[test]
+fn the_move_of_the_hostile_creature_into_the_character_is_a_bump() {
+    // A13: a disposition makes the creature a target (A1), never an
+    // attacker. The hostile creature stands east of the character.
+    let mut bumps = 0;
+    for seed in 0..32 {
+        let mut world = World::new(seed, Speed::new(1));
+        let character = world.awaited();
+        let hostile = world.create_entity(
+            Speed::new(2),
+            at(2, 1),
+            Controller::Wander(Disposition::Hostile),
+        );
+
+        let outcome = first_outcome_of(world, hostile);
+
+        assert!(!is_attack(outcome), "seed {seed}: {outcome:?}");
+        bumps += usize::from(outcome == Outcome::Bumped(character));
+    }
     assert!(
-        neutral_changes
-            .iter()
-            .any(|change| change.outcome == Outcome::Bumped(cast.hostile)),
-        "the seeded run never moves the neutral creature into the hostile one"
-    );
-    assert!(
-        world
-            .perceived_changes()
-            .iter()
-            .all(|change| !is_attack(change.outcome)),
-        "a creature attacked"
+        bumps > 0,
+        "no seed moves the hostile creature into the character"
     );
 }
 
