@@ -116,6 +116,23 @@ pub enum Outcome {
     Missed(EntityId),
 }
 
+/// What died: a character or a creature (D4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Died {
+    Character,
+    Creature,
+}
+
+/// A corpse the character perceives (D2, D4): where it lies, what died, and
+/// the entity that died when the character recognizes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PerceivedCorpse {
+    pub position: TilePosition,
+    pub died: Died,
+    /// `None` when the character does not recognize the corpse.
+    pub entity: Option<EntityId>,
+}
+
 /// Everything one character perceives at `time` (R16).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
@@ -126,6 +143,8 @@ pub struct Snapshot {
     /// length is a multiple of `width`.
     pub terrain: Vec<Terrain>,
     pub entities: Vec<PerceivedEntity>,
+    /// In the order of the deaths.
+    pub corpses: Vec<PerceivedCorpse>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -417,6 +436,52 @@ impl Wire for PerceivedChange {
     }
 }
 
+impl Wire for Died {
+    fn write(&self, out: &mut Vec<u8>) {
+        let tag: u8 = match self {
+            Self::Character => 0,
+            Self::Creature => 1,
+        };
+        tag.write(out);
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(Self::Character),
+            1 => Ok(Self::Creature),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
+/// Its tile, what died, then one tag: 0 for an unrecognized corpse, 1
+/// followed by the entity that died.
+impl Wire for PerceivedCorpse {
+    fn write(&self, out: &mut Vec<u8>) {
+        self.position.write(out);
+        self.died.write(out);
+        match self.entity {
+            None => 0_u8.write(out),
+            Some(entity) => {
+                1_u8.write(out);
+                entity.write(out);
+            }
+        }
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        Ok(Self {
+            position: TilePosition::read(input)?,
+            died: Died::read(input)?,
+            entity: match u8::read(input)? {
+                0 => None,
+                1 => Some(EntityId::read(input)?),
+                _ => return Err(DecodeError),
+            },
+        })
+    }
+}
+
 impl Wire for Snapshot {
     fn write(&self, out: &mut Vec<u8>) {
         self.time.write(out);
@@ -431,6 +496,7 @@ impl Wire for Snapshot {
             width: u32::read(input)?,
             terrain: Vec::read(input)?,
             entities: Vec::read(input)?,
+            corpses: Vec::new(),
         };
         let width = usize::try_from(snapshot.width).map_err(|_| DecodeError)?;
         // A zero width has no remainder: it is refused with the ragged rows.

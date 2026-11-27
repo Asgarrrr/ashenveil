@@ -6,9 +6,9 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, ChangeKind, ClientMessage, Condition, Direction, Disposition, EntityId, Offer, Outcome,
-    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
-    Terrain,
+    Action, ChangeKind, ClientMessage, Condition, Died, Direction, Disposition, EntityId, Offer,
+    Outcome, PerceivedChange, PerceivedCorpse, PerceivedEntity, PerceivedHealth, ResumeToken,
+    ServerMessage, Snapshot, Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -140,8 +140,27 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
             )
         },
     );
+    let corpses = list(
+        &snapshot.corpses,
+        |PerceivedCorpse {
+             position,
+             died,
+             entity,
+         }| {
+            let died = match died {
+                Died::Character => "character",
+                Died::Creature => "creature",
+            };
+            let entity =
+                entity.map_or_else(|| "null".to_owned(), |entity| entity.get().to_string());
+            format!(
+                r#"{{"position":{{"x":{},"y":{},"z":{}}},"died":"{died}","entity":{entity}}}"#,
+                position.x, position.y, position.z
+            )
+        },
+    );
     format!(
-        r#"{{"kind":"snapshot","time":{},"width":{},"terrain":[{terrain}],"entities":[{entities}]}}"#,
+        r#"{{"kind":"snapshot","time":{},"width":{},"terrain":[{terrain}],"entities":[{entities}],"corpses":[{corpses}]}}"#,
         snapshot.time.units(),
         snapshot.width
     )

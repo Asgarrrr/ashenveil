@@ -135,6 +135,8 @@ fn expected_snapshot(world: &World) -> ServerMessage {
                 health: health::to_wire(perceived.health),
             })
             .collect(),
+        // A walk kills nothing.
+        corpses: Vec::new(),
     })
 }
 

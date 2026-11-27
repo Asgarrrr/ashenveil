@@ -17,7 +17,9 @@ use ash_sim::world::World;
 use crate::action;
 
 /// R16: what `character` perceives, as a protocol message. Hit points for
-/// `character` alone (A9): every other entity shows a condition (A10).
+/// `character` alone (A9): every other entity shows a condition (A10). Every
+/// corpse shows what died, and the dead entity when `character` recognizes
+/// it (D4).
 pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
     let snapshot = perception::snapshot(world, character);
     ServerMessage::Snapshot(Snapshot {
@@ -34,6 +36,7 @@ pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
                 health: health_to_wire(perceived.health),
             })
             .collect(),
+        corpses: Vec::new(),
     })
 }
 

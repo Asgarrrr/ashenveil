@@ -6,6 +6,7 @@ import type {
   Direction,
   Offer,
   PerceivedChange,
+  PerceivedCorpse,
   PerceivedEntity,
   ServerMessage,
   Terrain,
@@ -40,6 +41,8 @@ export class PerceivedWorld {
   terrain: Terrain[] = [];
   /** What is perceived of each entity, by entity (R16, A4). */
   readonly entities = new Map<number, PerceivedEntity>();
+  /** Every corpse perceived, in the order of the deaths (D2, D4). */
+  corpses: PerceivedCorpse[] = [];
   /** The entity this client controls, once the server awaits it. */
   controlled: number | undefined;
   /** The offers of the controlled entity; empty when not awaited. */

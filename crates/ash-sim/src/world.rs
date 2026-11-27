@@ -10,6 +10,7 @@ use ash_core::time::Time;
 use crate::action::{self, Action, Offer, Refused};
 use crate::combat::Health;
 use crate::controller::{Controller, Disposition};
+use crate::death::Corpse;
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
 use crate::perception::{PerceivedChange, Perception};
@@ -58,6 +59,10 @@ pub struct World {
     /// entity derive from it.
     scheduler: Scheduler,
     rng: Rng,
+    /// F6, D12: every corpse, each under its rank among the deaths of this
+    /// world. The rank is the explicit key of their order (ADR 0001, point
+    /// 5).
+    corpses: Vec<(u64, Corpse)>,
     perceived_changes: Vec<PerceivedChange>,
     command_log: Vec<Action>,
 }
@@ -72,6 +77,7 @@ impl World {
             entities: Vec::new(),
             scheduler: Scheduler::default(),
             rng: Rng::new(seed),
+            corpses: Vec::new(),
             perceived_changes: Vec::new(),
             command_log: Vec::new(),
         };
@@ -176,6 +182,14 @@ impl World {
         self.entities.iter().map(|entity| entity.id)
     }
 
+    /// Every corpse, in the order of the deaths (D2). Under whole-map
+    /// perception (R16), every character perceives each of them (D4).
+    pub(crate) fn corpses(&self) -> Vec<Corpse> {
+        let mut ranked = self.corpses.clone();
+        ranked.sort_unstable_by_key(|&(rank, _)| rank);
+        ranked.into_iter().map(|(_, corpse)| corpse).collect()
+    }
+
     /// Where `entity`, which is embodied, stands. Under whole-map perception
     /// (R16), every character perceives it.
     pub fn position(&self, entity: EntityId) -> TilePosition {
@@ -260,6 +274,12 @@ impl World {
                 Effect::Remove { entity } => {
                     let row = self.row(entity);
                     self.entities.remove(row);
+                }
+                Effect::LeaveCorpse(corpse) => {
+                    let Ok(rank) = u64::try_from(self.corpses.len()) else {
+                        ash_core::invariant!("the deaths of this world outnumber a rank")
+                    };
+                    self.corpses.push((rank, corpse));
                 }
                 Effect::Create {
                     speed,

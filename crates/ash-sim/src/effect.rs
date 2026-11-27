@@ -10,6 +10,7 @@ use ash_core::time::Time;
 
 use crate::combat::Health;
 use crate::controller::Controller;
+use crate::death::Corpse;
 use crate::perception::PerceivedChange;
 
 /// Everything one resolution changes, applied once.
@@ -33,6 +34,10 @@ pub(crate) enum Effect {
     /// `entity` leaves the world: it is no longer embodied (A8). Its id
     /// stays issued, and the scheduler keeps its entry (F2, F3).
     Remove { entity: EntityId },
+    /// A death leaves this corpse, after every corpse of an earlier death
+    /// (D2). No effect removes or moves a corpse.
+    #[expect(dead_code, reason = "signatures commit: no death leaves a corpse yet")]
+    LeaveCorpse(Corpse),
     /// Every character perceives `change` (R16, R17).
     Perceive(PerceivedChange),
     /// The turn of the scheduler's next entity ends: it is due again at
