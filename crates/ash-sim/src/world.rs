@@ -47,22 +47,16 @@ impl World {
     /// The fixed map holding one character, due at time zero. A player
     /// connection controls it, so the world awaits it at once (R2).
     pub fn new(seed: u64, character_speed: Speed) -> Self {
-        let character = EntityId::new(0);
-        let mut scheduler = Scheduler::default();
-        scheduler.schedule(character, Time::ZERO);
-        Self {
+        let mut world = Self {
             map: Map::skeleton(),
-            entities: alloc::vec![Entity {
-                id: character,
-                speed: character_speed,
-                position: CHARACTER_START,
-                controller: Controller::Player,
-            }],
-            scheduler,
+            entities: Vec::new(),
+            scheduler: Scheduler::default(),
             rng: Rng::new(seed),
             perceived_changes: Vec::new(),
             command_log: Vec::new(),
-        }
+        };
+        world.create_entity(character_speed, CHARACTER_START, Controller::Player);
+        world
     }
 
     /// The world of the skeleton, from `seed`: the character, then a
@@ -227,7 +221,10 @@ impl World {
                         position,
                         controller,
                     });
-                    self.scheduler.schedule(id, self.clock());
+                    // The first entity has no turn to join: the world
+                    // begins at time zero.
+                    let now = self.scheduler.head().map_or(Time::ZERO, |(due, _)| due);
+                    self.scheduler.schedule(id, now);
                 }
             }
         }
