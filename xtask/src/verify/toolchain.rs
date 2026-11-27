@@ -37,7 +37,8 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         name: "test",
-        args: &["test", "--workspace"],
+        // Without it cargo stops at the first failing target and hides the rest.
+        args: &["test", "--workspace", "--no-fail-fast"],
         install: None,
     },
     Step {
@@ -308,6 +309,36 @@ mod tests {
                 .find(|line| line.contains(&format!("--crate-name {krate} ")))
                 .unwrap_or_else(|| panic!("no rustc call for {krate}: {stderr}"));
             assert!(rustc.contains("overflow-checks=on"), "{rustc}");
+        }
+    }
+
+    #[test]
+    fn test_step_reports_every_failing_target() {
+        let repo = TestRepo::new();
+        repo.write(
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"probe\"]\nresolver = \"3\"\n",
+        );
+        repo.write(
+            "probe/Cargo.toml",
+            "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
+        );
+        repo.write("probe/src/lib.rs", "");
+        for target in ["first", "second"] {
+            repo.write(
+                &format!("probe/tests/{target}.rs"),
+                "#[test]\nfn fails() {\n    panic!();\n}\n",
+            );
+        }
+        let output = step("test")
+            .command(repo.root())
+            .env("CARGO_TARGET_DIR", repo.root().join("target"))
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{stderr}");
+        for target in ["--test first", "--test second"] {
+            assert!(stderr.contains(target), "{target} not reported: {stderr}");
         }
     }
 
