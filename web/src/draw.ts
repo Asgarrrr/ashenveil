@@ -38,7 +38,7 @@ export function color(world: PerceivedWorld, entity: number): string {
   if (entity === world.controlled) {
     return "#fc3";
   }
-  return world.dispositions.get(entity) === "hostile" ? "#f55" : "#6cf";
+  return world.entities.get(entity)?.disposition === "hostile" ? "#f55" : "#6cf";
 }
 
 /** The line the log shows for `entry`: when, who, and what it did. */
@@ -62,7 +62,7 @@ function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void {
   context.font = `${TILE - 6}px monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  for (const [entity, { x, y }] of world.positions) {
+  for (const [entity, { position: { x, y } }] of world.entities) {
     context.fillStyle = color(world, entity);
     context.fillText(entity === world.controlled ? "@" : "e", (x + 0.5) * TILE, (y + 0.5) * TILE);
   }

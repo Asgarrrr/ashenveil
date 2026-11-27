@@ -70,6 +70,24 @@ function replay(stream) {
   return world;
 }
 
+/** A snapshot at time 0 of a floor of 5 by 5 tiles holding `entities`. */
+const snapshot = (entities) => ({
+  kind: "snapshot",
+  time: 0,
+  width: 5,
+  terrain: Array(25).fill("floor"),
+  entities,
+});
+const perceivedEntity = (entity, x, y, disposition) => ({
+  entity,
+  position: { x, y, z: 0 },
+  disposition,
+});
+
+/** Where each entity `world` holds stands. */
+const positions = (world) =>
+  [...world.entities.values()].map(({ entity, position }) => [entity, position]);
+
 const wait = { kind: "wait" };
 const move = (direction) => ({ kind: "move", direction });
 const strike = (direction) => ({ kind: "attack", direction });
@@ -89,14 +107,11 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   // R16: each creature is one more perceived entity, stepped like the
   // character: entity 1 west, west, east from (7, 4), entity 2 north,
   // northeast, southeast from (1, 4).
-  assert.deepEqual(
-    [...world.positions],
-    [
-      [0, { x: 3, y: 2, z: 0 }],
-      [1, { x: 6, y: 4, z: 0 }],
-      [2, { x: 3, y: 3, z: 0 }],
-    ],
-  );
+  assert.deepEqual(positions(world), [
+    [0, { x: 3, y: 2, z: 0 }],
+    [1, { x: 6, y: 4, z: 0 }],
+    [2, { x: 3, y: 3, z: 0 }],
+  ]);
   assert.equal(world.time, 250);
 
   assert.equal(
@@ -141,12 +156,33 @@ test("the snapshot gives each creature its disposition, and the character none",
   // A4: entity 1 is hostile, entity 2 is neutral.
   const world = replay(walk.slice(0, 1));
   assert.deepEqual(
-    [...world.dispositions],
+    [...world.entities.values()].map(({ entity, disposition }) => [entity, disposition]),
     [
+      [0, null],
       [1, "hostile"],
       [2, "neutral"],
     ],
   );
+});
+
+test("a later snapshot replaces every entity of the one before", () => {
+  // Each reconnection sends a new snapshot. In the later one, entity 1 is
+  // gone, entity 2 stands elsewhere and entity 3 is new.
+  const first = [
+    perceivedEntity(0, 1, 1, null),
+    perceivedEntity(1, 3, 1, "hostile"),
+    perceivedEntity(2, 1, 3, "neutral"),
+  ];
+  const later = [
+    perceivedEntity(0, 1, 1, null),
+    perceivedEntity(2, 2, 3, "neutral"),
+    perceivedEntity(3, 4, 4, "hostile"),
+  ];
+  const world = new PerceivedWorld();
+  world.apply(snapshot(first));
+  world.apply(snapshot(later));
+
+  assert.deepEqual([...world.entities.values()], later);
 });
 
 test("the map draws the character, a hostile creature and a neutral creature apart", () => {
@@ -169,15 +205,9 @@ test("a perceived step moves the mover toward its direction", () => {
   };
   for (const [direction, [x, y]] of Object.entries(steps)) {
     const world = new PerceivedWorld();
-    world.apply({
-      kind: "snapshot",
-      time: 0,
-      width: 5,
-      terrain: Array(25).fill("floor"),
-      entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 }, disposition: null }],
-    });
+    world.apply(snapshot([perceivedEntity(4, 2, 2, null)]));
     world.apply({ kind: "perceived", time: 0, entity: 4, outcome: { kind: "stepped", direction } });
-    assert.deepEqual(world.positions.get(4), { x, y, z: 0 }, direction);
+    assert.deepEqual(positions(world), [[4, { x, y, z: 0 }]], direction);
   }
 });
 
@@ -189,20 +219,17 @@ test("a bump leaves the mover in place and logs whom it bumped into", () => {
   const before = replay(bump.slice(0, at));
   const bumped = replay(bump.slice(0, at + 1));
 
-  assert.deepEqual(bumped.positions, before.positions, "the bump moved an entity");
+  assert.deepEqual(bumped.entities, before.entities, "the bump moved an entity");
   assert.deepEqual(bumped.log.at(-1), {
     time: 200,
     entity: 0,
     outcome: { kind: "bumped", target: 2 },
   });
-  assert.deepEqual(
-    [...replay(bump).positions],
-    [
-      [0, { x: 3, y: 3, z: 0 }],
-      [1, { x: 7, y: 4, z: 0 }],
-      [2, { x: 1, y: 3, z: 0 }],
-    ],
-  );
+  assert.deepEqual(positions(replay(bump)), [
+    [0, { x: 3, y: 3, z: 0 }],
+    [1, { x: 7, y: 4, z: 0 }],
+    [2, { x: 1, y: 3, z: 0 }],
+  ]);
 });
 
 test("an attack is offered toward the adjacent creature only, and logged as a hit or a miss", () => {
@@ -227,7 +254,7 @@ test("an attack is offered toward the adjacent creature only, and logged as a hi
       { time: 300, entity: 0, outcome: { kind: "missed", target: 2 } },
     ],
   );
-  assert.equal(replay(attack.slice(0, first + 1)).positions.get(0).x, before.positions.get(0).x);
+  assert.deepEqual(replay(attack.slice(0, first + 1)).entities, before.entities);
 });
 
 test("the log line of a strike says whether it hit or missed", () => {
@@ -245,7 +272,7 @@ test("a refused command advances nothing and keeps the offer", () => {
 
   assert.equal(refused.refused, true);
   assert.equal(refused.time, beforeRefusal.time);
-  assert.deepEqual(refused.positions, beforeRefusal.positions);
+  assert.deepEqual(refused.entities, beforeRefusal.entities);
   assert.deepEqual(refused.offer, beforeRefusal.offer);
   assert.equal(refused.costOf(move("north")), undefined, "north is a wall");
 
