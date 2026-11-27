@@ -223,4 +223,24 @@ hostile, neutral, condition, death, outcome.
 
 ## Proposed amendments
 
-(empty)
+- 2026-11-27, accepted by the human (found in S1, second-model read): a
+  perceived change carries one outcome and no action. The outcome is stepped
+  with its direction, waited, bumped, hit or missed; the last three name
+  their target. An impossible pair, such as a wait that hit, is then
+  unrepresentable in the simulation, on the wire and in the web model.
+  This amends:
+  - S1 Behavior: "The perceived change replaces `bumped` with an outcome"
+    reads "replaces `action` and `bumped` with one outcome".
+  - S1 Acceptance: "The decoder rejects unknown tags, truncated payloads and
+    impossible action and outcome pairs" reads "The decoder rejects unknown
+    tags, truncated payloads and an outcome whose target is its own actor".
+  - S3 Behavior: "an act (entity, action, outcome)" reads "an act (entity,
+    outcome)".
+  - Consequence for S2: a witness cannot tell a strike made by a move from
+    an explicit attack. The command log keeps the submitted action.
+- 2026-11-27, open, for the human before S2 (second-model read): S2 says a
+  move into a creature "the actor perceives as hostile" resolves to an
+  attack. A wandering creature that moves into a hostile creature would then
+  attack it, against A13 (only the character attacks). A1 speaks of the
+  character. S2 must say how the wander is kept from attacking through a
+  move.
