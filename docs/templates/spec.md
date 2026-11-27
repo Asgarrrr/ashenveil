@@ -42,6 +42,17 @@ pass. Check the box when the slice is merged.
 - Perf budget: <benchmark and threshold, or "none">.
 - Acceptance: `cargo xtask accept <test>` — <what it proves>.
 
+## Glossary proposals
+
+Fill this table when the spec is drafted, from the nouns of the design. Each
+definition restates a rule and cites it; the signatures commit of each slice
+uses these names. The human approves the rows into `CONTEXT.md` at the
+milestone. Write "none" with a reason when the spec adds no term.
+
+| Term | Proposed definition | Source | Code name | Avoid |
+|---|---|---|---|---|
+| <term> | <the rule it restates> | `docs/design/<system>.md` R<n> | `<Name>` | <rejected synonyms> |
+
 ## Proposed amendments
 
 (empty)
