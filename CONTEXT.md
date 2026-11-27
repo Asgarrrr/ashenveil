@@ -12,7 +12,10 @@ Seeded from the product decisions in `docs/plans/0000-methodology.md`.
 | Tile | One cell of the 3D grid. |
 | Chunk | A fixed block of tiles; the unit of sparse storage. |
 | Time unit | The unit of game time. |
+| Entity | A thing of a world that acts when it is due, at its own speed, under the same rules whatever its controller. Today, a character or a creature. |
+| Action | What an entity does when it is due. It takes effect at once, and its cost is the time the entity spends before it acts again. Today, move, wait or attack. |
 | Action cost | The number of time units an action takes; the scheduler orders actions by it. |
+| Scheduler | What orders entities by the time they are due. Of two due at the same time, the one that became due first acts first. |
 | Controller | What drives an entity: a player connection or the simulation. The player is an entity with a controller, never a global. |
 | Catch-up | Lazy simulation of the time a world spent unloaded, run when the player returns. |
 | Quarantine | The state of a world whose simulation violated an invariant. Only that world stops. |
@@ -21,6 +24,8 @@ Seeded from the product decisions in `docs/plans/0000-methodology.md`.
 | Speed | The divisor of an entity's base costs. Never perceived by another entity. |
 | Base cost | An action's cost at speed 1. |
 | Bump | A move into a tile another entity holds that is not an attack: the mover stays, pays the move, and both perceive it. |
+| Refusal | The rules turning down a move or an attack, judged on what the entity perceives. A refused move or attack is not an action: it costs nothing, changes nothing and advances no clock. |
+| Offer | An action the rules allow the awaited entity, with the cost it would pay. A controller chooses only among its offers; a wait is always one. |
 | Perception | What a character learns of the world. The only channel from the world to its player. |
 | Perceived change | One change a character perceives, stamped with its time and ordered. |
 | Map | The fixed terrain of a world: floor and wall tiles. |
