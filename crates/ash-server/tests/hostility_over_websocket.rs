@@ -208,7 +208,7 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
             Some(&PerceivedChange::Act {
                 entity, outcome, ..
             }) => Some((entity, outcome)),
-            Some(PerceivedChange::Death { .. }) | None => None,
+            Some(PerceivedChange::Death { .. } | PerceivedChange::Condition { .. }) | None => None,
         };
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,

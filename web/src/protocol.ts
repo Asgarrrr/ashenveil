@@ -33,12 +33,20 @@ export type Outcome =
   | { kind: "missed"; target: number };
 
 /**
+ * What the character perceives of another entity's hit points (A10): a
+ * kind, never a number.
+ */
+export type Condition = "unhurt" | "wounded" | "badly_wounded" | "dying";
+
+/**
  * A change every character perceives, stamped with the time it happened
- * (R17): an entity acts, or an entity dies and leaves the world (A8).
+ * (R17): an entity acts, an entity dies and leaves the world (A8), or a hit
+ * leaves an entity in another condition (A10).
  */
 export type PerceivedChange =
   | { kind: "act"; time: number; entity: number; outcome: Outcome }
-  | { kind: "death"; time: number; entity: number };
+  | { kind: "death"; time: number; entity: number }
+  | { kind: "condition"; time: number; entity: number; condition: Condition };
 
 export type Terrain = "floor" | "wall";
 

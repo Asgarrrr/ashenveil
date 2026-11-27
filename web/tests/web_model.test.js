@@ -1,5 +1,5 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S3: the perceived-world model of the web client, fed
+// slices S1 to S4: the perceived-world model of the web client, fed
 // through the real WASM codec. `cargo xtask accept web_model`
 // builds the client, then runs this file with Node's test runner.
 //
@@ -23,8 +23,8 @@
 //
 // `fixtures/death.json`: another world. Entity 0 moved east, then
 // southeast, then attacked the hostile creature to the southeast twice.
-// The second hit killed it (A8). Entity 0 then moved southeast, onto the
-// tile the creature left.
+// The first hit left it wounded (A10), the second killed it (A8). Entity 0
+// then moved southeast, onto the tile the creature left.
 //
 //   012345678
 // 0 #########
@@ -98,6 +98,8 @@ const outcomeOf = (message) =>
     ? message.change.outcome.kind
     : undefined;
 const isDeath = (message) => message.kind === "perceived" && message.change.kind === "death";
+const isConditionChange = (message) =>
+  message.kind === "perceived" && message.change.kind === "condition";
 
 /** Where each entity `world` holds stands. */
 const positions = (world) =>
@@ -371,6 +373,42 @@ test("after the death the world goes on without the dead creature", () => {
 test("the log line of a death says who died", () => {
   const world = replay(death);
   assert.equal(logLine(world, { kind: "death", time: 300, entity: 1 }), "300  entity 1 dies");
+});
+
+test("a change of condition is logged right after its hit, and moves no entity", () => {
+  const changed = indexOf(death, isConditionChange);
+  const before = replay(death.slice(0, changed));
+  const after = replay(death.slice(0, changed + 1));
+
+  // A10, A11: the first hit left the hostile creature, entity 1, wounded.
+  assert.deepEqual(after.log.slice(-2), [
+    act(200, 0, { kind: "hit", target: 1 }),
+    { kind: "condition", time: 200, entity: 1, condition: "wounded" },
+  ]);
+  assert.deepEqual(positions(after), positions(before));
+  // The lethal hit changed no condition: the death followed it.
+  assert.equal(replay(death).log.filter(({ kind }) => kind === "condition").length, 1);
+});
+
+test("each condition decodes to its name", () => {
+  // A change is tag 2, then kind 2 for a change of condition, the time and
+  // the entity, little-endian, then the condition.
+  const names = ["unhurt", "wounded", "badly_wounded", "dying"];
+  names.forEach((condition, tag) => {
+    const bytes = Uint8Array.of(2, 2, 44, 1, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, tag);
+    assert.deepEqual(decodeServerMessage(bytes), {
+      kind: "perceived",
+      change: { kind: "condition", time: 300, entity: 7, condition },
+    });
+  });
+});
+
+test("the log line of a change of condition says how the entity looks", () => {
+  const world = replay(death);
+  const looks = (condition) => logLine(world, { kind: "condition", time: 200, entity: 2, condition });
+  assert.equal(looks("wounded"), "200  entity 2 looks wounded");
+  assert.equal(looks("badly_wounded"), "200  entity 2 looks badly wounded");
+  assert.equal(looks("dying"), "200  entity 2 looks dying");
 });
 
 test("a refused command advances nothing and keeps the offer", () => {

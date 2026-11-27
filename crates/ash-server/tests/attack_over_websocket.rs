@@ -136,6 +136,12 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
             outcome,
         } => (entity, Some(outcome)),
         PerceivedChange::Death { time: _, entity } => (entity, None),
+        // A condition is a kind, never a number (A10).
+        PerceivedChange::Condition {
+            time: _,
+            entity,
+            condition: _,
+        } => (entity, None),
     }
 }
 

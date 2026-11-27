@@ -133,6 +133,12 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
             outcome,
         } => (entity, Some(outcome)),
         PerceivedChange::Death { time: _, entity } => (entity, None),
+        // A condition is a kind, never a number (A10).
+        PerceivedChange::Condition {
+            time: _,
+            entity,
+            condition: _,
+        } => (entity, None),
     }
 }
 
@@ -251,7 +257,9 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
                 entity,
                 outcome,
             } if entity == creature => Some((time, outcome)),
-            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+            PerceivedChange::Act { .. }
+            | PerceivedChange::Death { .. }
+            | PerceivedChange::Condition { .. } => None,
         })
         .collect();
     assert!(creature_acts.len() > 2, "{creature_acts:?}");

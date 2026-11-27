@@ -43,6 +43,20 @@ pub enum Disposition {
     Neutral,
 }
 
+/// What the character perceives of another entity's hit points (A10): a
+/// kind, never a number (R18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condition {
+    /// All of its hit points.
+    Unhurt,
+    /// Fewer than all of them.
+    Wounded,
+    /// Fewer than half of them.
+    BadlyWounded,
+    /// Fewer than a quarter of them.
+    Dying,
+}
+
 /// An entity the character perceives: where it stands and, for a creature,
 /// its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +79,13 @@ pub enum PerceivedChange {
     /// `entity` died and left the world (A8). Its lethal hit is the change
     /// before, at the same time.
     Death { time: Time, entity: EntityId },
+    /// A hit left `entity` in another `condition` (A10). That hit is the
+    /// change before, at the same time.
+    Condition {
+        time: Time,
+        entity: EntityId,
+        condition: Condition,
+    },
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -242,6 +263,28 @@ impl Wire for Option<Disposition> {
     }
 }
 
+impl Wire for Condition {
+    fn write(&self, out: &mut Vec<u8>) {
+        let tag: u8 = match self {
+            Self::Unhurt => 0,
+            Self::Wounded => 1,
+            Self::BadlyWounded => 2,
+            Self::Dying => 3,
+        };
+        tag.write(out);
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(Self::Unhurt),
+            1 => Ok(Self::Wounded),
+            2 => Ok(Self::BadlyWounded),
+            3 => Ok(Self::Dying),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
 impl Wire for PerceivedEntity {
     fn write(&self, out: &mut Vec<u8>) {
         self.entity.write(out);
@@ -311,6 +354,16 @@ impl Wire for PerceivedChange {
                 time.write(out);
                 entity.write(out);
             }
+            Self::Condition {
+                time,
+                entity,
+                condition,
+            } => {
+                2_u8.write(out);
+                time.write(out);
+                entity.write(out);
+                condition.write(out);
+            }
         }
     }
 
@@ -336,6 +389,11 @@ impl Wire for PerceivedChange {
             1 => Ok(Self::Death {
                 time: Time::read(input)?,
                 entity: EntityId::read(input)?,
+            }),
+            2 => Ok(Self::Condition {
+                time: Time::read(input)?,
+                entity: EntityId::read(input)?,
+                condition: Condition::read(input)?,
             }),
             _ => Err(DecodeError),
         }

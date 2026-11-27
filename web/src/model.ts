@@ -110,6 +110,9 @@ export class PerceivedWorld {
       this.entities.delete(change.entity);
       return;
     }
+    if (change.kind === "condition") {
+      return;
+    }
     const { entity, outcome } = change;
     if (entity === this.controlled) {
       this.offer = [];

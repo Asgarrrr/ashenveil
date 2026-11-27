@@ -131,8 +131,9 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .map_or(Action::Wait, Action::Move)
 }
 
-/// True when `change` names `entity`: it acts, is acted on, or dies. The
-/// patterns name every field, so a new one fails to compile here.
+/// True when `change` names `entity`: it acts, is acted on, dies, or changes
+/// condition. The patterns name every field, so a new one fails to compile
+/// here.
 fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
     match *change {
         PerceivedChange::Act {
@@ -152,6 +153,11 @@ fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
             time: _,
             entity: dead,
         } => dead == entity,
+        PerceivedChange::Condition {
+            time: _,
+            entity: struck,
+            condition: _,
+        } => struck == entity,
     }
 }
 

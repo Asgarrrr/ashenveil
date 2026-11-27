@@ -45,10 +45,18 @@ impl Health {
         }
     }
 
-    /// A10: the condition these hit points show.
+    /// A10: the condition these hit points show. A product that saturates
+    /// is above every `max`, like the product it stands for.
     pub(crate) fn condition(self) -> Condition {
-        // S4 signatures: every entity looks unhurt.
-        Condition::Unhurt
+        if self.current == self.max {
+            Condition::Unhurt
+        } else if self.current.saturating_mul(4) < self.max {
+            Condition::Dying
+        } else if self.current.saturating_mul(2) < self.max {
+            Condition::BadlyWounded
+        } else {
+            Condition::Wounded
+        }
     }
 }
 
@@ -106,13 +114,16 @@ pub(crate) fn attack(
     (outcome, after)
 }
 
-/// A6, A8: what a hit on `target` changes, in order. The target loses 3 hit
-/// points. At zero it dies: it leaves the world, and every character
+/// A6, A8, A10: what a hit on `target` changes, in order. The target loses
+/// 3 hit points. At zero it dies: it leaves the world, and every character
 /// perceives its death at the time of the hit (A11). The death of a
 /// character is out of scope: its zero hit points crash through
-/// `invariant!`.
+/// `invariant!`. A target that lives on in another condition is perceived
+/// in it, at the time of the hit too.
 pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
-    let health = world.health(target).damaged(DAMAGE);
+    let before = world.health(target);
+    let health = before.damaged(DAMAGE);
+    let time = world.clock();
     let mut effects = alloc::vec![Effect::Damage {
         entity: target,
         health,
@@ -123,8 +134,14 @@ pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
         }
         effects.push(Effect::Remove { entity: target });
         effects.push(Effect::Perceive(PerceivedChange::Death {
-            time: world.clock(),
+            time,
             entity: target,
+        }));
+    } else if health.condition() != before.condition() {
+        effects.push(Effect::Perceive(PerceivedChange::Condition {
+            time,
+            entity: target,
+            condition: health.condition(),
         }));
     }
     effects

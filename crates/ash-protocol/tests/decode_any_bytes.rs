@@ -5,8 +5,8 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ClientMessage, Condition, Disposition, Outcome, PerceivedChange,
+    PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -102,6 +102,10 @@ fn server_messages() -> Vec<ServerMessage> {
             time: Time::new(u64::MAX),
             entity: EntityId::new(u32::MAX),
         }),
+        condition_change(0, 3, Condition::Unhurt),
+        condition_change(300, 1, Condition::Wounded),
+        condition_change(u64::MAX, u32::MAX, Condition::BadlyWounded),
+        condition_change(301, 0, Condition::Dying),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
@@ -113,6 +117,14 @@ fn perceived(time: u64, entity: u32, outcome: Outcome) -> ServerMessage {
         time: Time::new(time),
         entity: EntityId::new(entity),
         outcome,
+    })
+}
+
+fn condition_change(time: u64, entity: u32, condition: Condition) -> ServerMessage {
+    ServerMessage::Perceived(PerceivedChange::Condition {
+        time: Time::new(time),
+        entity: EntityId::new(entity),
+        condition,
     })
 }
 
@@ -257,8 +269,47 @@ fn a_malformed_death_is_refused() {
             "a death of {length} bytes decodes"
         );
     }
-    // No kind follows the death, with the bytes of a death or of a wait.
-    for tag in 2..=u8::MAX {
+}
+
+#[test]
+fn a_malformed_change_of_condition_is_refused() {
+    // The controls: a change of kind 2 is the entity it names coming, at its
+    // time, to the condition its one tag names.
+    let known = [
+        (0, Condition::Unhurt),
+        (1, Condition::Wounded),
+        (2, Condition::BadlyWounded),
+        (3, Condition::Dying),
+    ];
+    for (tag, condition) in known {
+        assert_eq!(
+            ServerMessage::decode(&change_bytes(2, &[tag])),
+            Ok(ServerMessage::Perceived(PerceivedChange::Condition {
+                time: Time::new(100),
+                entity: EntityId::new(2),
+                condition,
+            })),
+            "tag {tag}"
+        );
+    }
+
+    for tag in 4..=u8::MAX {
+        assert!(
+            ServerMessage::decode(&change_bytes(2, &[tag])).is_err(),
+            "a condition tag of {tag} decodes"
+        );
+    }
+    // A change of condition carries one condition: not none, and no hit
+    // points after it.
+    for rest in [&[][..], &[1, 3, 0, 0, 0], &[1, 3, 0, 0, 0, 6, 0, 0, 0]] {
+        assert!(
+            ServerMessage::decode(&change_bytes(2, rest)).is_err(),
+            "a change of condition with {rest:?} decodes"
+        );
+    }
+    // No kind follows the change of condition, with the bytes of a death or
+    // of a wounded entity.
+    for tag in 3..=u8::MAX {
         for rest in [&[][..], &[1]] {
             assert!(
                 ServerMessage::decode(&change_bytes(tag, rest)).is_err(),

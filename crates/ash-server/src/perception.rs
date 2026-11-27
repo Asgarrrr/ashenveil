@@ -3,9 +3,10 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, Disposition, Outcome, PerceivedChange, PerceivedEntity, ServerMessage,
-    Snapshot,
+    AvailableAction, Condition, Disposition, Outcome, PerceivedChange, PerceivedEntity,
+    ServerMessage, Snapshot,
 };
+use ash_sim::combat::Condition as SimCondition;
 use ash_sim::controller::Disposition as SimDisposition;
 use ash_sim::perception::{self, Outcome as SimOutcome, PerceivedChange as SimChange};
 use ash_sim::world::World;
@@ -67,11 +68,15 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
             outcome: outcome_to_wire(outcome),
         },
         SimChange::Death { time, entity } => PerceivedChange::Death { time, entity },
-        // S4 signatures: no hit changes a condition yet. The wire carries
-        // the change in a later commit.
-        SimChange::Condition { .. } => {
-            ash_core::invariant!("the wire carries no change of condition")
-        }
+        SimChange::Condition {
+            time,
+            entity,
+            condition,
+        } => PerceivedChange::Condition {
+            time,
+            entity,
+            condition: condition_to_wire(condition),
+        },
     }
 }
 
@@ -82,6 +87,15 @@ fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
         SimOutcome::Bumped(target) => Outcome::Bumped(target),
         SimOutcome::Hit(target) => Outcome::Hit(target),
         SimOutcome::Missed(target) => Outcome::Missed(target),
+    }
+}
+
+fn condition_to_wire(condition: SimCondition) -> Condition {
+    match condition {
+        SimCondition::Unhurt => Condition::Unhurt,
+        SimCondition::Wounded => Condition::Wounded,
+        SimCondition::BadlyWounded => Condition::BadlyWounded,
+        SimCondition::Dying => Condition::Dying,
     }
 }
 

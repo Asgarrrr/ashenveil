@@ -6,7 +6,7 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Direction, Disposition, EntityId, Outcome,
+    Action, AvailableAction, ClientMessage, Condition, Direction, Disposition, EntityId, Outcome,
     PerceivedChange, PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -175,6 +175,25 @@ fn change_json(change: PerceivedChange) -> String {
             time.units(),
             entity.get()
         ),
+        PerceivedChange::Condition {
+            time,
+            entity,
+            condition,
+        } => format!(
+            r#"{{"kind":"condition","time":{},"entity":{},"condition":"{}"}}"#,
+            time.units(),
+            entity.get(),
+            condition_name(condition)
+        ),
+    }
+}
+
+fn condition_name(condition: Condition) -> &'static str {
+    match condition {
+        Condition::Unhurt => "unhurt",
+        Condition::Wounded => "wounded",
+        Condition::BadlyWounded => "badly_wounded",
+        Condition::Dying => "dying",
     }
 }
 

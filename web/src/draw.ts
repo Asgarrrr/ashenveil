@@ -49,6 +49,9 @@ export function logLine(world: PerceivedWorld, change: PerceivedChange): string 
       return `${who} ${happened(world, change.outcome)}`;
     case "death":
       return `${who} dies`;
+    case "condition":
+      // The codec names a condition in snake case.
+      return `${who} looks ${change.condition.replace("_", " ")}`;
   }
 }
 
