@@ -218,8 +218,70 @@ down the signatures with a failing acceptance test.
 
 ## Glossary proposals
 
-Proposed for the milestone: attack, hit, miss, hit points, disposition,
-hostile, neutral, condition, death, outcome.
+Proposed for the milestone. Each definition restates the rules named beside
+it; the human approves, edits or rejects each row.
+
+| Term | Proposed definition | Source |
+|---|---|---|
+| Attack | An action that strikes an adjacent entity: it hits or it misses. A character's move into a creature it perceives as hostile is an attack. | A1, A3, A6 |
+| Hit | An attack that removes hit points from its target. | A6 |
+| Miss | An attack that does not hit. The attacker still pays the action cost; nothing else changes. | A6 |
+| Hit points | A number each entity has: a hit lowers it, and at zero the entity dies. A character sees its own as a number and never perceives those of another entity. A placeholder, to be replaced by body parts. | A6 to A10, Out of scope |
+| Condition | What a character perceives of another entity's hit points: unhurt, wounded, badly wounded or dying. A kind, never a number. | A10 |
+| Disposition | Whether a creature is hostile or neutral. A character perceives it. | A4 |
+| Hostile | One of the two dispositions. A character's move into a creature it perceives as hostile is an attack. | A1, A4 |
+| Neutral | One of the two dispositions. A character's move into a creature it perceives as neutral is a bump. | A2, A4 |
+| Death | The end of an entity's embodiment, at zero hit points: the entity leaves the world. Its identity is never given to another entity. | A8, entries "Identity" and "Embodiment" |
+| Outcome | What an action did, as its perceived change says it: stepped, waited, bumped, hit or missed. The last three name their target. | A11, accepted amendment of S1 |
+| Bump (amended) | A move into a tile another entity holds: the mover stays, pays the move, and both perceive it. A character's move into a creature it perceives as hostile is an attack, not a bump. | A1, A2, entry "Bump", proposed amendment of S2 |
+| Wander (amended) | A simulation controller that picks evenly among the actions the rules allow, except attacks. | A13, entry "Wander", S1 invariant |
+
+Questions for the human. Each count is the number of lines that hold the
+word, whole and in any case, at commit 5fcb076: first in `crates`,
+`docs/design`, `docs/specs` and `CONTEXT.md` together, then in `crates` alone.
+
+1. Hit points and `Health`. The type of an entity's hit points is `Health`
+   (`crates/ash-sim/src/combat.rs:24`). `Effect::Damage { entity, health }`
+   carries it. `PerceivedHealth` holds hit points or a condition, so the
+   code uses "health" for two things. The docs of these types say "hit
+   points", and the JSON kind is `hit_points`. Counts: "health" 101 and 94;
+   "hit points" 91 and 69. Options:
+   - "health" becomes a term of its own: the current and maximum hit points
+     of an entity;
+   - the types take the term "hit points" in a later change.
+2. Attack and `combat`. The module `combat`
+   (`crates/ash-sim/src/lib.rs:15`) holds attack, hit points, condition and
+   death. One module names one glossary concept (`.claude/rules/sim.md`).
+   The action and time design names the system "combat": "the combat
+   design". Counts: "combat" 25 and 13; "attack" 159 and 123. Options:
+   - "combat" becomes a term;
+   - the module takes the name of a term;
+   - the module splits when a second verb needs it.
+3. "Strike". The design uses it as the verb of an attack (A3, A13), and a
+   strike can miss. Comments and test names follow the design. Counts:
+   "strike" 28 and 23; "strikes" 46 and 42; "struck" 20 and 18. Options:
+   - plain English, kept as the verb of the term "attack";
+   - a synonym of "attack" that the glossary forbids.
+4. "Damage". It names the constant `DAMAGE`
+   (`crates/ash-sim/src/combat.rs:19`) and the effect `Effect::Damage`
+   (`crates/ash-sim/src/effect.rs:32`). The design uses it once, under "Out
+   of scope". Counts: 19 and 12. Options:
+   - a term: the hit points a hit removes;
+   - plain English.
+5. Snapshot. The entry says "The whole perceived state, sent when a
+   controller connects." Since S4 a snapshot is built for one character (S4
+   Behavior, A9, A10). Counts: 146 and 127. Options:
+   - amend the entry in this batch, for example: "The whole state one
+     character perceives, sent when its controller connects.";
+   - keep the entry.
+6. Phase 1 names with no entry. The modules `action` and `scheduler`, the
+   command log (`World::command_log`, `crates/ash-sim/src/world.rs:206`) and
+   the refusal (the type is `Refused`, `crates/ash-sim/src/action.rs:40`).
+   Counts: "action" 518 and 475; "scheduler" 38 and 28; "command log" 10 and
+   2, `command_log` 23 and 23; "refusal" 8 and 6, "refused" 81 and 70.
+   Options:
+   - a second batch;
+   - no entry.
 
 ## Proposed amendments
 
