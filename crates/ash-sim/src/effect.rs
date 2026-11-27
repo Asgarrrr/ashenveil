@@ -11,36 +11,28 @@ use ash_core::time::Time;
 use crate::controller::Controller;
 use crate::perception::PerceivedChange;
 
-/// Everything one resolution changes, in the order `apply` writes it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Everything one resolution changes, applied once.
 pub(crate) struct Effects {
-    /// The RNG after every draw that led to these effects: the world's own
-    /// when nothing drew.
-    pub(crate) rng: Rng,
-    pub(crate) effects: Vec<Effect>,
+    /// Written in this order.
+    pub(crate) in_order: Vec<Effect>,
+    /// The RNG state after every draw that led to these effects: the
+    /// world's own when nothing drew.
+    pub(crate) rng_after: Rng,
 }
 
 /// One change to the world.
-#[expect(
-    dead_code,
-    reason = "S1 signatures: resolve returns these from the next commit"
-)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Effect {
-    /// The scheduler's next entry, `entity` due at `time`, starts its turn:
-    /// the clock runs to `time` (R2, R8). An entity a player connection
-    /// controls becomes awaited.
-    Turn { entity: EntityId, time: Time },
     /// `entity` now stands at `position` (R4).
     Place {
         entity: EntityId,
         position: TilePosition,
     },
-    /// `entity` acts again at `due`, after every entity already due then
-    /// (R7, R8).
-    Schedule { entity: EntityId, due: Time },
     /// Every character perceives `change` (R16, R17).
     Perceive(PerceivedChange),
+    /// The turn of the scheduler's next entity ends: it is due again at
+    /// `due`, after every entity already due then (R7, R8). The clock and
+    /// the awaited entity follow the scheduler.
+    EndTurn { due: Time },
     /// A new entity at `position`, due now, with an id never issued before
     /// (F2).
     Create {

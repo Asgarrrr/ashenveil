@@ -1,14 +1,16 @@
 //! The actions an entity can take, what they cost (R4 to R6), and the rule
 //! that resolves them (ADR 0001, F4).
 
+use alloc::vec::Vec;
+
 use ash_core::entity::{EntityId, Speed};
 use ash_core::rng::Rng;
 use ash_core::tile::Direction;
 use ash_core::time::ActionCost;
 
 use crate::combat;
-use crate::effect::Effects;
-use crate::perception::Perception;
+use crate::effect::{Effect, Effects};
+use crate::perception::{Outcome, PerceivedChange, Perception};
 use crate::world::World;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,14 +46,36 @@ pub struct AvailableAction {
     pub cost: ActionCost,
 }
 
-/// F4: what `actor` taking `action` changes, or why the rules refuse it.
-/// Pure: a refusal reads only `perception` (R10), an outcome reads the true
-/// `world`. Every draw starts from `rng`, and the effects carry the RNG
-/// after the last one. A refusal draws nothing.
-#[expect(
-    dead_code,
-    reason = "S1 signatures: World::submit and the wander go through resolve in the next commit"
-)]
+/// R10, R11, R14: whether the rules let `actor` take `action`, judged on
+/// what it perceives alone. The offers are the actions it allows, so an
+/// offered action is never refused.
+pub(crate) fn allowed(perception: &Perception<'_>, actor: EntityId, action: Action) -> bool {
+    let from = perception.position(actor);
+    match action {
+        Action::Wait => true,
+        Action::Move(direction) => perception.map().allows_move(from, direction),
+        Action::Attack(_) => false,
+    }
+}
+
+/// R14: every action `actor` is allowed, the wait first, then the moves and
+/// the attacks clockwise from the north. The same for every controller (R3).
+pub(crate) fn offers<'p>(
+    perception: &'p Perception<'_>,
+    actor: EntityId,
+) -> impl Iterator<Item = Action> + 'p {
+    let moves = Direction::ALL.map(Action::Move);
+    let attacks = Direction::ALL.map(Action::Attack);
+    core::iter::once(Action::Wait)
+        .chain(moves)
+        .chain(attacks)
+        .filter(move |&action| allowed(perception, actor, action))
+}
+
+/// F4: what `actor` taking `action` changes, or `Refused` when `allowed`
+/// says no. Pure: the refusal reads only `perception`, the outcome reads the
+/// true `world` and cannot fail. Every draw starts from `rng`, and the
+/// effects carry the RNG state after the last one. A refusal draws nothing.
 pub(crate) fn resolve(
     world: &World,
     perception: &Perception<'_>,
@@ -59,8 +83,42 @@ pub(crate) fn resolve(
     action: Action,
     rng: &Rng,
 ) -> Result<Effects, Refused> {
-    match action {
-        Action::Move(_) | Action::Wait => Err(Refused),
-        Action::Attack(direction) => combat::attack(world, perception, actor, direction, rng),
+    if !allowed(perception, actor, action) {
+        return Err(Refused);
     }
+    let mut in_order = Vec::new();
+    let (outcome, rng_after) = match action {
+        Action::Wait => (Outcome::Waited, rng.clone()),
+        Action::Move(direction) => {
+            let to = world.position(actor).step(direction);
+            // R13: a move into an occupied tile is a bump. The mover stays
+            // and pays the move; nothing else changes.
+            let outcome = match world.occupant(to) {
+                Some(occupant) => Outcome::Bumped(occupant),
+                None => {
+                    in_order.push(Effect::Place {
+                        entity: actor,
+                        position: to,
+                    });
+                    Outcome::Stepped
+                }
+            };
+            (outcome, rng.clone())
+        }
+        Action::Attack(direction) => combat::attack(world, actor, direction, rng),
+    };
+    // R7: the effect happens now; the cost delays the actor's next turn.
+    in_order.push(Effect::Perceive(PerceivedChange {
+        time: world.clock(),
+        entity: actor,
+        action,
+        outcome,
+    }));
+    in_order.push(Effect::EndTurn {
+        due: world.clock().after(action.cost(world.speed(actor))),
+    });
+    Ok(Effects {
+        in_order,
+        rng_after,
+    })
 }

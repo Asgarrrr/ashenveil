@@ -7,6 +7,7 @@ use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction};
+use crate::map::Map;
 use crate::world::World;
 
 /// One change, stamped with the time it happened (R17). It names the action
@@ -36,25 +37,27 @@ pub enum Outcome {
 }
 
 /// What a character perceives of the world: the only view a refusal reads
-/// (R10, F4). It holds no other entity's speed, cost or next turn (R18).
-/// Under whole-map perception (R16), every character perceives the whole
-/// map and every entity.
-#[expect(
-    dead_code,
-    reason = "S1 signatures: resolve reads it from the next commit"
-)]
+/// (R10, F4). It shows no entity's speed, cost or next turn (R18). Under
+/// whole-map perception (R16), every character perceives the whole map and
+/// where every entity stands.
 pub(crate) struct Perception<'w> {
     world: &'w World,
 }
 
-#[expect(
-    dead_code,
-    reason = "S1 signatures: resolve reads it from the next commit"
-)]
 impl<'w> Perception<'w> {
     /// R16: every character perceives the whole of `world`.
     pub(crate) fn whole_map(world: &'w World) -> Self {
         Self { world }
+    }
+
+    /// The map, every tile of it (R16).
+    pub(crate) fn map(&self) -> &'w Map {
+        self.world.map()
+    }
+
+    /// Where `entity` stands (R16).
+    pub(crate) fn position(&self, entity: EntityId) -> TilePosition {
+        self.world.position(entity)
     }
 }
 
