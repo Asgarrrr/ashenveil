@@ -66,7 +66,7 @@ Sequential. Each slice reaches the browser: the simulation, the wire, the
 WASM codec and the web client. Inside a Rust slice, the first commit lays
 down the signatures with a failing acceptance test.
 
-### - [ ] S1 — The character strikes on purpose
+### - [x] S1 — The character strikes on purpose
 
 - Files: `crates/ash-sim/src/{lib,world,action,perception,wander}.rs`,
   `crates/ash-sim/src/combat.rs` (new), `crates/ash-sim/src/effect.rs`
