@@ -46,7 +46,7 @@ pub struct AvailableAction {
     pub cost: ActionCost,
 }
 
-/// R10, R11, R14: whether the rules let `actor` take `action`, judged on
+/// R10, R11, R14, A3: whether the rules let `actor` take `action`, judged on
 /// what it perceives alone. The offers are the actions it allows, so an
 /// offered action is never refused.
 pub(crate) fn allowed(perception: &Perception<'_>, actor: EntityId, action: Action) -> bool {
@@ -54,7 +54,7 @@ pub(crate) fn allowed(perception: &Perception<'_>, actor: EntityId, action: Acti
     match action {
         Action::Wait => true,
         Action::Move(direction) => perception.map().allows_move(from, direction),
-        Action::Attack(_) => false,
+        Action::Attack(direction) => perception.occupant(from.step(direction)).is_some(),
     }
 }
 

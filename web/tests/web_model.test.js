@@ -88,7 +88,11 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   );
   assert.equal(world.time, 250);
 
-  assert.equal(world.offer.length, 9, "every move is open at (3, 2), and wait");
+  assert.equal(
+    world.offer.length,
+    10,
+    "every move is open at (3, 2), wait, and an attack on the creature at (4, 3)",
+  );
   assert.equal(world.costOf(wait), 50);
   assert.equal(world.costOf(move("northwest")), 100);
 

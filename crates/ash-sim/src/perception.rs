@@ -59,6 +59,11 @@ impl<'w> Perception<'w> {
     pub(crate) fn position(&self, entity: EntityId) -> TilePosition {
         self.world.position(entity)
     }
+
+    /// The entity standing at `position`, if any (R16).
+    pub(crate) fn occupant(&self, position: TilePosition) -> Option<EntityId> {
+        self.world.occupant(position)
+    }
 }
 
 /// An entity a character perceives, and where it stands.
