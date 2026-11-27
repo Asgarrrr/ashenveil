@@ -504,8 +504,11 @@ test("the entity list shows the hit points of the character as numbers, and each
   );
 });
 
-/** The page elements `draw` fills for `world`: a list keeps the text of its items. */
-function drawn(world) {
+/**
+ * The page elements `draw` fills for `world`, the attack armed or not: a list
+ * keeps the text of its items.
+ */
+function drawn(world, attacking = false) {
   const list = () => ({
     lines: [],
     replaceChildren(...items) {
@@ -522,7 +525,7 @@ function drawn(world) {
   };
   globalThis.document = { createElement: () => ({}) };
   try {
-    draw(view, world, true);
+    draw(view, world, true, attacking);
   } finally {
     delete globalThis.document;
   }
@@ -612,10 +615,22 @@ test("bytes that are not a message decode to nothing", () => {
   assert.equal(decodeServerMessage(walk[0].subarray(1)), undefined);
 });
 
-/** The commands `keys` complete, pressed in order on one keyboard. */
+/** The press of the key at `code` while `modifiers` are held. */
+const keyPress = (code, modifiers = {}) => ({
+  code,
+  metaKey: false,
+  ctrlKey: false,
+  altKey: false,
+  ...modifiers,
+});
+
+/**
+ * The commands `keys` complete, pressed in order on one keyboard. A code
+ * alone is that key pressed with no modifier.
+ */
 function press(keys) {
   const keyboard = new Keyboard();
-  return keys.map((code) => keyboard.press(code));
+  return keys.map((key) => keyboard.press(typeof key === "string" ? keyPress(key) : key));
 }
 
 test("the letter block and the numpad map to the eight moves and wait", () => {
@@ -668,4 +683,43 @@ test("the attack key followed by a direction key attacks toward it", () => {
   // Any other key cancels the attack, and is not a command of its own.
   assert.deepEqual(press(["KeyF", "Space", "KeyD"]), [undefined, undefined, move("east")]);
   assert.deepEqual(press(["KeyF", "KeyP", "KeyD"]), [undefined, undefined, move("east")]);
+});
+
+test("a key pressed with a modifier neither arms the attack nor completes a command", () => {
+  // A3: Cmd+F and Ctrl+F are shortcuts of the browser, so the direction key
+  // after them moves, and strikes nothing.
+  for (const modifier of ["metaKey", "ctrlKey", "altKey"]) {
+    const held = (code) => keyPress(code, { [modifier]: true });
+    assert.deepEqual(press([held("KeyF"), "ArrowRight"]), [undefined, move("east")], modifier);
+    assert.deepEqual(press([held("ArrowLeft")]), [undefined], modifier);
+    // After the attack key it is any other key: it cancels the attack.
+    assert.deepEqual(press(["KeyF", held("KeyD"), "KeyD"]), [undefined, undefined, move("east")], modifier);
+  }
+});
+
+test("the status shows the armed attack until a key completes or cancels it", () => {
+  const world = replay(walk.slice(0, 2));
+  const keyboard = new Keyboard();
+  const statusAfter = (code) => {
+    keyboard.press(keyPress(code));
+    return drawn(world, keyboard.attacking).status.textContent;
+  };
+
+  assert.match(statusAfter("KeyF"), /attack/i);
+  assert.equal(statusAfter("Escape"), "");
+  assert.match(statusAfter("KeyF"), /attack/i);
+  assert.equal(statusAfter("KeyD"), "");
+
+  // The end of the world outranks the armed attack.
+  const ended = replay(walk);
+  assert.equal(drawn(ended, true).status.textContent, drawn(ended).status.textContent);
+});
+
+test("the key help names the attack key, and that key arms the attack", () => {
+  const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const help = page.match(/<p>.*?<\/p>/gs).find((paragraph) => /attack/i.test(paragraph));
+  assert.ok(help, "the key help says nothing of the attack");
+  const [, letter] = /<kbd>(\w)<\/kbd>/.exec(help) ?? [];
+  assert.ok(letter, `the key help names no attack key: ${help}`);
+  assert.deepEqual(press([`Key${letter}`, "KeyD"]), [undefined, strike("east")]);
 });
