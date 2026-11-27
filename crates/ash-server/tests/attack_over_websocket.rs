@@ -90,8 +90,8 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
         .collect()
 }
 
-/// The offered attack, if any; otherwise the offered move that brings
-/// `from` closest to `target`.
+/// The offered attack toward `target`, if any; otherwise the offered move
+/// that brings `from` closest to `target`.
 fn strike_or_chase(
     offered: &[AvailableAction],
     from: TilePosition,
@@ -106,7 +106,9 @@ fn strike_or_chase(
     let actions = offered.iter().map(|offer| offer.action);
     actions
         .clone()
-        .find(|action| matches!(action, Action::Attack(_)))
+        .find(
+            |action| matches!(action, Action::Attack(direction) if from.step(*direction) == target),
+        )
         .or_else(|| {
             actions.min_by_key(|action| match action {
                 Action::Move(direction) => distance(from.step(*direction)),

@@ -114,7 +114,7 @@ down the signatures with a failing acceptance test.
   carry outcomes, with no odds. The decoder rejects unknown tags, truncated
   payloads and impossible action and outcome pairs.
 
-### - [ ] S2 — A move into a hostile creature is an attack
+### - [x] S2 — A move into a hostile creature is an attack
 
 - Files: `crates/ash-sim/src/{world,combat,action,perception,controller}.rs`,
   `crates/ash-sim/tests/hostility.rs` (new),
@@ -255,3 +255,23 @@ hostile, neutral, condition, death, outcome.
   corner is allowed. A3 says "adjacent", and R11 forbids only moves past a
   corner. S1 follows A3 as written. The human questions whether diagonals
   stay at all; that belongs to a design brainstorm, not to this spec.
+  S2 adds a second case: a diagonal move past a wall corner into a hostile
+  creature is refused, because R11 is judged before A1, while the explicit
+  attack there is allowed. A test pins it. Issue #37 holds the question.
+- 2026-11-27, recorded (found in S2): the S2 acceptance runs as four
+  commands: `cargo xtask accept hostility`, `accept
+  hostility_over_websocket`, `accept decode_any_bytes` and `accept
+  web_model`.
+- 2026-11-27, recorded (found in S2): a disposition sits on the wander
+  controller, so a character cannot hold one. The glossary defines a
+  creature by its controller. A second simulation controller, or a
+  controller hand-over, moves the disposition onto the entity.
+- 2026-11-27, recorded (found in S2): the neutral creature of the skeleton
+  world starts at (1, 4) with speed 2 (R6). The spec gave neither.
+- 2026-11-27, recorded (found in S2): an offer shows the cost of the
+  submitted move, and the resolved attack charges its own cost. Both are
+  100 today (A5, R5). When the base costs diverge, the offer must show the
+  cost of the resolved action (R9); a test trips on that day.
+- 2026-11-27, proposed for the milestone glossary batch (found in S2): the
+  entry "Bump" in `CONTEXT.md` gains an exception: a character's move into
+  a creature it perceives as hostile is an attack, not a bump (A1).

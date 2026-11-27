@@ -6,7 +6,7 @@ import type {
   AvailableAction,
   Direction,
   Outcome,
-  Position,
+  PerceivedEntity,
   ServerMessage,
   Terrain,
 } from "./protocol.js";
@@ -45,7 +45,8 @@ export class PerceivedWorld {
   width = 0;
   /** Level 0, row by row from the north, each row from the west. */
   terrain: Terrain[] = [];
-  readonly positions = new Map<number, Position>();
+  /** What is perceived of each entity, by entity (R16, A4). */
+  readonly entities = new Map<number, PerceivedEntity>();
   /** The entity this client controls, once the server awaits it. */
   controlled: number | undefined;
   /** The actions offered to the controlled entity; empty when not awaited. */
@@ -62,9 +63,9 @@ export class PerceivedWorld {
         this.time = message.time;
         this.width = message.width;
         this.terrain = message.terrain;
-        this.positions.clear();
-        for (const { entity, position } of message.entities) {
-          this.positions.set(entity, position);
+        this.entities.clear();
+        for (const perceived of message.entities) {
+          this.entities.set(perceived.entity, perceived);
         }
         break;
       case "awaited":
@@ -113,10 +114,11 @@ export class PerceivedWorld {
     if (entity === this.controlled) {
       this.offer = [];
     }
-    const position = this.positions.get(entity);
-    if (outcome.kind === "stepped" && position !== undefined) {
+    const perceived = this.entities.get(entity);
+    if (outcome.kind === "stepped" && perceived !== undefined) {
       const [east, south] = STEPS[outcome.direction];
-      this.positions.set(entity, { ...position, x: position.x + east, y: position.y + south });
+      const { x, y, z } = perceived.position;
+      this.entities.set(entity, { ...perceived, position: { x: x + east, y: y + south, z } });
     }
   }
 }

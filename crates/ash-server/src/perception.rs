@@ -3,8 +3,10 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, Outcome, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
+    AvailableAction, Disposition, Outcome, PerceivedChange, PerceivedEntity, ServerMessage,
+    Snapshot,
 };
+use ash_sim::controller::Disposition as SimDisposition;
 use ash_sim::perception::{self, Outcome as SimOutcome};
 use ash_sim::world::World;
 
@@ -23,6 +25,7 @@ pub fn snapshot(world: &World) -> ServerMessage {
             .map(|perceived| PerceivedEntity {
                 entity: perceived.entity,
                 position: perceived.position,
+                disposition: perceived.disposition.map(disposition_to_wire),
             })
             .collect(),
     })
@@ -61,6 +64,13 @@ fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
         SimOutcome::Bumped(target) => Outcome::Bumped(target),
         SimOutcome::Hit(target) => Outcome::Hit(target),
         SimOutcome::Missed(target) => Outcome::Missed(target),
+    }
+}
+
+fn disposition_to_wire(disposition: SimDisposition) -> Disposition {
+    match disposition {
+        SimDisposition::Hostile => Disposition::Hostile,
+        SimDisposition::Neutral => Disposition::Neutral,
     }
 }
 

@@ -5,8 +5,8 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
-    ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
+    ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -62,6 +62,7 @@ fn server_messages() -> Vec<ServerMessage> {
                 PerceivedEntity {
                     entity: EntityId::new(0),
                     position: TilePosition { x: 1, y: 1, z: 0 },
+                    disposition: None,
                 },
                 PerceivedEntity {
                     entity: EntityId::new(1),
@@ -70,6 +71,12 @@ fn server_messages() -> Vec<ServerMessage> {
                         y: 2,
                         z: 7,
                     },
+                    disposition: Some(Disposition::Hostile),
+                },
+                PerceivedEntity {
+                    entity: EntityId::new(2),
+                    position: TilePosition { x: 1, y: 0, z: 0 },
+                    disposition: Some(Disposition::Neutral),
                 },
             ],
         }),
@@ -209,6 +216,49 @@ fn a_change_the_simulation_cannot_make_is_refused() {
     ];
     for (what, bytes) in refused {
         assert!(ServerMessage::decode(&bytes).is_err(), "{what} decodes");
+    }
+}
+
+/// The bytes of a snapshot at time 0 of one floor tile, holding entity 1 at
+/// (0, 0, 0), its disposition already encoded in `disposition`.
+fn snapshot_bytes(disposition: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![0];
+    bytes.extend(0_u64.to_le_bytes());
+    // A width of 1, then one tile: floor.
+    bytes.extend(1_u32.to_le_bytes());
+    bytes.extend(1_u32.to_le_bytes());
+    bytes.push(0);
+    // One entity: its id, then its position.
+    bytes.extend(1_u32.to_le_bytes());
+    bytes.extend(1_u32.to_le_bytes());
+    bytes.extend([0; 12]);
+    bytes.extend(disposition);
+    bytes
+}
+
+#[test]
+fn an_unknown_disposition_is_refused() {
+    // The controls: no disposition, hostile and neutral decode, each from
+    // its own tag.
+    let known = [
+        (0, None),
+        (1, Some(Disposition::Hostile)),
+        (2, Some(Disposition::Neutral)),
+    ];
+    for (tag, disposition) in known {
+        let decoded = match ServerMessage::decode(&snapshot_bytes(&[tag])) {
+            Ok(ServerMessage::Snapshot(snapshot)) => snapshot.entities,
+            other => panic!("a disposition tag of {tag} gives {other:?}"),
+        };
+        let dispositions: Vec<_> = decoded.iter().map(|entity| entity.disposition).collect();
+        assert_eq!(dispositions, [disposition], "tag {tag}");
+    }
+
+    for tag in 3..=u8::MAX {
+        assert!(
+            ServerMessage::decode(&snapshot_bytes(&[tag])).is_err(),
+            "a disposition tag of {tag} decodes"
+        );
     }
 }
 

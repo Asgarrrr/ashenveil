@@ -31,6 +31,8 @@ use Direction::{East, North, South, SouthEast};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/disposition.rs"]
+mod disposition;
 #[path = "websocket/outcome.rs"]
 mod outcome;
 
@@ -130,6 +132,7 @@ fn expected_snapshot(world: &World) -> ServerMessage {
             .map(|perceived| PerceivedEntity {
                 entity: perceived.entity,
                 position: perceived.position,
+                disposition: perceived.disposition.map(disposition::to_wire),
             })
             .collect(),
     })
@@ -186,6 +189,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
             Some(PerceivedEntity {
                 entity: character,
                 position: at(1, 1),
+                disposition: None,
             })
         )
     );
@@ -269,6 +273,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
             Some(PerceivedEntity {
                 entity: character,
                 position: at(3, 1),
+                disposition: None,
             })
         )
     );

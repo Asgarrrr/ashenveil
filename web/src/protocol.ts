@@ -34,6 +34,9 @@ export type Outcome =
 
 export type Terrain = "floor" | "wall";
 
+/** How a creature stands toward the character (A4). */
+export type Disposition = "hostile" | "neutral";
+
 export interface Position {
   x: number;
   y: number;
@@ -49,6 +52,8 @@ export interface AvailableAction {
 export interface PerceivedEntity {
   entity: number;
   position: Position;
+  /** `null` for a character: it has no disposition. */
+  disposition: Disposition | null;
 }
 
 export type ServerMessage =

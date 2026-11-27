@@ -8,7 +8,7 @@ use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{self, Action, AvailableAction, Refused};
-use crate::controller::Controller;
+use crate::controller::{Controller, Disposition};
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
 use crate::perception::{PerceivedChange, Perception};
@@ -19,9 +19,13 @@ use crate::wander;
 /// fixed map.
 const CHARACTER_START: TilePosition = TilePosition { x: 1, y: 1, z: 0 };
 
-/// Where the creature stands when the world begins: a floor tile of the
-/// fixed map, across the room from the character.
-const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+/// Where the hostile creature stands when the world begins: a floor tile of
+/// the fixed map, across the room from the character.
+const HOSTILE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+
+/// Where the neutral creature stands when the world begins: a floor tile of
+/// the fixed map, down the west side from the character.
+const NEUTRAL_START: TilePosition = TilePosition { x: 1, y: 4, z: 0 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Entity {
@@ -60,11 +64,20 @@ impl World {
     }
 
     /// The world of the skeleton, from `seed`: the character, then a
-    /// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
-    /// commands starts from it too.
+    /// hostile and a neutral creature (A4), both wandering at speed 2 (R6,
+    /// R8). A replay of a world's accepted commands starts from it too.
     pub fn skeleton(seed: u64) -> Self {
         let mut world = Self::new(seed, Speed::new(1));
-        world.create_entity(Speed::new(2), CREATURE_START, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            HOSTILE_START,
+            Controller::Wander(Disposition::Hostile),
+        );
+        world.create_entity(
+            Speed::new(2),
+            NEUTRAL_START,
+            Controller::Wander(Disposition::Neutral),
+        );
         world
     }
 
@@ -180,9 +193,9 @@ impl World {
     fn advance(&mut self) {
         loop {
             let entity = self.turn().1;
-            match self.entity(entity).controller {
+            match self.controller(entity) {
                 Controller::Player => return,
-                Controller::Wander => {
+                Controller::Wander(_) => {
                     let offered = self.actions_of(entity);
                     let (action, rng) = wander::choose(&self.rng, &offered);
                     let perception = Perception::whole_map(self);
@@ -260,6 +273,12 @@ impl World {
         self.entity(entity).speed
     }
 
+    /// What drives `entity`: a player connection for a character, the
+    /// simulation for a creature.
+    pub(crate) fn controller(&self, entity: EntityId) -> Controller {
+        self.entity(entity).controller
+    }
+
     fn entity(&self, entity: EntityId) -> &Entity {
         match self
             .entities
@@ -293,7 +312,11 @@ mod tests {
     #[should_panic(expected = "invariant violated")]
     fn an_entity_created_on_another_crashes() {
         let mut world = World::new(0, Speed::new(1));
-        world.create_entity(Speed::new(2), CHARACTER_START, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            CHARACTER_START,
+            Controller::Wander(Disposition::Neutral),
+        );
     }
 
     #[test]
@@ -301,7 +324,11 @@ mod tests {
     fn an_entity_created_on_a_wall_crashes() {
         let mut world = World::new(0, Speed::new(1));
         let wall = TilePosition { x: 0, y: 0, z: 0 };
-        world.create_entity(Speed::new(2), wall, Controller::Wander);
+        world.create_entity(
+            Speed::new(2),
+            wall,
+            Controller::Wander(Disposition::Neutral),
+        );
     }
 
     #[test]
@@ -310,7 +337,11 @@ mod tests {
         // the attack aside itself (A13).
         let mut world = World::new(0, Speed::new(1));
         let east = TilePosition { x: 2, y: 1, z: 0 };
-        let creature = world.create_entity(Speed::new(2), east, Controller::Wander);
+        let creature = world.create_entity(
+            Speed::new(2),
+            east,
+            Controller::Wander(Disposition::Neutral),
+        );
         let attacks: Vec<Action> = world
             .actions_of(creature)
             .into_iter()

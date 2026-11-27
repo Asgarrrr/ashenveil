@@ -90,13 +90,21 @@ pub(crate) fn resolve(
     if !allowed(perception, actor, action) {
         return Err(Refused);
     }
+    // A1: a character's move into a creature it perceives as hostile is the
+    // attack on it, with the attack's outcome and cost (A5).
+    let action = match action {
+        Action::Move(direction) if combat::move_attacks(world, perception, actor, direction) => {
+            Action::Attack(direction)
+        }
+        submitted => submitted,
+    };
     let mut in_order = Vec::new();
     let (outcome, rng_after) = match action {
         Action::Wait => (Outcome::Waited, rng.clone()),
         Action::Move(direction) => {
             let to = world.position(actor).step(direction);
-            // R13: a move into an occupied tile is a bump. The mover stays
-            // and pays the move; nothing else changes.
+            // R13, A2: a move into any other occupied tile is a bump. The
+            // mover stays and pays the move; nothing else changes.
             let outcome = match world.occupant(to) {
                 Some(occupant) => Outcome::Bumped(occupant),
                 None => {

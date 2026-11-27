@@ -12,7 +12,7 @@ use std::time::Duration;
 use ash_protocol::message::{Action, ClientMessage, Direction, ResumeToken, ServerMessage};
 use tungstenite::{Message, WebSocket};
 
-use Direction::{East, North, SouthEast};
+use Direction::{East, North, NorthWest, SouthEast, West};
 
 type Socket = WebSocket<TcpStream>;
 
@@ -101,9 +101,8 @@ fn fixture(name: &str) -> Vec<String> {
         .collect()
 }
 
-// The fixtures do not hold the Hello, so the recorded tokens are lost. Each
-// token below was found by trying tokens until its world sent the fixture
-// byte for byte. To re-record after a deliberate change, paste the left side
+// The fixtures do not hold the Hello: each token below is the one its
+// recording used. To re-record after a deliberate change, paste the left side
 // of the failing `assert_eq!` into the fixture file: it prints valid JSON.
 
 #[test]
@@ -133,9 +132,9 @@ fn the_bump_fixture_is_what_the_server_sends() {
     let messages = record(
         &mut socket,
         &[
-            Action::Move(East),
             Action::Move(SouthEast),
             Action::Move(SouthEast),
+            Action::Move(NorthWest),
         ],
     );
     assert_eq!(hex(&messages), fixture("bump.json"));
@@ -149,10 +148,10 @@ fn the_attack_fixture_is_what_the_server_sends() {
     let messages = record(
         &mut socket,
         &[
-            Action::Move(East),
             Action::Move(SouthEast),
-            Action::Attack(SouthEast),
-            Action::Attack(East),
+            Action::Move(SouthEast),
+            Action::Attack(NorthWest),
+            Action::Attack(West),
         ],
     );
     assert_eq!(hex(&messages), fixture("attack.json"));

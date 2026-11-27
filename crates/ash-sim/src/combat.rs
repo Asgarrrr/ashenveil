@@ -1,14 +1,32 @@
-//! Attacks between entities (A3, A5, A6).
+//! Attacks between entities (A1 to A6).
 
 use ash_core::entity::EntityId;
 use ash_core::rng::Rng;
 use ash_core::tile::Direction;
 
-use crate::perception::Outcome;
+use crate::controller::{Controller, Disposition};
+use crate::perception::{Outcome, Perception};
 use crate::world::World;
 
 /// A6: the percentage of attacks that hit.
 const HIT_CHANCE: u64 = 70;
+
+/// A1: whether the move of `mover` toward `direction` is an attack on the
+/// entity there: `mover` is a character, and it perceives that entity as a
+/// hostile creature. A creature's move never is (A13).
+pub(crate) fn move_attacks(
+    world: &World,
+    perception: &Perception<'_>,
+    mover: EntityId,
+    direction: Direction,
+) -> bool {
+    let to = perception.position(mover).step(direction);
+    world.controller(mover) == Controller::Player
+        && perception
+            .occupant(to)
+            .and_then(|occupant| perception.disposition(occupant))
+            == Some(Disposition::Hostile)
+}
 
 /// The outcome of `attacker` striking toward `direction`, which the rules
 /// allowed, and the RNG state after the one draw that decides it (A6).
@@ -39,7 +57,6 @@ mod tests {
     use ash_core::tile::TilePosition;
 
     use super::*;
-    use crate::controller::Controller;
 
     /// A6: an attack hits when `draw % 100 < 70`. The first draw of seed 182
     /// leaves 69, the first draw of seed 18 leaves 70.
@@ -48,7 +65,11 @@ mod tests {
         let mut world = World::new(0, Speed::new(1));
         let attacker = world.awaited();
         let east = TilePosition { x: 2, y: 1, z: 0 };
-        let target = world.create_entity(Speed::new(1), east, Controller::Wander);
+        let target = world.create_entity(
+            Speed::new(1),
+            east,
+            Controller::Wander(Disposition::Neutral),
+        );
 
         for (seed, remainder, outcome) in [
             (182, 69, Outcome::Hit(target)),
