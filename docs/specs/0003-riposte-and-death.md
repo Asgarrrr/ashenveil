@@ -77,7 +77,8 @@ Declared gaps:
 - A hostile creature strikes on the diagonal across a wall corner. S6
   follows A3 as written, and a test pins it. Issue #37 holds the question.
 - Issue #40 stays open: `World::create_entity` can still run during play.
-  Tests use it at setup only.
+  The tests of this spec use it at setup only. A character it creates
+  counts as created with its world: it recognizes every corpse (S4).
 
 ## References
 
@@ -98,7 +99,9 @@ slices.
 - `Hello` keeps its form. Its count covers the perceived changes of every
   character its controller drove, in order: each from its creation or
   arrival to its death. With one character per world, this is today's
-  count. The codec, the page and every WebSocket test helper keep working.
+  count. The codec of `Hello` and the count of the page do not change.
+  From S5, the WebSocket tests compare with the changes of their
+  controller, not with the list of the world.
 - The server keeps the first character of each token and never moves it.
   It finds the character its controller drives now through the world,
   which records the stranger of each dead character.
@@ -299,8 +302,10 @@ verify` runs it.
   - `cargo xtask accept character_death` — on a world with two
     characters, one strikes the other until it dies. The lethal hit is
     followed by the perceived death. A character corpse lies on its tile.
-    A stranger stands on the start tile with a new id and 10 hit points,
-    and the world awaits it after the entities already due.
+    A stranger stands on the start tile with a new id and 10 hit points.
+  - The same target: a third entity is due at the time of the death. It
+    acts before the stranger, and the world then awaits the stranger
+    (D9).
   - The same target: the death changes nothing else. The clock, the
     other entities, their hit points, their dispositions and the earlier
     corpses stay (D12). The other character has no stranger.
@@ -367,7 +372,8 @@ verify` runs it.
   - No perceived change holds an id that `apply` did not issue.
   - Recognition reads saved state: the order of the corpses and the
     stranger of each dead character. It never reads the perceived
-    changes, which are external (F6).
+    changes, which are external (F6). A character that no death created
+    recognizes every corpse.
   - The stranger's snapshot names no entity that died before its arrival
     (D4, D11).
   - The test entry cannot reach production: `serve` never sets it, and no
@@ -391,10 +397,11 @@ verify` runs it.
     the stranger.
   - The same target: a command that names the dead character is refused
     and changes nothing. A new connection with a count of zero receives
-    every change from the first, then the snapshot of the stranger. A
-    connection with the count before the lethal hit receives the hit, the
-    death and the arrival. The stranger dies in turn, and the client
-    controls a second stranger.
+    every change from the first, then the snapshot of the stranger. The
+    stranger dies in turn, and the client controls a second stranger.
+  - The same target: after the two deaths, a connection at each count
+    receives exactly the rest of the changes. The counts tested stand
+    before each lethal hit, after each death and after each arrival.
   - `cargo xtask accept decode_any_bytes` — the decoder rejects a
     malformed arrival.
   - `cargo xtask accept web_model` — after the death of its character,
@@ -440,7 +447,10 @@ verify` runs it.
   - `cargo xtask accept own_hit_points_over_websocket` — on the test
     entry, the replies to the client's waits hold each hit, then 7, 4 and
     1 of 10. No message names a condition for the client's own character.
-    A new connection receives the same changes.
+  - The same target: the client strikes the second character once. It
+    receives the condition of that character and never its hit points.
+    A connection at each count then receives exactly the rest of the
+    changes of its controller, through a death and an arrival.
   - `cargo xtask accept decode_any_bytes` — the decoder rejects malformed
     hit points.
   - `cargo xtask accept web_model` — the model shows 7 of 10 after the
@@ -478,7 +488,8 @@ verify` runs it.
     stays a bump (A13).
   - The skeleton world keeps its three entities. Its hostile creature now
     strikes. Each existing fight test keeps its claim, on seeds where its
-    character lives.
+    character lives. It compares with the changes its character
+    perceived.
 - Invariants:
   - The offers stay the same for every controller (R3). The aggression
     chooses only among its offers (R14).
