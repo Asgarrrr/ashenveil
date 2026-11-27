@@ -32,6 +32,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { logLine } from "../build/draw.js";
 import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
@@ -184,15 +185,26 @@ test("an attack is offered toward the adjacent creature only, and logged as a hi
   assert.equal(before.costOf(strike("east")), undefined);
   assert.equal(before.costOf(move("southeast")), 100);
 
-  const world = replay(attack);
-  const strikes = world.log
-    .filter(({ entity, outcome }) => entity === 0 && ["hit", "missed"].includes(outcome.kind))
-    .map(({ outcome }) => outcome);
-  // A11: one hit and one miss, each naming the creature. No odds (A12).
-  assert.deepEqual(strikes.map(({ kind }) => kind).sort(), ["hit", "missed"]);
-  assert.ok(strikes.every(({ target }) => target === 1), JSON.stringify(strikes));
-  assert.ok(strikes.every((outcome) => Object.keys(outcome).length === 2), "an outcome says more");
+  // A11: the two steps, then a hit and a miss, each naming the creature
+  // and nothing more: no odds (A12).
+  assert.deepEqual(
+    replay(attack).log.filter(({ entity }) => entity === 0),
+    [
+      { time: 0, entity: 0, outcome: { kind: "stepped", direction: "east" } },
+      { time: 100, entity: 0, outcome: { kind: "stepped", direction: "southeast" } },
+      { time: 200, entity: 0, outcome: { kind: "hit", target: 1 } },
+      { time: 300, entity: 0, outcome: { kind: "missed", target: 1 } },
+    ],
+  );
   assert.equal(replay(attack.slice(0, first + 1)).positions.get(0).x, before.positions.get(0).x);
+});
+
+test("the log line of a strike says whether it hit or missed", () => {
+  // The recorded world controls entity 0, drawn as "@".
+  const world = replay(attack);
+  const struck = (kind) => ({ time: 200, entity: 0, outcome: { kind, target: 1 } });
+  assert.equal(logLine(world, struck("hit")), "200  @ hits entity 1");
+  assert.equal(logLine(world, struck("missed")), "200  @ misses entity 1");
 });
 
 test("a refused command advances nothing and keeps the offer", () => {
@@ -275,6 +287,14 @@ test("the letter block and the numpad map to the eight moves and wait", () => {
   );
   assert.equal(new Set(encoded).size, 10, `the codec merges commands: ${encoded}`);
   assert.ok(encoded.every((hex) => hex.length > 0), `a command encodes to nothing: ${encoded}`);
+});
+
+test("a move and an attack encode to their own bytes", () => {
+  // A command is tag 1, then the entity as a little-endian u32, then the
+  // action: tag 1 for a move, tag 2 for an attack, then east, direction 2.
+  const hex = (command) => Buffer.from(encodeCommand(7, command)).toString("hex");
+  assert.equal(hex(move("east")), "01070000000102");
+  assert.equal(hex(strike("east")), "01070000000202");
 });
 
 test("the attack key followed by a direction key attacks toward it", () => {

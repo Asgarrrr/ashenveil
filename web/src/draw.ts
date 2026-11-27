@@ -1,7 +1,7 @@
 // Throwaway Canvas 2D drawing of the perceived world. It reads the model and
 // never changes it; the real renderer will replace this file.
 
-import type { PerceivedWorld } from "./model.js";
+import type { LogEntry, PerceivedWorld } from "./model.js";
 import type { Action, Outcome } from "./protocol.js";
 
 const TILE = 32;
@@ -26,10 +26,13 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
     ...world.log
       .slice(-20)
       .reverse()
-      .map(({ time, entity, outcome }) =>
-        item(`${time}  ${name(world, entity)} ${happened(world, outcome)}`),
-      ),
+      .map((entry) => item(logLine(world, entry))),
   );
+}
+
+/** The line the log shows for `entry`: when, who, and what it did. */
+export function logLine(world: PerceivedWorld, { time, entity, outcome }: LogEntry): string {
+  return `${time}  ${name(world, entity)} ${happened(world, outcome)}`;
 }
 
 function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void {
