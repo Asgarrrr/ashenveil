@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use ash_core::entity::{EntityId, Speed};
+use ash_core::entity::{EntityId, EntityIds, Speed};
 use ash_core::rng::Rng;
 use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
@@ -50,6 +50,9 @@ enum Lookup<'w> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct World {
     map: Map,
+    /// F2: every id this world issued, to the living and to the dead.
+    ids: EntityIds,
+    /// The embodied entities, in creation order.
     entities: Vec<Entity>,
     /// Its next entry is the turn being played: the clock and the awaited
     /// entity derive from it.
@@ -65,6 +68,7 @@ impl World {
     pub fn new(seed: u64, character_speed: Speed) -> Self {
         let mut world = Self {
             map: Map::skeleton(),
+            ids: EntityIds::default(),
             entities: Vec::new(),
             scheduler: Scheduler::default(),
             rng: Rng::new(seed),
@@ -102,13 +106,13 @@ impl World {
         position: TilePosition,
         controller: Controller,
     ) -> EntityId {
-        let id = self.next_id();
+        // F2: `apply` issues this id as it writes the creation.
+        let id = self.ids.peek();
         if self.map.terrain(position) != Terrain::Floor || self.occupant(position).is_some() {
             ash_core::invariant!("{id:?} cannot be created on {position:?}");
         }
         self.apply(Effects {
             in_order: alloc::vec![Effect::Create {
-                id,
                 speed,
                 position,
                 controller,
@@ -163,14 +167,14 @@ impl World {
         self.map.tiles()
     }
 
-    /// Every entity, in creation order. Under whole-map perception (R16),
-    /// every character perceives each of them.
+    /// Every embodied entity, in creation order. Under whole-map perception
+    /// (R16), every character perceives each of them.
     pub(crate) fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.iter().map(|entity| entity.id)
     }
 
-    /// Where `entity` stands. Under whole-map perception (R16), every
-    /// character perceives it.
+    /// Where `entity`, which is embodied, stands. Under whole-map perception
+    /// (R16), every character perceives it.
     pub fn position(&self, entity: EntityId) -> TilePosition {
         self.entity(entity).position
     }
@@ -201,14 +205,26 @@ impl World {
         &self.command_log
     }
 
-    /// Runs the clock entity by entity. A wandering entity acts at once; the
+    /// Runs the clock entry by entry. A wandering entity acts at once; the
     /// clock stops at the first entity a player connection controls (R2).
+    /// The entry of an entity that died is skipped: nothing acts and
+    /// nothing draws (F3).
     fn advance(&mut self) {
         loop {
             let entity = self.turn().1;
-            match self.controller(entity) {
-                Controller::Player => return,
-                Controller::Wander(_) => {
+            let effects = match self.lookup(entity) {
+                Lookup::NotEmbodied => Effects {
+                    in_order: alloc::vec![Effect::Unschedule],
+                    rng_after: self.rng.clone(),
+                },
+                Lookup::Embodied(Entity {
+                    controller: Controller::Player,
+                    ..
+                }) => return,
+                Lookup::Embodied(Entity {
+                    controller: Controller::Wander(_),
+                    ..
+                }) => {
                     let offered = self.actions_of(entity);
                     let (action, rng) = wander::choose(&self.rng, &offered);
                     let perception = Perception::whole_map(self);
@@ -216,9 +232,10 @@ impl World {
                     else {
                         ash_core::invariant!("the wander of {entity:?} chose a refused action")
                     };
-                    self.apply(effects);
+                    effects
                 }
-            }
+            };
+            self.apply(effects);
         }
     }
 
@@ -252,12 +269,12 @@ impl World {
                     self.entities.remove(row);
                 }
                 Effect::Create {
-                    id,
                     speed,
                     position,
                     controller,
                     health,
                 } => {
+                    let id = self.ids.issue();
                     self.entities.push(Entity {
                         id,
                         speed,
@@ -284,14 +301,6 @@ impl World {
         }
     }
 
-    /// The id the next created entity gets.
-    fn next_id(&self) -> EntityId {
-        match u32::try_from(self.entities.len()) {
-            Ok(raw) => EntityId::new(raw),
-            Err(_) => ash_core::invariant!("the world holds more entities than ids"),
-        }
-    }
-
     /// The entity standing at `position`, if any.
     pub(crate) fn occupant(&self, position: TilePosition) -> Option<EntityId> {
         self.entities
@@ -312,13 +321,6 @@ impl World {
 
     /// The hit points of `entity` (A7). Only its own controller may learn
     /// them (R18).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "S3 signatures: the hit rule reads them in the next commit"
-        )
-    )]
     pub(crate) fn health(&self, entity: EntityId) -> Health {
         self.entity(entity).health
     }
@@ -332,7 +334,8 @@ impl World {
             .find(|candidate| candidate.id == entity)
         {
             Some(found) => Lookup::Embodied(found),
-            None => Lookup::NotEmbodied,
+            None if self.ids.has_issued(entity) => Lookup::NotEmbodied,
+            None => ash_core::invariant!("this world never issued {entity:?}"),
         }
     }
 

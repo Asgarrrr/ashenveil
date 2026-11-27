@@ -28,22 +28,23 @@ pub struct EntityIds {
 impl EntityIds {
     /// The id the next `issue` returns.
     pub fn peek(&self) -> EntityId {
-        EntityId(0)
+        EntityId(self.issued)
     }
 
     /// An id never issued before. Once every id is issued, the next call
     /// crashes through `invariant!`.
     pub fn issue(&mut self) -> EntityId {
-        self.peek()
+        let id = self.peek();
+        match self.issued.checked_add(1) {
+            Some(issued) => self.issued = issued,
+            None => crate::invariant!("every entity id of the world is issued"),
+        }
+        id
     }
 
     /// Whether `id` was issued here.
-    #[expect(
-        unused_variables,
-        reason = "S3 signatures: the counter is read in the next commit"
-    )]
     pub fn has_issued(&self, id: EntityId) -> bool {
-        false
+        id.0 < self.issued
     }
 }
 

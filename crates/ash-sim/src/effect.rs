@@ -22,10 +22,6 @@ pub(crate) struct Effects {
 }
 
 /// One change to the world.
-#[expect(
-    dead_code,
-    reason = "S3 signatures: the rules return the new effects in the next commit"
-)]
 pub(crate) enum Effect {
     /// `entity` now stands at `position` (R4).
     Place {
@@ -47,9 +43,8 @@ pub(crate) enum Effect {
     /// it has no turn to take (F3).
     Unschedule,
     /// A new entity at `position`, due now: at time zero when it is the
-    /// first of its world. `id` was never issued before (F2).
+    /// first of its world. The world issues its id as it writes this (F2).
     Create {
-        id: EntityId,
         speed: Speed,
         position: TilePosition,
         controller: Controller,

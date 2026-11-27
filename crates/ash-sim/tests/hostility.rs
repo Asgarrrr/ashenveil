@@ -115,11 +115,23 @@ fn offered_cost(world: &World, action: Action) -> Option<ActionCost> {
         .map(|offered| offered.cost)
 }
 
-/// The direction of the tile next to `from` that `target` stands on.
+/// Where the characters perceive `entity`; `None` once it died and left
+/// the world (A8).
+fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
+    perception::snapshot(world)
+        .entities
+        .iter()
+        .find(|perceived| perceived.entity == entity)
+        .map(|perceived| perceived.position)
+}
+
+/// The direction of the tile next to `from` that `target` stands on; `None`
+/// too once `target` died.
 fn direction_to(world: &World, from: EntityId, target: EntityId) -> Option<Direction> {
+    let target = standing(world, target)?;
     Direction::ALL
         .into_iter()
-        .find(|&direction| world.position(from).step(direction) == world.position(target))
+        .find(|&direction| world.position(from).step(direction) == target)
 }
 
 /// The offered move that brings the awaited character closest to `target`:
@@ -182,6 +194,11 @@ fn act(world: &mut World, cast: &Cast, action: Action) -> Outcome {
 /// The character moves into the hostile creature until it has hit and
 /// missed, moves into the neutral creature until it bumps, then attacks the
 /// neutral creature on purpose.
+///
+/// The hostile creature dies at its second hit (A6 to A8). A seed whose
+/// second hit comes before its first miss cannot show a miss: the run fails
+/// on it, by name. On the way to the neutral creature, a move may still
+/// strike the hostile one, and kill it.
 fn run(seed: u64) -> (World, Cast) {
     let (mut world, cast) = world_with_creatures(seed, at(7, 4), at(1, 4));
 
@@ -194,6 +211,10 @@ fn run(seed: u64) -> (World, Cast) {
         if hit_and_missed(&strikes) {
             break;
         }
+        assert!(
+            standing(&world, cast.hostile).is_some(),
+            "seed {seed}: the hostile creature died before the run saw a miss: {strikes:?}"
+        );
         let action = move_toward(&world, cast.hostile);
         if action == Action::Wait {
             world.submit(action).expect("a wait is never refused");

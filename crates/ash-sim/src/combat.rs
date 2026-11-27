@@ -8,11 +8,14 @@ use ash_core::tile::Direction;
 
 use crate::controller::{Controller, Disposition};
 use crate::effect::Effect;
-use crate::perception::{Outcome, Perception};
+use crate::perception::{Outcome, PerceivedChange, Perception};
 use crate::world::World;
 
 /// A6: the percentage of attacks that hit.
 const HIT_CHANCE: u64 = 70;
+
+/// A6: the hit points a hit removes.
+const DAMAGE: u32 = 3;
 
 /// The hit points of an entity (A7). An embodied entity has at least one:
 /// at zero it dies and leaves the world (A8).
@@ -87,12 +90,22 @@ pub(crate) fn attack(
 /// perceives its death at the time of the hit (A11). The death of a
 /// character is out of scope: its zero hit points crash through
 /// `invariant!`.
-#[expect(
-    unused_variables,
-    reason = "S3 signatures: the rule is written in the next commit"
-)]
 pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
-    Vec::new()
+    let mut effects = alloc::vec![Effect::Damage {
+        entity: target,
+        amount: DAMAGE,
+    }];
+    if world.health(target).damaged(DAMAGE).current == 0 {
+        if world.controller(target) == Controller::Player {
+            ash_core::invariant!("the character {target:?} reaches zero hit points");
+        }
+        effects.push(Effect::Remove { entity: target });
+        effects.push(Effect::Perceive(PerceivedChange::Death {
+            time: world.clock(),
+            entity: target,
+        }));
+    }
+    effects
 }
 
 #[cfg(test)]

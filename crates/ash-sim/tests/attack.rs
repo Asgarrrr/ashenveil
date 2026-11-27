@@ -77,6 +77,10 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
 /// The character strikes whenever an attack is offered and waits
 /// otherwise, until it has hit and missed. Every attack is offered at 100
 /// (A5) and delays the character's next turn by 100.
+///
+/// The creature dies at its second hit (A6 to A8). A seed whose second hit
+/// comes before its first miss cannot show a miss: the fight fails on it,
+/// by name.
 fn fight(seed: u64) -> (World, EntityId, EntityId) {
     let (mut world, character, creature) = world_with_creature(seed, at(2, 1));
     let attacks = |world: &World| {
@@ -96,6 +100,14 @@ fn fight(seed: u64) -> (World, EntityId, EntityId) {
         if hit && missed {
             return (world, character, creature);
         }
+        let died = world
+            .perceived_changes()
+            .iter()
+            .any(|change| matches!(change, PerceivedChange::Death { .. }));
+        assert!(
+            !died,
+            "seed {seed}: the creature died before the fight saw a miss"
+        );
         let Some(offered) = offered_attack(&world) else {
             world.submit(Action::Wait).expect("a wait is never refused");
             continue;
