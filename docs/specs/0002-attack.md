@@ -185,7 +185,7 @@ down the signatures with a failing acceptance test.
   client and the dead id never appears again. The decoder rejects a
   malformed death change.
 
-### - [ ] S4 — The character sees the fight
+### - [x] S4 — The character sees the fight
 
 - Files: `crates/ash-sim/src/{combat,perception,effect}.rs`,
   `crates/ash-sim/tests/condition.rs` (new),
