@@ -436,6 +436,12 @@ impl Wire for PerceivedChange {
             },
             1 => ChangeKind::Death,
             2 => ChangeKind::Condition(Condition::read(input)?),
+            // No disposition is a character's: no change leaves a creature
+            // without one.
+            3 => match Option::<Disposition>::read(input)? {
+                Some(disposition) => ChangeKind::Disposition(disposition),
+                None => return Err(DecodeError),
+            },
             _ => return Err(DecodeError),
         };
         Ok(Self { time, entity, kind })

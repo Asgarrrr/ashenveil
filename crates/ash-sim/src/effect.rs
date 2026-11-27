@@ -35,7 +35,6 @@ pub(crate) enum Effect {
     /// stays issued, and the scheduler keeps its entry (F2, F3).
     Remove { entity: EntityId },
     /// The creature `entity` now has this disposition (A4).
-    #[expect(dead_code, reason = "the rule of spec 0003, S2, returns it next")]
     ChangeDisposition {
         entity: EntityId,
         disposition: Disposition,

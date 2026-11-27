@@ -139,8 +139,21 @@ pub(crate) fn struck(world: &World, outcome: Outcome) -> Vec<Effect> {
 /// of the attack. A hostile creature stays hostile, and a character has no
 /// disposition: nothing changes. Only a character attacks a creature (A13).
 fn provoked(world: &World, target: EntityId) -> Vec<Effect> {
-    let _ = (world, target);
-    Vec::new()
+    if world.controller(target) != Controller::Wander(Disposition::Neutral) {
+        return Vec::new();
+    }
+    let disposition = Disposition::Hostile;
+    alloc::vec![
+        Effect::ChangeDisposition {
+            entity: target,
+            disposition,
+        },
+        Effect::Perceive(PerceivedChange {
+            time: world.clock(),
+            entity: target,
+            kind: ChangeKind::Disposition(disposition),
+        }),
+    ]
 }
 
 /// A6, A8, A10: what a hit on `target` changes, in order. The target loses
