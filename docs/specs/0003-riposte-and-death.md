@@ -164,7 +164,7 @@ server and the client together.
 A unit test named below is no `cargo xtask accept` target: `cargo xtask
 verify` runs it.
 
-### - [ ] S1 — A death leaves a corpse
+### - [x] S1 — A death leaves a corpse
 
 - Files: `crates/ash-sim/src/{lib,world,combat,effect,perception}.rs`,
   `crates/ash-sim/src/death.rs` (new), `crates/ash-sim/tests/corpse.rs`
