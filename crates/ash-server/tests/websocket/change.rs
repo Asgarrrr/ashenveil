@@ -32,7 +32,7 @@ pub fn to_wire(change: SimChange) -> WireChange {
     }
 }
 
-fn condition_to_wire(condition: SimCondition) -> WireCondition {
+pub fn condition_to_wire(condition: SimCondition) -> WireCondition {
     match condition {
         SimCondition::Unhurt => WireCondition::Unhurt,
         SimCondition::Wounded => WireCondition::Wounded,
