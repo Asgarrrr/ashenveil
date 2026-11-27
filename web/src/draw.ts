@@ -34,7 +34,7 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
  * The color of `entity` on the map. A hostile creature stands apart from a
  * neutral one: a move into it is an attack (A1, A4).
  */
-export function color(world: PerceivedWorld, entity: number): string {
+function color(world: PerceivedWorld, entity: number): string {
   if (entity === world.controlled) {
     return "#fc3";
   }
@@ -46,7 +46,8 @@ export function logLine(world: PerceivedWorld, { time, entity, outcome }: LogEnt
   return `${time}  ${name(world, entity)} ${happened(world, outcome)}`;
 }
 
-function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void {
+/** The terrain, then one glyph for each entity, in its color. */
+export function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void {
   canvas.width = world.width * TILE;
   canvas.height = world.height * TILE;
   const context = canvas.getContext("2d");

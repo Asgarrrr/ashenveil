@@ -33,7 +33,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { color, logLine } from "../build/draw.js";
+import { drawMap, logLine } from "../build/draw.js";
 import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
@@ -187,8 +187,18 @@ test("a later snapshot replaces every entity of the one before", () => {
 
 test("the map draws the character, a hostile creature and a neutral creature apart", () => {
   const world = replay(walk.slice(0, 2));
-  const colors = [0, 1, 2].map((entity) => color(world, entity));
-  assert.equal(new Set(colors).size, 3, `${colors}`);
+  // A canvas that keeps the fill style of each glyph drawn on it.
+  const styles = [];
+  const context = {
+    fillRect() {},
+    fillText() {
+      styles.push(this.fillStyle);
+    },
+  };
+  drawMap({ getContext: () => context }, world);
+
+  assert.equal(styles.length, 3, "one glyph for each entity");
+  assert.equal(new Set(styles).size, 3, `${styles}`);
 });
 
 test("a perceived step moves the mover toward its direction", () => {
