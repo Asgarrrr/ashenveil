@@ -114,7 +114,7 @@ down the signatures with a failing acceptance test.
   carry outcomes, with no odds. The decoder rejects unknown tags, truncated
   payloads and impossible action and outcome pairs.
 
-### - [ ] S2 — A move into a hostile creature is an attack
+### - [x] S2 — A move into a hostile creature is an attack
 
 - Files: `crates/ash-sim/src/{world,combat,action,perception,controller}.rs`,
   `crates/ash-sim/tests/hostility.rs` (new),
