@@ -28,11 +28,15 @@ let socket: WebSocket | undefined;
 
 connect();
 document.addEventListener("keydown", (event) => {
+  const attacking = keyboard.attacking;
   const action = keyboard.press(event);
   // R14: only an offered action is sent, so none is refused.
   if (action === undefined || world.controlled === undefined || world.costOf(action) === undefined) {
-    // The key may have armed or cancelled the attack, which the status shows.
-    redraw();
+    // The status shows the armed attack. A redraw rebuilds the lists and
+    // drops a text selection, so a key that changes nothing redraws nothing.
+    if (keyboard.attacking !== attacking) {
+      redraw();
+    }
     return;
   }
   event.preventDefault();
