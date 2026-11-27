@@ -23,6 +23,7 @@ const SPEC_SECTIONS: &[&str] = &[
     "Simplest alternative",
     "Multiplayer impact",
     "Slices",
+    "Glossary proposals",
     "Proposed amendments",
 ];
 
