@@ -73,6 +73,18 @@ fn names(change: PerceivedChange, entity: EntityId) -> bool {
     }
 }
 
+/// The entities whose death the characters perceived, in order.
+fn deaths(world: &World) -> Vec<EntityId> {
+    world
+        .perceived_changes()
+        .iter()
+        .filter_map(|&change| match change {
+            PerceivedChange::Death { entity, .. } => Some(entity),
+            PerceivedChange::Act { .. } => None,
+        })
+        .collect()
+}
+
 /// The character, created first, then a hostile creature at (7, 4) and a
 /// neutral one at (1, 4), both wandering at speed 2 (R6).
 fn world_with_creatures(seed: u64) -> (World, EntityId, [EntityId; 2]) {
@@ -150,10 +162,10 @@ struct Ambush {
     third: Option<EntityId>,
 }
 
-/// The two characters strike the creature before its first turn: one by a
-/// move into it (A1), one by an attack (A3). On a seed of two hits, it dies
-/// at time zero.
-fn ambush(seed: u64, with_third: bool) -> (World, Ambush) {
+/// The two characters strike the creature before its first turn: the first
+/// by a move into it (A1), the second by `lethal`. On a seed of two hits, it
+/// dies at time zero.
+fn ambush(seed: u64, lethal: Action, with_third: bool) -> (World, Ambush) {
     let mut world = World::new(seed, Speed::new(1));
     let cast = Ambush {
         first: world.awaited(),
@@ -167,7 +179,7 @@ fn ambush(seed: u64, with_third: bool) -> (World, Ambush) {
     };
     assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
     assert_eq!(world.awaited(), cast.second);
-    assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
+    assert_eq!(world.submit(lethal), Ok(()));
     (world, cast)
 }
 
@@ -279,6 +291,29 @@ fn a_creature_dies_at_its_second_hit_and_its_death_is_perceived_right_after() {
 }
 
 #[test]
+fn each_kill_in_one_world_removes_the_creature_it_names_and_is_perceived() {
+    let (mut world, character, [hostile, neutral]) = world_with_creatures(SEED);
+    let third = world.create_entity(
+        Speed::new(2),
+        at(7, 1),
+        Controller::Wander(Disposition::Neutral),
+    );
+    // In creation order: after the first death, the id of a creature is
+    // no longer its rank among the entities.
+    let prey = [hostile, neutral, third];
+    for (killed, &target) in prey.iter().enumerate() {
+        hunt(&mut world, target);
+
+        // A11: one death for each kill, in order.
+        assert_eq!(deaths(&world), prey[..=killed], "kill {killed}");
+        // A8: the snapshot holds the character, then the survivors.
+        let mut living = vec![character];
+        living.extend(&prey[killed + 1..]);
+        assert_eq!(embodied(&world), living, "kill {killed}");
+    }
+}
+
+#[test]
 fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
     for seed in 0..8 {
         let (mut world, character, [hostile, neutral]) = world_with_creatures(seed);
@@ -337,7 +372,7 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
 fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
     let mut third_and_fourth_draws = Vec::new();
     for seed in seeds_of_two_hits() {
-        let (mut world, cast) = ambush(seed, true);
+        let (mut world, cast) = ambush(seed, Action::Attack(Direction::West), true);
         let third = cast.third.expect("the ambush has a third character");
 
         // A8, A11: both strikes hit at time zero, and the second is lethal.
@@ -396,9 +431,91 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
 }
 
 #[test]
+fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing() {
+    let mut fourth_and_fifth_draws = Vec::new();
+    for seed in seeds_of_two_hits() {
+        // Due at time zero in creation order (R8): two characters, the
+        // creature they kill, a second creature, then a third character.
+        let mut world = World::new(seed, Speed::new(1));
+        let second = world.create_entity(Speed::new(1), at(3, 1), Controller::Player);
+        let dead = world.create_entity(
+            Speed::new(2),
+            at(2, 1),
+            Controller::Wander(Disposition::Hostile),
+        );
+        let living = world.create_entity(
+            Speed::new(2),
+            at(7, 4),
+            Controller::Wander(Disposition::Neutral),
+        );
+        let third = world.create_entity(Speed::new(1), at(4, 1), Controller::Player);
+        assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
+        assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
+        assert_eq!(deaths(&world), [dead], "seed {seed}");
+
+        // The world passed the entry of the dead creature, then the living
+        // creature took its turn: the wander drew once, the third draw.
+        assert_eq!(
+            (world.awaited(), world.clock()),
+            (third, Time::ZERO),
+            "seed {seed}"
+        );
+        let changes = world.perceived_changes();
+        assert!(
+            matches!(
+                changes[3..],
+                [PerceivedChange::Act { entity, .. }] if entity == living
+            ),
+            "seed {seed}: {changes:?}"
+        );
+
+        // The entry drew nothing: the strike of the third character, on the
+        // second, takes the fourth draw of the seed.
+        assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
+        let mut draws = strikes(seed).skip(3);
+        let (fourth_draw, fifth_draw) = (draws.next(), draws.next());
+        let outcome = if fourth_draw == Some(true) {
+            Outcome::Hit(second)
+        } else {
+            Outcome::Missed(second)
+        };
+        assert_eq!(
+            world.perceived_changes()[4],
+            PerceivedChange::Act {
+                time: Time::ZERO,
+                entity: third,
+                outcome,
+            },
+            "seed {seed}"
+        );
+        fourth_and_fifth_draws.push((fourth_draw, fifth_draw));
+    }
+    // The seeds tell a fourth draw from a fifth, both ways.
+    for hits in [true, false] {
+        assert!(
+            fourth_and_fifth_draws.contains(&(Some(hits), Some(!hits))),
+            "{fourth_and_fifth_draws:?}"
+        );
+    }
+}
+
+#[test]
+fn a_lethal_hit_made_by_a_move_kills_like_an_explicit_attack() {
+    let seed = seeds_of_two_hits().next().expect("a seed of two hits");
+    let (by_attack, _) = ambush(seed, Action::Attack(Direction::West), false);
+    // A1: the second character moves into the hostile creature instead.
+    let (by_move, cast) = ambush(seed, Action::Move(Direction::West), false);
+
+    // A8, A11: the same hit, then the same death, at the same time.
+    assert_eq!(deaths(&by_move), [cast.creature]);
+    assert_eq!(by_move.perceived_changes(), by_attack.perceived_changes());
+    assert_eq!(embodied(&by_move), [cast.first, cast.second]);
+}
+
+#[test]
 fn the_tile_of_the_dead_creature_is_free() {
     let seed = seeds_of_two_hits().next().expect("a seed of two hits");
-    let (mut world, cast) = ambush(seed, false);
+    let (mut world, cast) = ambush(seed, Action::Attack(Direction::West), false);
     assert_eq!(embodied(&world), [cast.first, cast.second]);
 
     // A3: no entity stands east of the first character, so no attack is
@@ -434,7 +551,7 @@ fn an_entity_created_after_a_death_gets_an_id_never_issued_before() {
     // A count of the entities would give the id of the dead creature, then
     // the id of the third character.
     for with_third in [false, true] {
-        let (mut world, cast) = ambush(seed, with_third);
+        let (mut world, cast) = ambush(seed, Action::Attack(Direction::West), with_third);
         let living: Vec<EntityId> = [cast.first, cast.second]
             .into_iter()
             .chain(cast.third)

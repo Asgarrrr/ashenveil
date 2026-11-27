@@ -196,7 +196,7 @@ test("a later snapshot replaces every entity of the one before", () => {
   assert.deepEqual([...world.entities.values()], later);
 });
 
-test("the map draws the character, a hostile creature and a neutral creature apart", () => {
+test("the map draws the character, a hostile creature and a neutral creature apart, and no dead entity", () => {
   const world = replay(walk.slice(0, 2));
   // A canvas that keeps the fill style of each glyph drawn on it.
   const styles = [];
@@ -210,6 +210,12 @@ test("the map draws the character, a hostile creature and a neutral creature apa
 
   assert.equal(styles.length, 3, "one glyph for each entity");
   assert.equal(new Set(styles).size, 3, `${styles}`);
+
+  // A8: the map drawn after a death holds no glyph for the dead entity.
+  world.apply({ kind: "perceived", change: { kind: "death", time: 0, entity: 1 } });
+  styles.length = 0;
+  drawMap({ getContext: () => context }, world);
+  assert.equal(styles.length, 2, "one glyph for each living entity");
 });
 
 test("a perceived step moves the mover toward its direction", () => {
@@ -326,6 +332,24 @@ test("a death removes the entity it names, whichever it is", () => {
   assert.deepEqual(held(), [0, 3, 7]);
   dies(7);
   assert.deepEqual(held(), [0, 3]);
+  // A3, A8: a neutral creature dies like a hostile one.
+  dies(3);
+  assert.deepEqual(held(), [0]);
+});
+
+test("a later snapshot keeps the log, the death included", () => {
+  // R17: the client resumes with the count of the changes it holds. The
+  // snapshot of a reconnection replaces the entities, never the log.
+  const cast = [perceivedEntity(0, 1, 1, null), perceivedEntity(1, 2, 1, "hostile")];
+  const changes = [act(100, 0, { kind: "hit", target: 1 }), { kind: "death", time: 100, entity: 1 }];
+  const world = new PerceivedWorld();
+  world.apply(snapshot(cast));
+  for (const change of changes) {
+    world.apply({ kind: "perceived", change });
+  }
+  world.apply(snapshot(cast.slice(0, 1)));
+
+  assert.deepEqual(world.log, changes);
 });
 
 test("after the death the world goes on without the dead creature", () => {

@@ -326,16 +326,23 @@ fn the_client_perceives_the_death_and_never_the_dead_creature_again() {
         next = then;
     }
 
-    // R19: a later connection gets a snapshot without the dead creature,
-    // then the pending turn.
+    // R17, R19: a later connection gets each change it missed once, in
+    // order, then a snapshot without the dead creature and the pending turn.
+    // The client left before the lethal hit, between it and the death, or
+    // after the last change.
     drop(socket);
-    let mut socket = connect(address, TOKEN, received.len());
-    match receive(&mut socket) {
-        Some(ServerMessage::Snapshot(Snapshot { entities, .. })) => {
-            let perceived: Vec<EntityId> = entities.iter().map(|entity| entity.entity).collect();
-            assert_eq!(perceived, [character, neutral]);
+    for held in [died - 1, died, received.len()] {
+        let mut socket = connect(address, TOKEN, held);
+        let (missed, then) = receive_turn(&mut socket);
+        assert_eq!(missed, received[held..], "{held} changes held");
+        match then {
+            Some(ServerMessage::Snapshot(Snapshot { entities, .. })) => {
+                let perceived: Vec<EntityId> =
+                    entities.iter().map(|entity| entity.entity).collect();
+                assert_eq!(perceived, [character, neutral]);
+            }
+            other => panic!("expected a snapshot, got {other:?}"),
         }
-        other => panic!("expected a snapshot, got {other:?}"),
+        assert_eq!(receive(&mut socket), next);
     }
-    assert_eq!(receive(&mut socket), next);
 }

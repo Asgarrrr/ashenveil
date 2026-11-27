@@ -99,7 +99,7 @@ fn server_messages() -> Vec<ServerMessage> {
         perceived(200, 0, Outcome::Hit(EntityId::new(1))),
         perceived(u64::MAX, 0, Outcome::Missed(EntityId::new(1))),
         ServerMessage::Perceived(PerceivedChange::Death {
-            time: Time::new(200),
+            time: Time::new(u64::MAX),
             entity: EntityId::new(u32::MAX),
         }),
         ServerMessage::Refused,

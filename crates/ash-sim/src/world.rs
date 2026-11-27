@@ -418,6 +418,49 @@ mod tests {
     }
 
     #[test]
+    fn a_passed_dead_entry_acts_nothing_and_leaves_one_entry_per_embodied_entity() {
+        let mut world = World::new(0, Speed::new(1));
+        let character = world.awaited();
+        let [dead, wounded] = [2, 4].map(|x| {
+            world.create_entity(
+                Speed::new(2),
+                TilePosition { x, y: 1, z: 0 },
+                Controller::Wander(Disposition::Hostile),
+            )
+        });
+        // One creature left the world, as at its death (A8). A hit wounded
+        // the other, which lives (A6).
+        world.apply(Effects {
+            in_order: alloc::vec![
+                Effect::Remove { entity: dead },
+                Effect::Damage {
+                    entity: wounded,
+                    amount: 3,
+                },
+            ],
+            rng_after: world.rng.clone(),
+        });
+
+        // The entries of both creatures are due before the next turn of the
+        // character.
+        assert_eq!(world.submit(Action::Wait), Ok(()));
+
+        let acted = |entity| {
+            world.perceived_changes.iter().any(|change| {
+                matches!(change, PerceivedChange::Act { entity: actor, .. } if *actor == entity)
+            })
+        };
+        assert!(acted(wounded));
+        assert!(!acted(dead));
+        // From the next to act: the awaited character, then the creature.
+        let mut rest = world.scheduler.clone();
+        let scheduled: Vec<EntityId> = core::iter::from_fn(|| rest.pop())
+            .map(|(_, entity)| entity)
+            .collect();
+        assert_eq!(scheduled, [character, wounded]);
+    }
+
+    #[test]
     #[should_panic(expected = "invariant violated")]
     fn a_lookup_of_an_id_the_world_never_issued_crashes() {
         // The world issued one id, the character's: the next one is the
