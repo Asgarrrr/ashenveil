@@ -112,7 +112,7 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
         .perceived_changes()
         .iter()
         .copied()
-        .filter_map(change::to_wire)
+        .map(change::to_wire)
         .collect()
 }
 
@@ -215,7 +215,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let mut accept =
         |socket: &mut Socket, action: Action, outcome: Outcome, time: u64, then: u64| {
             send(socket, command(character, action));
-            let change = PerceivedChange {
+            let change = PerceivedChange::Act {
                 time: Time::new(time),
                 entity: character,
                 outcome,
@@ -291,7 +291,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let (changes, awaited) = receive_turn(&mut socket);
     assert_eq!(
         changes.first(),
-        Some(&PerceivedChange {
+        Some(&PerceivedChange::Act {
             time: Time::new(250),
             entity: character,
             outcome: Outcome::Waited,

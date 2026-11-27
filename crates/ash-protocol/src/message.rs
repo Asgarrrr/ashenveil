@@ -53,12 +53,18 @@ pub struct PerceivedEntity {
     pub disposition: Option<Disposition>,
 }
 
-/// One change, stamped with the time it happened (R17): what `entity` did.
+/// One change, stamped with the time it happened (R17, A11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PerceivedChange {
-    pub time: Time,
-    pub entity: EntityId,
-    pub outcome: Outcome,
+pub enum PerceivedChange {
+    /// What `entity` did.
+    Act {
+        time: Time,
+        entity: EntityId,
+        outcome: Outcome,
+    },
+    /// `entity` died and left the world (A8). Its lethal hit is the change
+    /// before, at the same time.
+    Death { time: Time, entity: EntityId },
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -289,25 +295,49 @@ impl Wire for Outcome {
 
 impl Wire for PerceivedChange {
     fn write(&self, out: &mut Vec<u8>) {
-        self.time.write(out);
-        self.entity.write(out);
-        self.outcome.write(out);
+        match self {
+            Self::Act {
+                time,
+                entity,
+                outcome,
+            } => {
+                0_u8.write(out);
+                time.write(out);
+                entity.write(out);
+                outcome.write(out);
+            }
+            Self::Death { time, entity } => {
+                1_u8.write(out);
+                time.write(out);
+                entity.write(out);
+            }
+        }
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        let change = Self {
-            time: Time::read(input)?,
-            entity: EntityId::read(input)?,
-            outcome: Outcome::read(input)?,
-        };
-        // No entity bumps or strikes itself (R13, A3).
-        match change.outcome {
-            Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target)
-                if target == change.entity =>
-            {
-                Err(DecodeError)
+        match u8::read(input)? {
+            0 => {
+                let time = Time::read(input)?;
+                let entity = EntityId::read(input)?;
+                // No entity bumps or strikes itself (R13, A3).
+                match Outcome::read(input)? {
+                    Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target)
+                        if target == entity =>
+                    {
+                        Err(DecodeError)
+                    }
+                    outcome => Ok(Self::Act {
+                        time,
+                        entity,
+                        outcome,
+                    }),
+                }
             }
-            _ => Ok(change),
+            1 => Ok(Self::Death {
+                time: Time::read(input)?,
+                entity: EntityId::read(input)?,
+            }),
+            _ => Err(DecodeError),
         }
     }
 }

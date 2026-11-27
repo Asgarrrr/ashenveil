@@ -5,20 +5,18 @@
 use ash_protocol::message::{Outcome as WireOutcome, PerceivedChange as WireChange};
 use ash_sim::perception::{Outcome as SimOutcome, PerceivedChange as SimChange};
 
-/// S3 signatures: `None` for a death, which the wire carries in a later
-/// commit.
-pub fn to_wire(change: SimChange) -> Option<WireChange> {
+pub fn to_wire(change: SimChange) -> WireChange {
     match change {
         SimChange::Act {
             time,
             entity,
             outcome,
-        } => Some(WireChange {
+        } => WireChange::Act {
             time,
             entity,
             outcome: outcome_to_wire(outcome),
-        }),
-        SimChange::Death { .. } => None,
+        },
+        SimChange::Death { time, entity } => WireChange::Death { time, entity },
     }
 }
 

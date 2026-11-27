@@ -87,7 +87,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
     world.perceived_changes()[seen..]
         .iter()
         .copied()
-        .filter_map(change::to_wire)
+        .map(change::to_wire)
         .collect()
 }
 
@@ -122,15 +122,18 @@ fn entity_parts(perceived: &PerceivedEntity) -> (EntityId, TilePosition, Option<
     (entity, position, disposition)
 }
 
-/// R18: everything a change says of an entity besides its time. The pattern
-/// names every field, so a new one fails to compile here.
-fn change_parts(change: &PerceivedChange) -> (EntityId, Outcome) {
-    let PerceivedChange {
-        time: _,
-        entity,
-        outcome,
-    } = *change;
-    (entity, outcome)
+/// R18: everything a change says of an entity besides its time: the entity
+/// it names and, for an act, the outcome. The patterns name every field, so
+/// a new one fails to compile here.
+fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
+    match *change {
+        PerceivedChange::Act {
+            time: _,
+            entity,
+            outcome,
+        } => (entity, Some(outcome)),
+        PerceivedChange::Death { time: _, entity } => (entity, None),
+    }
 }
 
 #[test]
@@ -170,7 +173,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
     };
     // R13: a bump between the character and the creature, either way.
     let bump_between_them = |change: &PerceivedChange| match change_parts(change) {
-        (mover, Outcome::Bumped(bumped)) => {
+        (mover, Some(Outcome::Bumped(bumped))) => {
             [mover, bumped] == [character, creature] || [mover, bumped] == [creature, character]
         }
         _ => false,
@@ -240,15 +243,21 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
 
     // R6: the creature's changes decode to outcomes only, yet their times
     // show it moves for 50 and waits for 25.
-    let creature_changes: Vec<_> = received
+    let creature_acts: Vec<(Time, Outcome)> = received
         .iter()
-        .filter(|change| change.entity == creature)
+        .filter_map(|change| match *change {
+            PerceivedChange::Act {
+                time,
+                entity,
+                outcome,
+            } if entity == creature => Some((time, outcome)),
+            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+        })
         .collect();
-    assert!(creature_changes.len() > 2, "{creature_changes:?}");
-    for pair in creature_changes.windows(2) {
-        let (_, outcome) = change_parts(pair[0]);
-        let paid = pair[1].time.units() - pair[0].time.units();
-        let cost = match outcome {
+    assert!(creature_acts.len() > 2, "{creature_acts:?}");
+    for pair in creature_acts.windows(2) {
+        let paid = pair[1].0.units() - pair[0].0.units();
+        let cost = match pair[0].1 {
             Outcome::Waited => 25,
             Outcome::Stepped(_) | Outcome::Bumped(_) | Outcome::Hit(_) | Outcome::Missed(_) => 50,
         };

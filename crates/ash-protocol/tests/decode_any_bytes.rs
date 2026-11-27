@@ -98,6 +98,10 @@ fn server_messages() -> Vec<ServerMessage> {
         perceived(150, 1, Outcome::Bumped(EntityId::new(u32::MAX))),
         perceived(200, 0, Outcome::Hit(EntityId::new(1))),
         perceived(u64::MAX, 0, Outcome::Missed(EntityId::new(1))),
+        ServerMessage::Perceived(PerceivedChange::Death {
+            time: Time::new(200),
+            entity: EntityId::new(u32::MAX),
+        }),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
@@ -105,7 +109,7 @@ fn server_messages() -> Vec<ServerMessage> {
 }
 
 fn perceived(time: u64, entity: u32, outcome: Outcome) -> ServerMessage {
-    ServerMessage::Perceived(PerceivedChange {
+    ServerMessage::Perceived(PerceivedChange::Act {
         time: Time::new(time),
         entity: EntityId::new(entity),
         outcome,
@@ -180,14 +184,20 @@ fn mutated_messages_never_panic_the_decoders() {
     }
 }
 
-/// The bytes of a perceived change at time 100 by entity 2, its outcome
-/// already encoded in `outcome`.
-fn perceived_bytes(outcome: &[u8]) -> Vec<u8> {
-    let mut bytes = vec![2];
+/// The bytes of a perceived change of kind `tag` at time 100 naming entity
+/// 2, then `rest`.
+fn change_bytes(tag: u8, rest: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![2, tag];
     bytes.extend(100_u64.to_le_bytes());
     bytes.extend(2_u32.to_le_bytes());
-    bytes.extend(outcome);
+    bytes.extend(rest);
     bytes
+}
+
+/// The bytes of an act at time 100 by entity 2, its outcome already encoded
+/// in `outcome`.
+fn perceived_bytes(outcome: &[u8]) -> Vec<u8> {
+    change_bytes(0, outcome)
 }
 
 #[test]
@@ -216,6 +226,45 @@ fn a_change_the_simulation_cannot_make_is_refused() {
     ];
     for (what, bytes) in refused {
         assert!(ServerMessage::decode(&bytes).is_err(), "{what} decodes");
+    }
+}
+
+#[test]
+fn a_malformed_death_is_refused() {
+    // The control: a change of kind 1 is the death of the entity it names,
+    // at its time, and nothing more.
+    assert_eq!(
+        ServerMessage::decode(&change_bytes(1, &[])),
+        Ok(ServerMessage::Perceived(PerceivedChange::Death {
+            time: Time::new(100),
+            entity: EntityId::new(2),
+        }))
+    );
+
+    // A death carries no outcome: not a wait, a step north or a hit on
+    // entity 1.
+    for outcome in [&[1][..], &[0, 0], &[3, 1, 0, 0, 0]] {
+        assert!(
+            ServerMessage::decode(&change_bytes(1, outcome)).is_err(),
+            "a death with the outcome {outcome:?} decodes"
+        );
+    }
+    // A death cut short, down to its kind alone.
+    let death = change_bytes(1, &[]);
+    for length in 2..death.len() {
+        assert!(
+            ServerMessage::decode(&death[..length]).is_err(),
+            "a death of {length} bytes decodes"
+        );
+    }
+    // No kind follows the death, with the bytes of a death or of a wait.
+    for tag in 2..=u8::MAX {
+        for rest in [&[][..], &[1]] {
+            assert!(
+                ServerMessage::decode(&change_bytes(tag, rest)).is_err(),
+                "a change of kind {tag} decodes"
+            );
+        }
     }
 }
 

@@ -1,8 +1,8 @@
 // Throwaway Canvas 2D drawing of the perceived world. It reads the model and
 // never changes it; the real renderer will replace this file.
 
-import type { LogEntry, PerceivedWorld } from "./model.js";
-import type { Action, Outcome } from "./protocol.js";
+import type { PerceivedWorld } from "./model.js";
+import type { Action, Outcome, PerceivedChange } from "./protocol.js";
 
 const TILE = 32;
 
@@ -26,7 +26,7 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
     ...world.log
       .slice(-20)
       .reverse()
-      .map((entry) => item(logLine(world, entry))),
+      .map((change) => item(logLine(world, change))),
   );
 }
 
@@ -41,9 +41,15 @@ function color(world: PerceivedWorld, entity: number): string {
   return world.entities.get(entity)?.disposition === "hostile" ? "#f55" : "#6cf";
 }
 
-/** The line the log shows for `entry`: when, who, and what it did. */
-export function logLine(world: PerceivedWorld, { time, entity, outcome }: LogEntry): string {
-  return `${time}  ${name(world, entity)} ${happened(world, outcome)}`;
+/** The line the log shows for `change`: when, who, and what it did. */
+export function logLine(world: PerceivedWorld, change: PerceivedChange): string {
+  const who = `${change.time}  ${name(world, change.entity)}`;
+  switch (change.kind) {
+    case "act":
+      return `${who} ${happened(world, change.outcome)}`;
+    case "death":
+      return `${who} dies`;
+  }
 }
 
 /** The terrain, then one glyph for each entity, in its color. */

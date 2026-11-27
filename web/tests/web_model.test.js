@@ -1,5 +1,5 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 and S2: the perceived-world model of the web client, fed
+// slices S1 to S3: the perceived-world model of the web client, fed
 // through the real WASM codec. `cargo xtask accept web_model`
 // builds the client, then runs this file with Node's test runner.
 //
@@ -20,6 +20,11 @@
 // `fixtures/attack.json`: the same world as `bump.json`. Entity 0 moved
 // southeast twice, then attacked the neutral creature twice: northwest,
 // then west (A3).
+//
+// `fixtures/death.json`: another world. Entity 0 moved east, then
+// southeast, then attacked the hostile creature to the southeast twice.
+// The second hit killed it (A8). Entity 0 then moved southeast, onto the
+// tile the creature left.
 //
 //   012345678
 // 0 #########
@@ -50,6 +55,7 @@ function fixture(name) {
 const walk = fixture("walk.json");
 const bump = fixture("bump.json");
 const attack = fixture("attack.json");
+const death = fixture("death.json");
 const controllerTaken = walk.length - 1;
 
 /** The index of the first message of `stream` that `found` accepts. */
@@ -83,6 +89,15 @@ const perceivedEntity = (entity, x, y, disposition) => ({
   position: { x, y, z: 0 },
   disposition,
 });
+
+/** The change an act is: at `time`, `entity` did `outcome`. */
+const act = (time, entity, outcome) => ({ kind: "act", time, entity, outcome });
+/** The outcome of the act `message` carries; `undefined` for any other message. */
+const outcomeOf = (message) =>
+  message.kind === "perceived" && message.change.kind === "act"
+    ? message.change.outcome.kind
+    : undefined;
+const isDeath = (message) => message.kind === "perceived" && message.change.kind === "death";
 
 /** Where each entity `world` holds stands. */
 const positions = (world) =>
@@ -122,12 +137,8 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.costOf(wait), 50);
   assert.equal(world.costOf(move("northwest")), 100);
 
-  const stepped = (time, entity, direction) => ({
-    time,
-    entity,
-    outcome: { kind: "stepped", direction },
-  });
-  const waited = (time, entity) => ({ time, entity, outcome: { kind: "waited" } });
+  const stepped = (time, entity, direction) => act(time, entity, { kind: "stepped", direction });
+  const waited = (time, entity) => act(time, entity, { kind: "waited" });
   assert.deepEqual(world.log, [
     stepped(0, 0, "east"),
     stepped(0, 1, "west"),
@@ -146,7 +157,7 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
     waited(200, 2),
     waited(225, 1),
     // A creature's move into the character is a bump (A13).
-    { time: 225, entity: 2, outcome: { kind: "bumped", target: 0 } },
+    act(225, 2, { kind: "bumped", target: 0 }),
   ]);
   assert.equal(world.refused, false);
   assert.equal(world.mayReconnect(), true);
@@ -216,25 +227,18 @@ test("a perceived step moves the mover toward its direction", () => {
   for (const [direction, [x, y]] of Object.entries(steps)) {
     const world = new PerceivedWorld();
     world.apply(snapshot([perceivedEntity(4, 2, 2, null)]));
-    world.apply({ kind: "perceived", time: 0, entity: 4, outcome: { kind: "stepped", direction } });
+    world.apply({ kind: "perceived", change: act(0, 4, { kind: "stepped", direction }) });
     assert.deepEqual(positions(world), [[4, { x, y, z: 0 }]], direction);
   }
 });
 
 test("a bump leaves the mover in place and logs whom it bumped into", () => {
-  const at = indexOf(
-    bump,
-    (message) => message.kind === "perceived" && message.outcome.kind === "bumped",
-  );
+  const at = indexOf(bump, (message) => outcomeOf(message) === "bumped");
   const before = replay(bump.slice(0, at));
   const bumped = replay(bump.slice(0, at + 1));
 
   assert.deepEqual(bumped.entities, before.entities, "the bump moved an entity");
-  assert.deepEqual(bumped.log.at(-1), {
-    time: 200,
-    entity: 0,
-    outcome: { kind: "bumped", target: 2 },
-  });
+  assert.deepEqual(bumped.log.at(-1), act(200, 0, { kind: "bumped", target: 2 }));
   assert.deepEqual(positions(replay(bump)), [
     [0, { x: 3, y: 3, z: 0 }],
     [1, { x: 7, y: 4, z: 0 }],
@@ -243,10 +247,7 @@ test("a bump leaves the mover in place and logs whom it bumped into", () => {
 });
 
 test("an attack is offered toward the adjacent creature only, and logged as a hit or a miss", () => {
-  const first = indexOf(
-    attack,
-    (message) => message.kind === "perceived" && ["hit", "missed"].includes(message.outcome.kind),
-  );
+  const first = indexOf(attack, (message) => ["hit", "missed"].includes(outcomeOf(message)));
   const before = replay(attack.slice(0, first));
   // A3, A5: offered toward the creature at 100, and nowhere else.
   assert.equal(before.costOf(strike("northwest")), 100);
@@ -258,10 +259,10 @@ test("an attack is offered toward the adjacent creature only, and logged as a hi
   assert.deepEqual(
     replay(attack).log.filter(({ entity }) => entity === 0),
     [
-      { time: 0, entity: 0, outcome: { kind: "stepped", direction: "southeast" } },
-      { time: 100, entity: 0, outcome: { kind: "stepped", direction: "southeast" } },
-      { time: 200, entity: 0, outcome: { kind: "hit", target: 2 } },
-      { time: 300, entity: 0, outcome: { kind: "missed", target: 2 } },
+      act(0, 0, { kind: "stepped", direction: "southeast" }),
+      act(100, 0, { kind: "stepped", direction: "southeast" }),
+      act(200, 0, { kind: "hit", target: 2 }),
+      act(300, 0, { kind: "missed", target: 2 }),
     ],
   );
   assert.deepEqual(replay(attack.slice(0, first + 1)).entities, before.entities);
@@ -272,8 +273,8 @@ test("a hit on the hostile creature is logged as a hit", () => {
   // disposition of its target.
   const world = new PerceivedWorld();
   world.apply(snapshot([perceivedEntity(0, 1, 1, null), perceivedEntity(1, 2, 1, "hostile")]));
-  const hit = { time: 0, entity: 0, outcome: { kind: "hit", target: 1 } };
-  world.apply({ kind: "perceived", ...hit });
+  const hit = act(0, 0, { kind: "hit", target: 1 });
+  world.apply({ kind: "perceived", change: hit });
 
   assert.deepEqual(world.log, [hit]);
 });
@@ -281,9 +282,71 @@ test("a hit on the hostile creature is logged as a hit", () => {
 test("the log line of a strike says whether it hit or missed", () => {
   // The recorded world controls entity 0, drawn as "@".
   const world = replay(attack);
-  const struck = (kind) => ({ time: 200, entity: 0, outcome: { kind, target: 1 } });
+  const struck = (kind) => act(200, 0, { kind, target: 1 });
   assert.equal(logLine(world, struck("hit")), "200  @ hits entity 1");
   assert.equal(logLine(world, struck("missed")), "200  @ misses entity 1");
+});
+
+test("a death removes the dead creature, and no other entity, and is logged after its hit", () => {
+  const died = indexOf(death, isDeath);
+  const before = replay(death.slice(0, died));
+  const after = replay(death.slice(0, died + 1));
+
+  assert.deepEqual(positions(before), [
+    [0, { x: 3, y: 2, z: 0 }],
+    [1, { x: 4, y: 3, z: 0 }],
+    [2, { x: 2, y: 2, z: 0 }],
+  ]);
+  // A8: the hostile creature, entity 1, left the world.
+  assert.deepEqual(positions(after), [
+    [0, { x: 3, y: 2, z: 0 }],
+    [2, { x: 2, y: 2, z: 0 }],
+  ]);
+  // A11: the hit that killed it, then its death, at the same time.
+  assert.deepEqual(after.log.slice(-2), [
+    act(300, 0, { kind: "hit", target: 1 }),
+    { kind: "death", time: 300, entity: 1 },
+  ]);
+});
+
+test("a death removes the entity it names, whichever it is", () => {
+  const world = new PerceivedWorld();
+  world.apply(
+    snapshot([
+      perceivedEntity(0, 1, 1, null),
+      perceivedEntity(3, 2, 1, "neutral"),
+      perceivedEntity(5, 3, 1, "hostile"),
+      perceivedEntity(7, 4, 1, "hostile"),
+    ]),
+  );
+  const dies = (entity) => world.apply({ kind: "perceived", change: { kind: "death", time: 0, entity } });
+  const held = () => [...world.entities.keys()];
+
+  dies(5);
+  assert.deepEqual(held(), [0, 3, 7]);
+  dies(7);
+  assert.deepEqual(held(), [0, 3]);
+});
+
+test("after the death the world goes on without the dead creature", () => {
+  const world = replay(death);
+
+  // The character stepped onto the tile the dead creature left (A8).
+  assert.deepEqual(positions(world), [
+    [0, { x: 4, y: 3, z: 0 }],
+    [2, { x: 3, y: 3, z: 0 }],
+  ]);
+  assert.equal(world.time, 500);
+  assert.equal(world.costOf(strike("west")), 100, "the neutral creature stands west");
+  assert.equal(world.log.filter(({ kind }) => kind === "death").length, 1);
+  // R17: the client resumes with the count of the changes it holds, so the
+  // log holds every perceived change: a death is one.
+  assert.equal(world.log.length, death.filter((bytes) => decodeServerMessage(bytes).kind === "perceived").length);
+});
+
+test("the log line of a death says who died", () => {
+  const world = replay(death);
+  assert.equal(logLine(world, { kind: "death", time: 300, entity: 1 }), "300  entity 1 dies");
 });
 
 test("a refused command advances nothing and keeps the offer", () => {

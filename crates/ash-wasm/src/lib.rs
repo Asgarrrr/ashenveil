@@ -90,15 +90,9 @@ fn message_json(message: &ServerMessage) -> String {
             entity.get(),
             list(actions, available_action_json)
         ),
-        ServerMessage::Perceived(PerceivedChange {
-            time,
-            entity,
-            outcome,
-        }) => format!(
-            r#"{{"kind":"perceived","time":{},"entity":{},"outcome":{}}}"#,
-            time.units(),
-            entity.get(),
-            outcome_json(*outcome)
+        ServerMessage::Perceived(change) => format!(
+            r#"{{"kind":"perceived","change":{}}}"#,
+            change_json(*change)
         ),
         ServerMessage::Refused => r#"{"kind":"refused"}"#.to_owned(),
         ServerMessage::Quarantined => r#"{"kind":"quarantined"}"#.to_owned(),
@@ -160,6 +154,26 @@ fn action_json(action: Action) -> String {
         Action::Attack(direction) => format!(
             r#"{{"kind":"attack","direction":"{}"}}"#,
             direction_name(direction)
+        ),
+    }
+}
+
+fn change_json(change: PerceivedChange) -> String {
+    match change {
+        PerceivedChange::Act {
+            time,
+            entity,
+            outcome,
+        } => format!(
+            r#"{{"kind":"act","time":{},"entity":{},"outcome":{}}}"#,
+            time.units(),
+            entity.get(),
+            outcome_json(outcome)
+        ),
+        PerceivedChange::Death { time, entity } => format!(
+            r#"{{"kind":"death","time":{},"entity":{}}}"#,
+            time.units(),
+            entity.get()
         ),
     }
 }

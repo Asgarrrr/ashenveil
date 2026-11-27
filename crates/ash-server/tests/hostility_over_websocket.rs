@@ -87,7 +87,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
     world.perceived_changes()[seen..]
         .iter()
         .copied()
-        .filter_map(change::to_wire)
+        .map(change::to_wire)
         .collect()
 }
 
@@ -182,10 +182,13 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
         let from = replay.position(character);
         let target = if struck { neutral } else { hostile };
         let action = chase(&actions, from, replay.position(target));
+        // Read from the snapshot: on the way to the neutral creature, a
+        // move may strike the hostile one again, and kill it (A8).
         let ahead = match action {
-            Action::Move(direction) => [hostile, neutral]
-                .into_iter()
-                .find(|&creature| replay.position(creature) == from.step(direction)),
+            Action::Move(direction) => snapshot_entities(&replay)
+                .iter()
+                .find(|perceived| perceived.position == from.step(direction))
+                .map(|perceived| perceived.entity),
             Action::Wait | Action::Attack(_) => None,
         };
         send(
@@ -201,9 +204,12 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
         let (changes, then) = receive_turn(&mut socket);
         assert_eq!(changes, changes_since(&replay, seen));
 
-        let did = changes
-            .first()
-            .map(|change| (change.entity, change.outcome));
+        let did = match changes.first() {
+            Some(&PerceivedChange::Act {
+                entity, outcome, ..
+            }) => Some((entity, outcome)),
+            Some(PerceivedChange::Death { .. }) | None => None,
+        };
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,
             // and the next turn comes 100 later.

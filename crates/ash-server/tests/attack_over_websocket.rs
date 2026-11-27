@@ -83,8 +83,18 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
     world.perceived_changes()[seen..]
         .iter()
         .copied()
-        .filter_map(change::to_wire)
+        .map(change::to_wire)
         .collect()
+}
+
+/// Where the characters of `world` perceive `entity`; `None` once it died
+/// and left the world (A8).
+fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
+    ash_sim::perception::snapshot(world)
+        .entities
+        .iter()
+        .find(|perceived| perceived.entity == entity)
+        .map(|perceived| perceived.position)
 }
 
 /// The offered attack toward `target`, if any; otherwise the offered move
@@ -115,15 +125,18 @@ fn strike_or_chase(
         .unwrap_or(Action::Wait)
 }
 
-/// A12, R18: everything a change says besides its time. The pattern names
-/// every field, so a new one, such as odds, fails to compile here.
-fn change_parts(change: &PerceivedChange) -> (EntityId, Outcome) {
-    let PerceivedChange {
-        time: _,
-        entity,
-        outcome,
-    } = *change;
-    (entity, outcome)
+/// A12, R18: everything a change says besides its time: the entity it
+/// names and, for an act, the outcome. The patterns name every field, so a
+/// new one, such as odds, fails to compile here.
+fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
+    match *change {
+        PerceivedChange::Act {
+            time: _,
+            entity,
+            outcome,
+        } => (entity, Some(outcome)),
+        PerceivedChange::Death { time: _, entity } => (entity, None),
+    }
 }
 
 /// A12: everything an offer says. The pattern names every field, so odds
@@ -162,7 +175,7 @@ fn the_client_perceives_its_strikes_as_hits_and_misses() {
             .iter()
             .map(change_parts)
             .filter(|&(entity, _)| entity == character)
-            .map(|(_, outcome)| outcome)
+            .filter_map(|(_, outcome)| outcome)
             .filter(|outcome| matches!(outcome, Outcome::Hit(_) | Outcome::Missed(_)))
             .collect();
         if strikes.contains(&Outcome::Hit(creature)) && strikes.contains(&Outcome::Missed(creature))
@@ -199,11 +212,13 @@ fn the_client_perceives_its_strikes_as_hits_and_misses() {
             .collect();
         assert_eq!(offers, expected);
 
-        let action = strike_or_chase(
-            &actions,
-            replay.position(character),
-            replay.position(creature),
-        );
+        // The creature dies at its second hit (A8). A world whose second
+        // hit comes before its first miss cannot show a miss: the test fails
+        // on it, by name.
+        let Some(target) = standing(&replay, creature) else {
+            panic!("the creature died before the client saw a miss: {received:?}");
+        };
+        let action = strike_or_chase(&actions, replay.position(character), target);
         send(
             &mut socket,
             ClientMessage::Command {

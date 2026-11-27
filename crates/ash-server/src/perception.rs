@@ -52,20 +52,22 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
         .perceived_changes()
         .iter()
         .skip(seen)
-        .filter_map(|&change| match change {
-            SimChange::Act {
-                time,
-                entity,
-                outcome,
-            } => Some(ServerMessage::Perceived(PerceivedChange {
-                time,
-                entity,
-                outcome: outcome_to_wire(outcome),
-            })),
-            // S3 signatures: no entity dies yet. The wire carries a death
-            // in a later commit.
-            SimChange::Death { .. } => None,
-        })
+        .map(|&change| ServerMessage::Perceived(change_to_wire(change)))
+}
+
+fn change_to_wire(change: SimChange) -> PerceivedChange {
+    match change {
+        SimChange::Act {
+            time,
+            entity,
+            outcome,
+        } => PerceivedChange::Act {
+            time,
+            entity,
+            outcome: outcome_to_wire(outcome),
+        },
+        SimChange::Death { time, entity } => PerceivedChange::Death { time, entity },
+    }
 }
 
 fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
