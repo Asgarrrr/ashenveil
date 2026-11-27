@@ -393,21 +393,26 @@ mod tests {
     fn a_removed_entity_is_issued_but_not_embodied_and_stays_scheduled() {
         let mut world = World::new(0, Speed::new(1));
         let character = world.awaited();
-        let creature = world.create_entity(
-            Speed::new(2),
-            TilePosition { x: 2, y: 1, z: 0 },
-            Controller::Wander(Disposition::Hostile),
-        );
+        let [removed, second, third] = [2, 4, 6].map(|x| {
+            world.create_entity(
+                Speed::new(2),
+                TilePosition { x, y: 1, z: 0 },
+                Controller::Wander(Disposition::Hostile),
+            )
+        });
         let scheduled = world.scheduler.clone();
 
         world.apply(Effects {
-            in_order: alloc::vec![Effect::Remove { entity: creature }],
+            in_order: alloc::vec![Effect::Remove { entity: removed }],
             rng_after: world.rng.clone(),
         });
 
         // F3: the two cases of a total lookup.
-        assert!(matches!(world.lookup(creature), Lookup::NotEmbodied));
+        assert!(matches!(world.lookup(removed), Lookup::NotEmbodied));
         assert!(matches!(world.lookup(character), Lookup::Embodied(_)));
+        // The others stay in creation order.
+        let embodied: Vec<EntityId> = world.entities().collect();
+        assert_eq!(embodied, [character, second, third]);
         // The entry outlives the embodiment: `advance` skips it later.
         assert_eq!(world.scheduler, scheduled);
     }
