@@ -182,8 +182,8 @@ impl World {
     }
 
     /// The awaited character takes `action`, then time runs to the next
-    /// character that awaits a player connection. A refused move changes
-    /// nothing (R10, R11).
+    /// character that awaits a player connection. A refused move or attack
+    /// changes nothing (R10, R11, A3).
     pub fn submit(&mut self, action: Action) -> Result<(), Refused> {
         let perception = Perception::whole_map(self);
         let effects = action::resolve(self, &perception, self.awaited(), action, &self.rng)?;
