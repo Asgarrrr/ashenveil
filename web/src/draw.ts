@@ -30,7 +30,7 @@ export function draw(
     ...[...world.entities.values()].map((perceived) => item(entityLine(world, perceived))),
   );
   view.actions.replaceChildren(
-    ...world.offer.map(({ action, cost }) => item(`${describe(action)}: ${cost}`)),
+    ...world.offers.map(({ action, cost }) => item(`${describe(action)}: ${cost}`)),
   );
   view.log.replaceChildren(
     ...world.log

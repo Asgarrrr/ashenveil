@@ -16,7 +16,7 @@
 use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::ActionCost;
-use ash_sim::action::{Action, AvailableAction, Refused};
+use ash_sim::action::{Action, Offer, Refused};
 use ash_sim::controller::{Controller, Disposition};
 use ash_sim::perception::{ChangeKind, Outcome};
 use ash_sim::world::World;
@@ -46,11 +46,11 @@ fn world_with_creature(seed: u64, start: TilePosition) -> (World, EntityId, Enti
 
 /// The first attack offered to the awaited character, clockwise from the
 /// north.
-fn offered_attack(world: &World) -> Option<AvailableAction> {
+fn offered_attack(world: &World) -> Option<Offer> {
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .find(|offered| matches!(offered.action, Action::Attack(_)))
+        .find(|offer| matches!(offer.action, Action::Attack(_)))
 }
 
 /// A11: an attack is perceived as a hit or a miss.
@@ -105,17 +105,17 @@ fn fight(seed: u64) -> (World, EntityId, EntityId) {
             !died,
             "seed {seed}: the creature died before the fight saw a miss"
         );
-        let Some(offered) = offered_attack(&world) else {
+        let Some(offer) = offered_attack(&world) else {
             world.submit(Action::Wait).expect("a wait is never refused");
             continue;
         };
-        assert_eq!(offered.cost, ActionCost::new(100), "{offered:?}");
+        assert_eq!(offer.cost, ActionCost::new(100), "{offer:?}");
         let clock = world.clock();
-        assert_eq!(world.submit(offered.action), Ok(()), "{offered:?}");
+        assert_eq!(world.submit(offer.action), Ok(()), "{offer:?}");
         assert_eq!(
             (world.awaited(), world.clock().units() - clock.units()),
             (character, 100),
-            "after {offered:?}"
+            "after {offer:?}"
         );
     }
     panic!(
@@ -130,13 +130,13 @@ fn an_adjacent_entity_can_be_attacked_for_100() {
     let (world, ..) = world_with_creature(SEED, at(2, 1));
     // A3, A5: offered with its cost (R9) toward the adjacent entity only.
     let attacks: Vec<_> = world
-        .available_actions()
+        .offers()
         .into_iter()
-        .filter(|offered| matches!(offered.action, Action::Attack(_)))
+        .filter(|offer| matches!(offer.action, Action::Attack(_)))
         .collect();
     assert_eq!(
         attacks,
-        [AvailableAction {
+        [Offer {
             action: Action::Attack(Direction::East),
             cost: ActionCost::new(100),
         }]
@@ -154,10 +154,10 @@ fn an_attacker_of_speed_2_pays_50() {
         Controller::Wander(Disposition::Neutral),
     );
 
-    let offered = offered_attack(&world).expect("the adjacent creature can be attacked");
-    assert_eq!(offered.cost, ActionCost::new(50));
+    let offer = offered_attack(&world).expect("the adjacent creature can be attacked");
+    assert_eq!(offer.cost, ActionCost::new(50));
     let clock = world.clock();
-    assert_eq!(world.submit(offered.action), Ok(()));
+    assert_eq!(world.submit(offer.action), Ok(()));
     assert_eq!(
         (world.awaited(), world.clock().units() - clock.units()),
         (character, 50)
@@ -196,7 +196,7 @@ fn a_refused_attack_after_the_wander_has_drawn_changes_nothing() {
         "the wander has not drawn yet"
     );
     let untouched = world.clone();
-    let offers = world.available_actions();
+    let offers = world.offers();
     assert_eq!(offered_attack(&world), None);
 
     // East is floor and holds no entity; north is a wall (A3, R10).
@@ -204,7 +204,7 @@ fn a_refused_attack_after_the_wander_has_drawn_changes_nothing() {
         assert_eq!(world.submit(Action::Attack(direction)), Err(Refused));
         // F4, R10: no RNG draw, no clock, no write.
         assert_eq!(world.clock(), untouched.clock());
-        assert_eq!(world.available_actions(), offers);
+        assert_eq!(world.offers(), offers);
         assert_eq!(world.command_log(), untouched.command_log());
         assert_eq!(world.perceived_changes(), untouched.perceived_changes());
         assert_eq!(world, untouched);
@@ -279,7 +279,7 @@ fn an_entity_of_another_controller_is_offered_the_same_attack() {
     world.submit(Action::Wait).expect("a wait is never refused");
     assert_eq!(world.awaited(), other);
     assert_eq!(
-        offered_attack(&world).map(|offered| offered.action),
+        offered_attack(&world).map(|offer| offer.action),
         Some(Action::Attack(Direction::West))
     );
 }

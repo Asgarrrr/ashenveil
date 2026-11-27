@@ -13,7 +13,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    Action, ChangeKind, ClientMessage, Disposition, Offer, Outcome, PerceivedChange,
     PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -95,14 +95,14 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 
 /// The offered action that brings `character` closest to `target`: a move
 /// onto it once adjacent, which bumps.
-fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) -> Action {
+fn chase(offers: &[Offer], from: TilePosition, target: TilePosition) -> Action {
     let distance = |position: TilePosition| {
         position
             .x
             .abs_diff(target.x)
             .max(position.y.abs_diff(target.y))
     };
-    offered
+    offers
         .iter()
         .map(|offer| offer.action)
         .min_by_key(|action| match action {
@@ -196,18 +196,18 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
     for _ in 0..MOST_COMMANDS {
         // R9, R18: every turn the client learns is the character's, at the
         // character's own costs.
-        let actions = match next {
+        let offers = match next {
             Some(ServerMessage::Awaited {
                 time,
                 entity,
-                actions,
+                offers,
             }) => {
                 assert_eq!((time, entity), (replay.clock(), character));
-                actions
+                offers
             }
             other => panic!("expected the character's turn, got {other:?}"),
         };
-        for offer in &actions {
+        for offer in &offers {
             let cost = match offer.action {
                 Action::Move(_) | Action::Attack(_) => 100,
                 Action::Wait => 50,
@@ -215,9 +215,9 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
             assert_eq!(offer.cost.units(), cost, "{offer:?}");
         }
         // R14: the offers are the simulation's, attacks included.
-        let offered: Vec<Action> = actions.iter().map(|offer| offer.action).collect();
+        let offered: Vec<Action> = offers.iter().map(|offer| offer.action).collect();
         let expected: Vec<Action> = replay
-            .available_actions()
+            .offers()
             .into_iter()
             .map(|offer| action::to_wire(offer.action))
             .collect();
@@ -227,7 +227,7 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
         }
 
         let action = chase(
-            &actions,
+            &offers,
             replay.position(character),
             replay.position(creature),
         );

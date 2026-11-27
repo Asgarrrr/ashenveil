@@ -2,17 +2,18 @@
 
 use ash_core::rng::Rng;
 
-use crate::action::{Action, AvailableAction};
+use crate::action::{Action, Offer};
 
-/// One of `offered`, drawn from `rng`, each about equally likely: the
-/// modulo bias of a few choices out of 2^64 draws is negligible. Returns the
-/// RNG state after the draw and leaves `rng` as it was (F4). Attacks are set
-/// aside before the draw: only the character attacks (A13). `offered` holds
-/// only actions the rules allow, so the wander is never refused (R14). An
-/// empty offer crashes through `invariant!`: waiting is always possible.
-pub fn choose(rng: &Rng, offered: &[AvailableAction]) -> (Action, Rng) {
+/// The action of one of `offers`, drawn from `rng`, each about equally
+/// likely: the modulo bias of a few choices out of 2^64 draws is negligible.
+/// Returns the RNG state after the draw and leaves `rng` as it was (F4).
+/// Attacks are set aside before the draw: only the character attacks (A13).
+/// `offers` holds only actions the rules allow, so the wander is never
+/// refused (R14). Empty `offers` crash through `invariant!`: waiting is
+/// always possible.
+pub fn choose(rng: &Rng, offers: &[Offer]) -> (Action, Rng) {
     let candidates = || {
-        offered
+        offers
             .iter()
             .map(|offer| offer.action)
             .filter(|action| !matches!(action, Action::Attack(_)))

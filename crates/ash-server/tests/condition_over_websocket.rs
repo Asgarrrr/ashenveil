@@ -14,8 +14,8 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Disposition, Outcome,
-    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Action, ChangeKind, ClientMessage, Condition, Disposition, Offer, Outcome, PerceivedChange,
+    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -95,11 +95,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 
 /// The offered attack toward `target`, if any; otherwise the offered move
 /// that brings `from` closest to `target`. A wait when no move is offered.
-fn strike_or_chase(
-    offered: &[AvailableAction],
-    from: TilePosition,
-    target: TilePosition,
-) -> Action {
+fn strike_or_chase(offers: &[Offer], from: TilePosition, target: TilePosition) -> Action {
     let distance = |position: TilePosition| {
         position
             .x
@@ -107,7 +103,7 @@ fn strike_or_chase(
             .max(position.y.abs_diff(target.y))
     };
     let toward = |direction| from.step(direction) == target;
-    let actions = offered.iter().map(|offer| offer.action);
+    let actions = offers.iter().map(|offer| offer.action);
     actions
         .clone()
         .find(|action| matches!(action, Action::Attack(direction) if toward(*direction)))
@@ -128,27 +124,27 @@ fn turn_of<'m>(
     message: &'m Option<ServerMessage>,
     replay: &World,
     character: EntityId,
-) -> &'m [AvailableAction] {
+) -> &'m [Offer] {
     let Some(ServerMessage::Awaited {
         time,
         entity,
-        actions,
+        offers,
     }) = message
     else {
         panic!("expected the character's turn, got {message:?}");
     };
     assert_eq!((*time, *entity), (replay.clock(), character));
-    let offers: Vec<(Action, u64)> = actions
+    let parts: Vec<(Action, u64)> = offers
         .iter()
         .map(|offer| (offer.action, offer.cost.units()))
         .collect();
     let expected: Vec<(Action, u64)> = replay
-        .available_actions()
+        .offers()
         .into_iter()
         .map(|offer| (action::to_wire(offer.action), offer.cost.units()))
         .collect();
-    assert_eq!(offers, expected);
-    actions
+    assert_eq!(parts, expected);
+    offers
 }
 
 /// What a snapshot says of the hit points of each entity, in its order.
@@ -195,12 +191,12 @@ fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
         ServerMessage::Awaited {
             time: _,
             entity: _,
-            actions,
+            offers,
         } => {
             // R9: an offer holds an action and the cost of the awaited
             // character, never a hit point.
-            for offer in actions {
-                let AvailableAction { action: _, cost: _ } = *offer;
+            for offer in offers {
+                let Offer { action: _, cost: _ } = *offer;
             }
             Vec::new()
         }
@@ -265,12 +261,8 @@ fn the_client_perceives_its_own_hit_points_and_the_condition_of_the_creature_it_
     let mut hit = None;
     for _ in 0..MOST_COMMANDS {
         sent.extend(next.clone());
-        let offered = turn_of(&next, &replay, character);
-        let action = strike_or_chase(
-            offered,
-            replay.position(character),
-            replay.position(hostile),
-        );
+        let offers = turn_of(&next, &replay, character);
+        let action = strike_or_chase(offers, replay.position(character), replay.position(hostile));
         send(
             &mut socket,
             ClientMessage::Command {

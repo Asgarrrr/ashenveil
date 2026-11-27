@@ -12,8 +12,7 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Outcome, PerceivedChange, ResumeToken,
-    ServerMessage,
+    Action, ChangeKind, ClientMessage, Offer, Outcome, PerceivedChange, ResumeToken, ServerMessage,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -100,18 +99,14 @@ fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
 
 /// The offered attack toward `target`, if any; otherwise the offered move
 /// that brings `from` closest to `target`.
-fn strike_or_chase(
-    offered: &[AvailableAction],
-    from: TilePosition,
-    target: TilePosition,
-) -> Action {
+fn strike_or_chase(offers: &[Offer], from: TilePosition, target: TilePosition) -> Action {
     let distance = |position: TilePosition| {
         position
             .x
             .abs_diff(target.x)
             .max(position.y.abs_diff(target.y))
     };
-    let actions = offered.iter().map(|offer| offer.action);
+    let actions = offers.iter().map(|offer| offer.action);
     actions
         .clone()
         .find(
@@ -146,8 +141,8 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
 
 /// A12: everything an offer says. The pattern names every field, so odds
 /// beside the cost fail to compile here.
-fn offer_parts(offer: &AvailableAction) -> (Action, u64) {
-    let AvailableAction { action, cost } = *offer;
+fn offer_parts(offer: &Offer) -> (Action, u64) {
+    let Offer { action, cost } = *offer;
     (action, cost.units())
 }
 
@@ -198,24 +193,24 @@ fn the_client_perceives_its_strikes_as_hits_and_misses() {
 
         // R9, R14: the turn is the character's, offering what the
         // simulation offers, an attack for 100 next to the creature (A5).
-        let actions = match next {
+        let offers = match next {
             Some(ServerMessage::Awaited {
                 time,
                 entity,
-                actions,
+                offers,
             }) => {
                 assert_eq!((time, entity), (replay.clock(), character));
-                actions
+                offers
             }
             other => panic!("expected the character's turn, got {other:?}"),
         };
-        let offers: Vec<(Action, u64)> = actions.iter().map(offer_parts).collect();
+        let parts: Vec<(Action, u64)> = offers.iter().map(offer_parts).collect();
         let expected: Vec<(Action, u64)> = replay
-            .available_actions()
+            .offers()
             .into_iter()
             .map(|offer| (action::to_wire(offer.action), offer.cost.units()))
             .collect();
-        assert_eq!(offers, expected);
+        assert_eq!(parts, expected);
 
         // The creature dies at its second hit (A8). A world whose second
         // hit comes before its first miss cannot show a miss: the test fails
@@ -223,7 +218,7 @@ fn the_client_perceives_its_strikes_as_hits_and_misses() {
         let Some(target) = standing(&replay, creature) else {
             panic!("the creature died before the client saw a miss: {received:?}");
         };
-        let action = strike_or_chase(&actions, replay.position(character), target);
+        let action = strike_or_chase(&offers, replay.position(character), target);
         send(
             &mut socket,
             ClientMessage::Command {

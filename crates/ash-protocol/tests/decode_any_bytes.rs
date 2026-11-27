@@ -5,9 +5,8 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Disposition, Outcome,
-    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
-    Terrain,
+    Action, ChangeKind, ClientMessage, Condition, Disposition, Offer, Outcome, PerceivedChange,
+    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -90,11 +89,11 @@ fn server_messages() -> Vec<ServerMessage> {
         ServerMessage::Awaited {
             time: Time::new(u64::MAX),
             entity: EntityId::new(0),
-            actions: Direction::ALL
+            offers: Direction::ALL
                 .into_iter()
                 .map(Action::Move)
                 .chain([Action::Wait, Action::Attack(Direction::East)])
-                .map(|action| AvailableAction {
+                .map(|action| Offer {
                     action,
                     cost: ActionCost::new(100),
                 })

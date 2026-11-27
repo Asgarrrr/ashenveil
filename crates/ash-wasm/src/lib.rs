@@ -6,9 +6,9 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Direction, Disposition,
-    EntityId, Outcome, PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken,
-    ServerMessage, Snapshot, Terrain,
+    Action, ChangeKind, ClientMessage, Condition, Direction, Disposition, EntityId, Offer, Outcome,
+    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -84,12 +84,12 @@ fn message_json(message: &ServerMessage) -> String {
         ServerMessage::Awaited {
             time,
             entity,
-            actions,
+            offers,
         } => format!(
             r#"{{"kind":"awaited","time":{},"entity":{},"actions":[{}]}}"#,
             time.units(),
             entity.get(),
-            list(actions, available_action_json)
+            list(offers, offer_json)
         ),
         ServerMessage::Perceived(change) => format!(
             r#"{{"kind":"perceived","change":{}}}"#,
@@ -147,11 +147,11 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
     )
 }
 
-fn available_action_json(offered: &AvailableAction) -> String {
+fn offer_json(offer: &Offer) -> String {
     format!(
         r#"{{"action":{},"cost":{}}}"#,
-        action_json(offered.action),
-        offered.cost.units()
+        action_json(offer.action),
+        offer.cost.units()
     )
 }
 
@@ -354,12 +354,12 @@ mod tests {
         );
     }
 
-    /// R9: the web client reads the offered actions and their costs from
-    /// this shape (`web/src/protocol.ts`).
+    /// R9: the web client reads the offers from this shape
+    /// (`web/src/protocol.ts`).
     #[test]
     fn an_awaited_message_crosses_as_its_json() {
         let awaited = json(&[
-            // Awaited at time 7, for entity 3, with three actions.
+            // Awaited at time 7, for entity 3, with three offers.
             &[1],
             &7_u64.to_le_bytes(),
             &3_u32.to_le_bytes(),
