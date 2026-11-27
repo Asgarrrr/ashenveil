@@ -1,7 +1,8 @@
 //! What the server and a client say to each other.
 //!
 //! Nothing here can carry another entity's speed, cost or next turn (R18):
-//! only the awaited entity's own costs, sent to its controller (R9).
+//! only the awaited entity's own costs, sent to its controller (R9). A
+//! disposition is a kind, never a number.
 
 use alloc::vec::Vec;
 
@@ -33,11 +34,23 @@ pub struct AvailableAction {
     pub cost: ActionCost,
 }
 
-/// An entity the character perceives, and where it stands.
+/// How a creature stands toward the character (A4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Disposition {
+    /// A move into the creature is an attack on it (A1).
+    Hostile,
+    /// A move into the creature is a bump (A2).
+    Neutral,
+}
+
+/// An entity the character perceives: where it stands and, for a creature,
+/// its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedEntity {
     pub entity: EntityId,
     pub position: TilePosition,
+    /// `None` for a character: it has no disposition.
+    pub disposition: Option<Disposition>,
 }
 
 /// One change, stamped with the time it happened (R17): what `entity` did.
@@ -201,16 +214,40 @@ impl Wire for AvailableAction {
     }
 }
 
+/// One tag: 0 for a character, which has no disposition, then one for each
+/// disposition of a creature.
+impl Wire for Option<Disposition> {
+    fn write(&self, out: &mut Vec<u8>) {
+        let tag: u8 = match self {
+            None => 0,
+            Some(Disposition::Hostile) => 1,
+            Some(Disposition::Neutral) => 2,
+        };
+        tag.write(out);
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(None),
+            1 => Ok(Some(Disposition::Hostile)),
+            2 => Ok(Some(Disposition::Neutral)),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
 impl Wire for PerceivedEntity {
     fn write(&self, out: &mut Vec<u8>) {
         self.entity.write(out);
         self.position.write(out);
+        self.disposition.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
         Ok(Self {
             entity: EntityId::read(input)?,
             position: TilePosition::read(input)?,
+            disposition: Option::read(input)?,
         })
     }
 }

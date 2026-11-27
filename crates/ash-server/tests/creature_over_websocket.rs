@@ -1,8 +1,9 @@
 //! Acceptance of spec 0001, slice S7, over WebSocket: the client perceives
-//! the creature only through positions and perceived outcomes (R18).
+//! a creature only through its position, its disposition and perceived
+//! outcomes (R18).
 //!
-//! The client chases the creature until a bump, planning each command on a
-//! replay of the accepted commands.
+//! The client chases the neutral creature until a bump, planning each
+//! command on a replay of the accepted commands.
 
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
@@ -12,14 +13,16 @@ use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
-    ServerMessage, Snapshot,
+    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
+    ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/disposition.rs"]
+mod disposition;
 #[path = "websocket/outcome.rs"]
 mod outcome;
 
@@ -110,11 +113,16 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .unwrap_or(Action::Wait)
 }
 
-/// R18: everything a snapshot says of an entity. The pattern names every
-/// field, so a new one fails to compile here.
-fn entity_parts(perceived: &PerceivedEntity) -> (EntityId, TilePosition) {
-    let PerceivedEntity { entity, position } = *perceived;
-    (entity, position)
+/// R18: everything a snapshot says of an entity: a disposition is a kind,
+/// never a number. The pattern names every field, so a new one fails to
+/// compile here.
+fn entity_parts(perceived: &PerceivedEntity) -> (EntityId, TilePosition, Option<Disposition>) {
+    let PerceivedEntity {
+        entity,
+        position,
+        disposition,
+    } = *perceived;
+    (entity, position, disposition)
 }
 
 /// R18: everything a change says of an entity besides its time. The pattern
@@ -135,7 +143,8 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
     let character = replay.awaited();
     let mut socket = connect(address, TOKEN);
 
-    // R16, R18: the snapshot gives each entity an id and a position.
+    // R16, R18: the snapshot gives each entity an id, a position and, for
+    // a creature, a disposition.
     let entities = match receive(&mut socket) {
         Some(ServerMessage::Snapshot(Snapshot { time, entities, .. })) => {
             assert_eq!(time, Time::ZERO);
@@ -146,12 +155,28 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
     let expected: Vec<_> = ash_sim::perception::snapshot(&replay)
         .entities
         .iter()
-        .map(|perceived| (perceived.entity, perceived.position))
+        .map(|perceived| {
+            (
+                perceived.entity,
+                perceived.position,
+                perceived.disposition.map(disposition::to_wire),
+            )
+        })
         .collect();
     assert_eq!(entities, expected);
+    // A move into the neutral creature is a bump (A2).
     let creature = match entities.as_slice() {
-        [(first, _), (creature, _)] if *first == character => *creature,
-        other => panic!("expected the character, then the creature: {other:?}"),
+        [(first, ..), _, (creature, _, Some(Disposition::Neutral))] if *first == character => {
+            *creature
+        }
+        other => panic!("expected the character, then two creatures, the last neutral: {other:?}"),
+    };
+    // R13: a bump between the character and the creature, either way.
+    let bump_between_them = |change: &PerceivedChange| match change_parts(change) {
+        (mover, Outcome::Bumped(bumped)) => {
+            [mover, bumped] == [character, creature] || [mover, bumped] == [creature, character]
+        }
+        _ => false,
     };
 
     let mut received = Vec::new();
@@ -185,10 +210,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
             .map(|offer| action::to_wire(offer.action))
             .collect();
         assert_eq!(offered, expected);
-        if received
-            .iter()
-            .any(|change: &PerceivedChange| matches!(change.outcome, Outcome::Bumped(_)))
-        {
+        if received.iter().any(bump_between_them) {
             break;
         }
 
@@ -213,20 +235,10 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         next = then;
     }
 
-    // R13: the client perceived a bump between the two entities, and the
-    // mover stayed in place.
-    let bump = received
-        .iter()
-        .position(|change| matches!(change.outcome, Outcome::Bumped(_)))
-        .expect("the chase never bumped");
-    let (mover, Outcome::Bumped(bumped)) = change_parts(&received[bump]) else {
-        unreachable!("{:?} is a bump", received[bump])
-    };
-    let pair = [mover, bumped];
+    // R13: the client perceived a bump between the two entities.
     assert!(
-        pair == [character, creature] || pair == [creature, character],
-        "{:?}",
-        received[bump]
+        received.iter().any(bump_between_them),
+        "the chase never bumped"
     );
 
     // R6: the creature's changes decode to outcomes only, yet their times

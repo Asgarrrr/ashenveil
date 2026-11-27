@@ -1,11 +1,12 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slice S1: the perceived-world model of the web client, fed through the
-// real WASM codec. `cargo xtask accept web_model`
+// slices S1 and S2: the perceived-world model of the web client, fed
+// through the real WASM codec. `cargo xtask accept web_model`
 // builds the client, then runs this file with Node's test runner.
 //
 // Each fixture holds the binary messages a real server sent, in hex. The
 // client said Hello, then commanded entity 0, which starts at (1, 1). The
-// creature, entity 1, starts at (7, 4) and wanders.
+// hostile creature, entity 1, starts at (7, 4); the neutral creature,
+// entity 2, starts at (1, 4). Both wander.
 // `crates/ash-server/tests/web_fixtures.rs` records each session again and
 // fails when the server no longer sends these bytes.
 //
@@ -13,12 +14,12 @@
 // wait, move southeast. A second connection with the same token then took
 // the controller.
 //
-// `fixtures/bump.json`: the client chased the creature until a move of
-// entity 0 bumped into it (R13).
+// `fixtures/bump.json`: entity 0 moved southeast twice, then northwest
+// into the neutral creature: a bump (R13, A2).
 //
 // `fixtures/attack.json`: the same world as `bump.json`. Entity 0 moved
-// east and southeast, then attacked the creature twice: southeast, then
-// east (A3).
+// southeast twice, then attacked the neutral creature twice: northwest,
+// then west (A3).
 //
 //   012345678
 // 0 #########
@@ -32,7 +33,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { logLine } from "../build/draw.js";
+import { color, logLine } from "../build/draw.js";
 import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
@@ -85,13 +86,15 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.terrainAt(9, 0), undefined);
 
   assert.equal(world.controlled, 0);
-  // R16: the creature is one more perceived entity, stepped like the
-  // character: west, west, north, west from (7, 4).
+  // R16: each creature is one more perceived entity, stepped like the
+  // character: entity 1 west, west, east from (7, 4), entity 2 north,
+  // northeast, southeast from (1, 4).
   assert.deepEqual(
     [...world.positions],
     [
       [0, { x: 3, y: 2, z: 0 }],
-      [1, { x: 4, y: 3, z: 0 }],
+      [1, { x: 6, y: 4, z: 0 }],
+      [2, { x: 3, y: 3, z: 0 }],
     ],
   );
   assert.equal(world.time, 250);
@@ -99,7 +102,7 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(
     world.offer.length,
     10,
-    "every move is open at (3, 2), wait, and an attack on the creature at (4, 3)",
+    "every move is open at (3, 2), wait, and an attack on the creature at (3, 3)",
   );
   assert.equal(world.costOf(wait), 50);
   assert.equal(world.costOf(move("northwest")), 100);
@@ -113,16 +116,43 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.deepEqual(world.log, [
     stepped(0, 0, "east"),
     stepped(0, 1, "west"),
-    stepped(50, 1, "west"),
+    stepped(0, 2, "north"),
+    waited(50, 1),
+    waited(50, 2),
+    waited(75, 1),
+    stepped(75, 2, "northeast"),
     waited(100, 0),
-    stepped(100, 1, "north"),
+    waited(100, 1),
+    waited(125, 2),
+    stepped(125, 1, "west"),
     stepped(150, 0, "southeast"),
-    waited(150, 1),
-    stepped(175, 1, "west"),
+    stepped(150, 2, "southeast"),
+    stepped(175, 1, "east"),
+    waited(200, 2),
     waited(225, 1),
+    // A creature's move into the character is a bump (A13).
+    { time: 225, entity: 2, outcome: { kind: "bumped", target: 0 } },
   ]);
   assert.equal(world.refused, false);
   assert.equal(world.mayReconnect(), true);
+});
+
+test("the snapshot gives each creature its disposition, and the character none", () => {
+  // A4: entity 1 is hostile, entity 2 is neutral.
+  const world = replay(walk.slice(0, 1));
+  assert.deepEqual(
+    [...world.dispositions],
+    [
+      [1, "hostile"],
+      [2, "neutral"],
+    ],
+  );
+});
+
+test("the map draws the character, a hostile creature and a neutral creature apart", () => {
+  const world = replay(walk.slice(0, 2));
+  const colors = [0, 1, 2].map((entity) => color(world, entity));
+  assert.equal(new Set(colors).size, 3, `${colors}`);
 });
 
 test("a perceived step moves the mover toward its direction", () => {
@@ -144,7 +174,7 @@ test("a perceived step moves the mover toward its direction", () => {
       time: 0,
       width: 5,
       terrain: Array(25).fill("floor"),
-      entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 } }],
+      entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 }, disposition: null }],
     });
     world.apply({ kind: "perceived", time: 0, entity: 4, outcome: { kind: "stepped", direction } });
     assert.deepEqual(world.positions.get(4), { x, y, z: 0 }, direction);
@@ -163,13 +193,14 @@ test("a bump leaves the mover in place and logs whom it bumped into", () => {
   assert.deepEqual(bumped.log.at(-1), {
     time: 200,
     entity: 0,
-    outcome: { kind: "bumped", target: 1 },
+    outcome: { kind: "bumped", target: 2 },
   });
   assert.deepEqual(
     [...replay(bump).positions],
     [
-      [0, { x: 3, y: 2, z: 0 }],
-      [1, { x: 6, y: 4, z: 0 }],
+      [0, { x: 3, y: 3, z: 0 }],
+      [1, { x: 7, y: 4, z: 0 }],
+      [2, { x: 1, y: 3, z: 0 }],
     ],
   );
 });
@@ -181,19 +212,19 @@ test("an attack is offered toward the adjacent creature only, and logged as a hi
   );
   const before = replay(attack.slice(0, first));
   // A3, A5: offered toward the creature at 100, and nowhere else.
-  assert.equal(before.costOf(strike("southeast")), 100);
+  assert.equal(before.costOf(strike("northwest")), 100);
   assert.equal(before.costOf(strike("east")), undefined);
-  assert.equal(before.costOf(move("southeast")), 100);
+  assert.equal(before.costOf(move("northwest")), 100);
 
   // A11: the two steps, then a hit and a miss, each naming the creature
   // and nothing more: no odds (A12).
   assert.deepEqual(
     replay(attack).log.filter(({ entity }) => entity === 0),
     [
-      { time: 0, entity: 0, outcome: { kind: "stepped", direction: "east" } },
+      { time: 0, entity: 0, outcome: { kind: "stepped", direction: "southeast" } },
       { time: 100, entity: 0, outcome: { kind: "stepped", direction: "southeast" } },
-      { time: 200, entity: 0, outcome: { kind: "hit", target: 1 } },
-      { time: 300, entity: 0, outcome: { kind: "missed", target: 1 } },
+      { time: 200, entity: 0, outcome: { kind: "hit", target: 2 } },
+      { time: 300, entity: 0, outcome: { kind: "missed", target: 2 } },
     ],
   );
   assert.equal(replay(attack.slice(0, first + 1)).positions.get(0).x, before.positions.get(0).x);

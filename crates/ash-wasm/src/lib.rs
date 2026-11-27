@@ -6,8 +6,8 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Direction, EntityId, Outcome, PerceivedChange,
-    PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ClientMessage, Direction, Disposition, EntityId, Outcome,
+    PerceivedChange, PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -116,9 +116,18 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
     });
     let entities = list(
         &snapshot.entities,
-        |PerceivedEntity { entity, position }| {
+        |PerceivedEntity {
+             entity,
+             position,
+             disposition,
+         }| {
+            let disposition = match disposition {
+                None => "null",
+                Some(Disposition::Hostile) => r#""hostile""#,
+                Some(Disposition::Neutral) => r#""neutral""#,
+            };
             format!(
-                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}}}}"#,
+                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}},"disposition":{disposition}}}"#,
                 entity.get(),
                 position.x,
                 position.y,

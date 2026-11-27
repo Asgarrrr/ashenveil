@@ -5,6 +5,7 @@ import type {
   Action,
   AvailableAction,
   Direction,
+  Disposition,
   Outcome,
   Position,
   ServerMessage,
@@ -46,6 +47,8 @@ export class PerceivedWorld {
   /** Level 0, row by row from the north, each row from the west. */
   terrain: Terrain[] = [];
   readonly positions = new Map<number, Position>();
+  /** The disposition of each creature (A4). A character has none. */
+  readonly dispositions = new Map<number, Disposition>();
   /** The entity this client controls, once the server awaits it. */
   controlled: number | undefined;
   /** The actions offered to the controlled entity; empty when not awaited. */
@@ -63,8 +66,12 @@ export class PerceivedWorld {
         this.width = message.width;
         this.terrain = message.terrain;
         this.positions.clear();
-        for (const { entity, position } of message.entities) {
+        this.dispositions.clear();
+        for (const { entity, position, disposition } of message.entities) {
           this.positions.set(entity, position);
+          if (disposition !== null) {
+            this.dispositions.set(entity, disposition);
+          }
         }
         break;
       case "awaited":

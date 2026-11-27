@@ -20,9 +20,13 @@ use crate::wander;
 /// fixed map.
 const CHARACTER_START: TilePosition = TilePosition { x: 1, y: 1, z: 0 };
 
-/// Where the creature stands when the world begins: a floor tile of the
-/// fixed map, across the room from the character.
-const CREATURE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+/// Where the hostile creature stands when the world begins: a floor tile of
+/// the fixed map, across the room from the character.
+const HOSTILE_START: TilePosition = TilePosition { x: 7, y: 4, z: 0 };
+
+/// Where the neutral creature stands when the world begins: a floor tile of
+/// the fixed map, down the west side from the character.
+const NEUTRAL_START: TilePosition = TilePosition { x: 1, y: 4, z: 0 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Entity {
@@ -61,13 +65,18 @@ impl World {
     }
 
     /// The world of the skeleton, from `seed`: the character, then a
-    /// wandering creature of speed 2 (R6, R8). A replay of a world's accepted
-    /// commands starts from it too.
+    /// hostile and a neutral creature (A4), both wandering at speed 2 (R6,
+    /// R8). A replay of a world's accepted commands starts from it too.
     pub fn skeleton(seed: u64) -> Self {
         let mut world = Self::new(seed, Speed::new(1));
         world.create_entity(
             Speed::new(2),
-            CREATURE_START,
+            HOSTILE_START,
+            Controller::Wander(Disposition::Hostile),
+        );
+        world.create_entity(
+            Speed::new(2),
+            NEUTRAL_START,
             Controller::Wander(Disposition::Neutral),
         );
         world
