@@ -218,8 +218,69 @@ down the signatures with a failing acceptance test.
 
 ## Glossary proposals
 
-Proposed for the milestone: attack, hit, miss, hit points, disposition,
-hostile, neutral, condition, death, outcome.
+Proposed for the milestone and written to `CONTEXT.md` in the same change.
+Each definition restates the source named beside it. A second, independent
+read reworked the first draft; the human approves, edits or rejects each row.
+
+New entries:
+
+| Term | Proposed definition | Source |
+|---|---|---|
+| Combat | The system of attacks between entities. | Pillar 3; action and time, "the combat design" |
+| Attack | An action that strikes an adjacent entity: it hits or it misses. A character's move into a tile held by a creature it perceives as hostile is an attack on that creature. | A1, A3, A6 |
+| Hit | An attack that lowers its target's health. | A6 |
+| Miss | An attack that does not hit. The attacker still pays the action cost. | A6 |
+| Damage | How much a hit lowers its target's health. Today, a fixed number of hit points. | A6, Out of scope |
+| Health | The bodily state of an entity. A character knows its own in numbers and perceives another entity's only as a condition. | Pillar 4, A9, A10 |
+| Hit points | Today's measure of health: a current and a maximum number. A hit lowers the current number; at zero the entity dies. | A6 to A8, Out of scope |
+| Condition | An entity's health as a kind, never a number: unhurt, wounded, badly wounded or dying. All a character perceives of another entity's health. | A10 |
+| Disposition | Whether a creature is hostile or neutral. A character perceives which. | A4 |
+| Death | The end of an entity's embodiment for good: the entity leaves the world. Today, at zero hit points. | A8, ADR 0001 point 3 |
+| Outcome | What an action did: today stepped, waited, bumped, hit or missed. A character perceives the outcome, never the action submitted. | A11, accepted amendment of S1 |
+
+Amended entries:
+
+| Term | Proposed definition | Source |
+|---|---|---|
+| Bump | A move into a tile another entity holds that is not an attack: the mover stays, pays the move, and both perceive it. | A1, A2, R13 |
+| Wander | A simulation controller that picks evenly among the actions the rules allow, except attacks. | A13, S1 invariant |
+| Snapshot | The whole state one character perceives, sent when its controller connects. | S4 Behavior, A9, A10 |
+| Quarantine | The state of a world whose simulation violated an invariant. Only that world stops. | The entry itself; "hit" is now a term |
+
+Choices behind the rows:
+
+- Each rule has one home. A1 lives in "Attack", and "Bump" excludes it.
+  "Hostile" and "neutral" have no row: the values of a kind live in the
+  entry of the kind, as floor and wall live in "Terrain".
+- "Health" is the term, and hit points are today's measure of it. The types
+  `Health` and `PerceivedHealth`, the field `health` and the wire key keep
+  their names: `PerceivedHealth` holds hit points or a condition, and both
+  are health. No rename follows.
+- "Combat" is the term of the system, so the module `combat` keeps its
+  name. `Health` and `Condition` move to a module `health` when the first
+  rule outside combat reads or writes health.
+- "Strike" stays plain English, the verb of "attack": the design uses it
+  (A3, A13), and a strike can miss. Two doc comments used "struck" for
+  "hit"; this change corrects them.
+- `Effect::Damage` carries the health a hit leaves, not the damage. Rename
+  it when the first effect that raises health exists.
+- The rows write "a character": a glossary states what holds for any
+  character, and shared worlds must stay possible.
+
+Left for the human:
+
+- "Health" rests on one line of pillar 4, where health is one item of a
+  list. The attack design never uses the word.
+- "Combat" as a term makes `docs/design/attack.md` the first version of
+  "the combat design" that the action and time design names.
+- A second batch for the phase 1 names with no entry: entity, action,
+  refusal, scheduler, offer. Their sources are the action and time rules.
+- An "Avoid" column in `CONTEXT.md`, one cell per term for its forbidden
+  synonyms (for example "hostility" for disposition). It changes the format
+  of the glossary.
+- The next spec can carry this table from the day it is approved, with the
+  code name of each term, so the milestone approves only the differences.
+  That changes `docs/templates/spec.md`.
 
 ## Proposed amendments
 
