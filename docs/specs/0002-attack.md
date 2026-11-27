@@ -277,15 +277,19 @@ Choices behind the rows:
 - The rows write "a character": a glossary states what holds for any
   character, and shared worlds must stay possible.
 
+The glossary gains an "Avoid" column: the words never to use for a term.
+A cell needs evidence: the word names the same concept in the repository,
+or it is the obvious synonym the term replaces. Three cells are filled:
+"monster" for creature, "available action" for offer, "HP" for hit points.
+A word the attack design uses stays out of the column, so "hostility",
+"blow" and "odds" are not avoided.
+
 Left for the human:
 
 - "Health" rests on one line of pillar 4, where health is one item of a
   list. The attack design never uses the word.
 - "Combat" as a term makes `docs/design/attack.md` the first version of
   "the combat design" that the action and time design names.
-- An "Avoid" column in `CONTEXT.md`, one cell per term for its forbidden
-  synonyms (for example "hostility" for disposition). It changes the format
-  of the glossary.
 - The next spec can carry this table from the day it is approved, with the
   code name of each term, so the milestone approves only the differences.
   That changes `docs/templates/spec.md`.
