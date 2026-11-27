@@ -44,7 +44,7 @@ fn walk(world: &mut World, directions: &[Direction]) {
     }
 }
 
-fn offers(world: &World, action: Action) -> bool {
+fn is_offered(world: &World, action: Action) -> bool {
     world.offers().iter().any(|offer| offer.action == action)
 }
 
@@ -52,7 +52,7 @@ fn offers(world: &World, action: Action) -> bool {
 /// included, compares equal before and after. R14: it is never offered.
 fn assert_refused(world: &mut World, direction: Direction) {
     assert!(
-        !offers(world, Action::Move(direction)),
+        !is_offered(world, Action::Move(direction)),
         "{direction:?} offered"
     );
     let before = world.clone();

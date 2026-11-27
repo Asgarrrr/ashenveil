@@ -3,8 +3,8 @@
 
 import type {
   Action,
-  Offer,
   Direction,
+  Offer,
   PerceivedChange,
   PerceivedEntity,
   ServerMessage,

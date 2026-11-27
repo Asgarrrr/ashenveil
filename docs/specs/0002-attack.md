@@ -256,7 +256,7 @@ Second batch, the phase 1 names with no entry:
 | Action | What an entity does when it is due. It takes effect at once, and its cost is the time the entity spends before it acts again. Today, move, wait or attack. | R4, R7, A3 | `Action` |
 | Scheduler | What orders entities by the time they are due. Of two due at the same time, the one that became due first acts first. | R8, ADR 0001 point 6 | `Scheduler` |
 | Refusal | The rules turning down a move or an attack, judged on what the entity perceives. A refused move or attack is not an action: it costs nothing, changes nothing and advances no clock. | R10, R11, A3, ADR 0001 point 4 | `Refused`, `ServerMessage::Refused` |
-| Offer | An action the rules allow the awaited entity, with the cost it would pay. A controller chooses only among its offers; a wait is always one. | R9, R14, ADR 0001 point 4 | `AvailableAction`, `available_actions`, `Awaited { actions }`; `offers` in `action.rs` |
+| Offer | An action the rules allow the awaited entity, with the cost it would pay. A controller chooses only among its offers; a wait is always one. | R9, R14, ADR 0001 point 4 | `Offer`, `World::offers`, `Awaited { offers }`; the JSON key stays `actions` |
 
 Choices behind the rows:
 
