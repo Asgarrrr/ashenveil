@@ -1,7 +1,10 @@
 # Attack
 
 Status: approved by the human on 2026-11-22. Brainstorm:
-`docs/plans/0004-attack-brainstorm.md`.
+`docs/plans/0004-attack-brainstorm.md`. Amended on 2026-11-27: creatures
+strike back, and an attacked neutral creature becomes hostile (rules 4, 8,
+9, 11, 13 and 14). Brainstorm:
+`docs/plans/0005-riposte-and-death-brainstorm.md`.
 
 ## Pillars served
 
@@ -35,25 +38,37 @@ player must choose the attack action on purpose.
    rule 13).
 3. The attack action strikes an adjacent entity on purpose, hostile or
    not. It is always available when an entity is adjacent.
-4. In this first version, each creature is either hostile or neutral, and
-   the character perceives which.
+4. Each creature is either hostile or neutral, and the character perceives
+   which. A neutral creature that a character attacks becomes hostile,
+   whether the attack hits or misses. It stays hostile.
 5. An attack has a base cost of 100, divided by the attacker's speed
    (action and time, rule 6). It takes effect at once (rule 7).
 6. An attack hits 70% of the time. A hit removes 3 hit points from the
    target. A miss changes nothing else; the attacker still pays the cost.
 7. The character has 10 hit points; a creature has 6. These numbers are
    provisional, tuned by playing.
-8. At zero hit points, the entity dies and leaves the world. Its identity
-   is never given to another entity.
-9. The character sees its own hit points as a number.
+8. At zero hit points, the entity dies (death design).
+9. The character sees its own hit points as a number. When a hit lowers
+   them and the character lives, it perceives the new number right after
+   the hit. It never perceives its own condition.
 10. The character perceives another entity's condition, never its hit
     points: unhurt at full, wounded below full, badly wounded below half,
     dying below a quarter.
-11. A hit, a miss, a change of condition and a death are perceived changes
-    (action and time, rule 17), stamped with their time.
+11. A hit, a miss, a character's new hit points, a change of condition, a
+    change of disposition and a death are perceived changes (action and
+    time, rule 17), stamped with their time. The changes of one attack
+    come in this order. First the hit or the miss. Then what the hit does
+    to its target: the death, or else the new hit points that a struck
+    character perceives (rule 9) and the change of condition that the
+    others perceive. Then the change of disposition. A creature that dies
+    of the attack does not change disposition.
 12. The player never sees the odds of a hit as a number.
-13. In this first version, only the character attacks. Creatures keep
-    wandering and never strike back.
+13. A hostile creature attacks a character on an adjacent tile. With
+    several adjacent characters, it picks evenly among them. With none, it
+    wanders. A neutral creature wanders. A creature never attacks a
+    creature, and a creature's move into any entity stays a bump.
+14. A creature's attack follows rules 5 and 6: the same cost rule, the
+    same odds and the same damage as a character's.
 
 ## Interactions
 
@@ -69,8 +84,7 @@ player must choose the attack action on purpose.
 
 ## Out of scope
 
-- Creatures attacking the character, and the character's death.
-- Corpses and traces of a death.
+- Pursuit: a creature that walks toward a character.
 - Body parts and localized wounds: hit points are a placeholder, to be
   replaced by body parts later.
 - Skills, weapons and armor that change the odds or the damage.
@@ -80,4 +94,10 @@ player must choose the attack action on purpose.
 
 ## Open questions
 
-None blocking the first slice.
+- **Why a creature is hostile.** A character cannot tell a creature made
+  hostile from one created hostile. Decide in the traces design.
+- **Adjacent across a wall corner.** A hostile creature can strike across
+  a corner that no move can cut (action and time, rule 11). Issue #37
+  holds the question.
+
+None blocks a slice.
