@@ -6,8 +6,9 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Direction, Disposition, EntityId, Outcome,
-    PerceivedChange, PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ClientMessage, Condition, Direction, Disposition, EntityId, Outcome,
+    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -114,14 +115,24 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
              entity,
              position,
              disposition,
+             health,
          }| {
             let disposition = match disposition {
                 None => "null",
                 Some(Disposition::Hostile) => r#""hostile""#,
                 Some(Disposition::Neutral) => r#""neutral""#,
             };
+            let health = match *health {
+                PerceivedHealth::HitPoints { current, max } => {
+                    format!(r#"{{"kind":"hit_points","current":{current},"max":{max}}}"#)
+                }
+                PerceivedHealth::Condition(condition) => format!(
+                    r#"{{"kind":"condition","condition":"{}"}}"#,
+                    condition_name(condition)
+                ),
+            };
             format!(
-                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}},"disposition":{disposition}}}"#,
+                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}},"disposition":{disposition},"health":{health}}}"#,
                 entity.get(),
                 position.x,
                 position.y,
@@ -175,6 +186,25 @@ fn change_json(change: PerceivedChange) -> String {
             time.units(),
             entity.get()
         ),
+        PerceivedChange::Condition {
+            time,
+            entity,
+            condition,
+        } => format!(
+            r#"{{"kind":"condition","time":{},"entity":{},"condition":"{}"}}"#,
+            time.units(),
+            entity.get(),
+            condition_name(condition)
+        ),
+    }
+}
+
+fn condition_name(condition: Condition) -> &'static str {
+    match condition {
+        Condition::Unhurt => "unhurt",
+        Condition::Wounded => "wounded",
+        Condition::BadlyWounded => "badly_wounded",
+        Condition::Dying => "dying",
     }
 }
 
@@ -276,6 +306,48 @@ mod tests {
             .collect();
         expected.sort();
         assert_eq!(steps, expected);
+    }
+
+    /// A10: the web shows the condition a snapshot names for each entity.
+    #[test]
+    fn the_snapshot_json_names_each_condition() {
+        let names = [
+            ("unhurt", Condition::Unhurt),
+            ("wounded", Condition::Wounded),
+            ("badly_wounded", Condition::BadlyWounded),
+            ("dying", Condition::Dying),
+        ];
+        // This crate cannot name a `Time`, so the snapshot starts from its
+        // bytes: tag 0 and the time, a width of 1, one tile, a floor, and
+        // no entity.
+        let empty = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let Ok(ServerMessage::Snapshot(empty)) = ServerMessage::decode(&empty) else {
+            panic!("the empty snapshot does not decode");
+        };
+        let snapshot = Snapshot {
+            entities: names
+                .iter()
+                .map(|&(_, condition)| PerceivedEntity {
+                    entity: EntityId::new(7),
+                    position: TilePosition { x: 0, y: 0, z: 0 },
+                    disposition: None,
+                    health: PerceivedHealth::Condition(condition),
+                })
+                .collect(),
+            ..empty
+        };
+
+        let json = decode_server_message(&ServerMessage::Snapshot(snapshot).encode())
+            .expect("the snapshot decodes");
+
+        let named: Vec<&str> = json
+            .split(r#""condition":""#)
+            .skip(1)
+            .filter_map(|rest| rest.split('"').next())
+            .collect();
+        assert_eq!(named, names.map(|(name, _)| name));
     }
 
     #[test]

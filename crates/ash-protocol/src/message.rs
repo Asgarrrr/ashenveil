@@ -2,7 +2,8 @@
 //!
 //! Nothing here can carry another entity's speed, cost or next turn (R18):
 //! only the awaited entity's own costs, sent to its controller (R9). A
-//! disposition is a kind, never a number.
+//! disposition and a condition are kinds, never numbers. Hit points go to
+//! their own character alone, in its snapshot (A9).
 
 use alloc::vec::Vec;
 
@@ -43,14 +44,39 @@ pub enum Disposition {
     Neutral,
 }
 
-/// An entity the character perceives: where it stands and, for a creature,
-/// its disposition.
+/// What the character perceives of another entity's hit points (A10): a
+/// kind, never a number (R18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condition {
+    /// All of its hit points.
+    Unhurt,
+    /// Fewer than all of them.
+    Wounded,
+    /// Fewer than half of them.
+    BadlyWounded,
+    /// Fewer than a quarter of them.
+    Dying,
+}
+
+/// What the character perceives of the hit points of an entity: its own as
+/// numbers (A9), those of any other entity as a condition (A10, R18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PerceivedHealth {
+    /// The hit points of the character itself.
+    HitPoints { current: u32, max: u32 },
+    /// The condition of another entity.
+    Condition(Condition),
+}
+
+/// An entity the character perceives: where it stands, its hit points or its
+/// condition and, for a creature, its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedEntity {
     pub entity: EntityId,
     pub position: TilePosition,
     /// `None` for a character: it has no disposition.
     pub disposition: Option<Disposition>,
+    pub health: PerceivedHealth,
 }
 
 /// One change, stamped with the time it happened (R17, A11).
@@ -65,6 +91,13 @@ pub enum PerceivedChange {
     /// `entity` died and left the world (A8). Its lethal hit is the change
     /// before, at the same time.
     Death { time: Time, entity: EntityId },
+    /// A hit left `entity` in another `condition` (A10). That hit is the
+    /// change before, at the same time.
+    Condition {
+        time: Time,
+        entity: EntityId,
+        condition: Condition,
+    },
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -82,7 +115,7 @@ pub enum Outcome {
     Missed(EntityId),
 }
 
-/// Everything the character perceives at `time` (R16).
+/// Everything one character perceives at `time` (R16).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
     pub time: Time,
@@ -242,11 +275,61 @@ impl Wire for Option<Disposition> {
     }
 }
 
+impl Wire for Condition {
+    fn write(&self, out: &mut Vec<u8>) {
+        let tag: u8 = match self {
+            Self::Unhurt => 0,
+            Self::Wounded => 1,
+            Self::BadlyWounded => 2,
+            Self::Dying => 3,
+        };
+        tag.write(out);
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(Self::Unhurt),
+            1 => Ok(Self::Wounded),
+            2 => Ok(Self::BadlyWounded),
+            3 => Ok(Self::Dying),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
+impl Wire for PerceivedHealth {
+    fn write(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::HitPoints { current, max } => {
+                0_u8.write(out);
+                current.write(out);
+                max.write(out);
+            }
+            Self::Condition(condition) => {
+                1_u8.write(out);
+                condition.write(out);
+            }
+        }
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(Self::HitPoints {
+                current: u32::read(input)?,
+                max: u32::read(input)?,
+            }),
+            1 => Condition::read(input).map(Self::Condition),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
 impl Wire for PerceivedEntity {
     fn write(&self, out: &mut Vec<u8>) {
         self.entity.write(out);
         self.position.write(out);
         self.disposition.write(out);
+        self.health.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -254,6 +337,7 @@ impl Wire for PerceivedEntity {
             entity: EntityId::read(input)?,
             position: TilePosition::read(input)?,
             disposition: Option::read(input)?,
+            health: PerceivedHealth::read(input)?,
         })
     }
 }
@@ -311,6 +395,16 @@ impl Wire for PerceivedChange {
                 time.write(out);
                 entity.write(out);
             }
+            Self::Condition {
+                time,
+                entity,
+                condition,
+            } => {
+                2_u8.write(out);
+                time.write(out);
+                entity.write(out);
+                condition.write(out);
+            }
         }
     }
 
@@ -336,6 +430,11 @@ impl Wire for PerceivedChange {
             1 => Ok(Self::Death {
                 time: Time::read(input)?,
                 entity: EntityId::read(input)?,
+            }),
+            2 => Ok(Self::Condition {
+                time: Time::read(input)?,
+                entity: EntityId::read(input)?,
+                condition: Condition::read(input)?,
             }),
             _ => Err(DecodeError),
         }

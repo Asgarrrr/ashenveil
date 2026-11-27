@@ -18,6 +18,7 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_sim::action::Action;
+use ash_sim::combat::Condition;
 use ash_sim::controller::{Controller, Disposition};
 use ash_sim::perception::{self, Outcome, PerceivedChange};
 use ash_sim::world::World;
@@ -31,26 +32,29 @@ fn at(x: u32, y: u32) -> TilePosition {
     TilePosition { x, y, z: 0 }
 }
 
-/// The entities the characters perceive, in the order of the snapshot.
+/// The entities the awaited character perceives, in the order of the
+/// snapshot.
 fn embodied(world: &World) -> Vec<EntityId> {
-    perception::snapshot(world)
+    perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .map(|perceived| perceived.entity)
         .collect()
 }
 
-/// Where the characters perceive `entity`; `None` once it left the world.
+/// Where the awaited character perceives `entity`; `None` once it left the
+/// world.
 fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
-    perception::snapshot(world)
+    perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .find(|perceived| perceived.entity == entity)
         .map(|perceived| perceived.position)
 }
 
-/// True when `change` names `entity`, as the one that acts, is acted on, or
-/// dies. The patterns name every field, so a new one fails to compile here.
+/// True when `change` names `entity`, as the one that acts, is acted on,
+/// dies, or changes condition. The patterns name every field, so a new one
+/// fails to compile here.
 fn names(change: PerceivedChange, entity: EntityId) -> bool {
     match change {
         PerceivedChange::Act {
@@ -70,6 +74,11 @@ fn names(change: PerceivedChange, entity: EntityId) -> bool {
             time: _,
             entity: dead,
         } => dead == entity,
+        PerceivedChange::Condition {
+            time: _,
+            entity: struck,
+            condition: _,
+        } => struck == entity,
     }
 }
 
@@ -80,9 +89,19 @@ fn deaths(world: &World) -> Vec<EntityId> {
         .iter()
         .filter_map(|&change| match change {
             PerceivedChange::Death { entity, .. } => Some(entity),
-            PerceivedChange::Act { .. } => None,
+            PerceivedChange::Act { .. } | PerceivedChange::Condition { .. } => None,
         })
         .collect()
+}
+
+/// A10: the change the first hit on `entity` makes at time zero: it comes
+/// from unhurt to wounded.
+fn wounded(entity: EntityId) -> PerceivedChange {
+    PerceivedChange::Condition {
+        time: Time::ZERO,
+        entity,
+        condition: Condition::Wounded,
+    }
 }
 
 /// The character, created first, then a hostile creature at (7, 4) and a
@@ -237,7 +256,7 @@ fn a_creature_dies_at_its_second_hit_and_its_death_is_perceived_right_after() {
                             outcome: did,
                             ..
                         } => (entity, did) == (character, outcome),
-                        PerceivedChange::Death { .. } => false,
+                        PerceivedChange::Death { .. } | PerceivedChange::Condition { .. } => false,
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>()
@@ -352,7 +371,9 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
                     entity,
                     outcome,
                 } if entity == neutral => Some((time, outcome)),
-                PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+                PerceivedChange::Act { .. }
+                | PerceivedChange::Death { .. }
+                | PerceivedChange::Condition { .. } => None,
             })
             .collect();
         assert!(turns.len() > 30, "seed {seed}: {} turns", turns.len());
@@ -375,7 +396,8 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         let (mut world, cast) = ambush(seed, Action::Attack(Direction::West), true);
         let third = cast.third.expect("the ambush has a third character");
 
-        // A8, A11: both strikes hit at time zero, and the second is lethal.
+        // A8, A10, A11: both strikes hit at time zero. The first wounds the
+        // creature, the second is lethal.
         let hit_by = |entity| PerceivedChange::Act {
             time: Time::ZERO,
             entity,
@@ -383,6 +405,7 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         };
         let killed = [
             hit_by(cast.first),
+            wounded(cast.creature),
             hit_by(cast.second),
             PerceivedChange::Death {
                 time: Time::ZERO,
@@ -401,22 +424,24 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         );
 
         // Nothing drew either: the strike of the third character, on the
-        // second, takes the third draw of the seed.
+        // second, takes the third draw of the seed. A hit wounds the second
+        // character (A10).
         assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
         let mut draws = strikes(seed).skip(2);
         let (third_draw, fourth_draw) = (draws.next(), draws.next());
-        let outcome = if third_draw == Some(true) {
-            Outcome::Hit(cast.second)
+        let struck = |outcome| PerceivedChange::Act {
+            time: Time::ZERO,
+            entity: third,
+            outcome,
+        };
+        let strike = if third_draw == Some(true) {
+            vec![struck(Outcome::Hit(cast.second)), wounded(cast.second)]
         } else {
-            Outcome::Missed(cast.second)
+            vec![struck(Outcome::Missed(cast.second))]
         };
         assert_eq!(
             world.perceived_changes()[killed.len()..],
-            [PerceivedChange::Act {
-                time: Time::ZERO,
-                entity: third,
-                outcome,
-            }],
+            strike,
             "seed {seed}"
         );
         third_and_fourth_draws.push((third_draw, fourth_draw));
@@ -454,7 +479,9 @@ fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing(
         assert_eq!(deaths(&world), [dead], "seed {seed}");
 
         // The world passed the entry of the dead creature, then the living
-        // creature took its turn: the wander drew once, the third draw.
+        // creature took its turn: the wander drew once, the third draw. Four
+        // changes come before its act: the two hits, the change of condition
+        // after the first (A10) and the death.
         assert_eq!(
             (world.awaited(), world.clock()),
             (third, Time::ZERO),
@@ -463,7 +490,7 @@ fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing(
         let changes = world.perceived_changes();
         assert!(
             matches!(
-                changes[3..],
+                changes[4..],
                 [PerceivedChange::Act { entity, .. }] if entity == living
             ),
             "seed {seed}: {changes:?}"
@@ -480,7 +507,7 @@ fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing(
             Outcome::Missed(second)
         };
         assert_eq!(
-            world.perceived_changes()[4],
+            world.perceived_changes()[5],
             PerceivedChange::Act {
                 time: Time::ZERO,
                 entity: third,
@@ -590,8 +617,15 @@ fn an_entity_created_after_a_death_gets_an_id_never_issued_before() {
                 "third {with_third}: {creature:?} never acts"
             );
         }
+        // The dead creature is named by the two hits, the change of
+        // condition after the first (A10) and the death, then never again.
         assert!(
-            world.perceived_changes()[3..]
+            world.perceived_changes()[..4]
+                .iter()
+                .all(|&change| names(change, cast.creature))
+        );
+        assert!(
+            world.perceived_changes()[4..]
                 .iter()
                 .all(|&change| !names(change, cast.creature))
         );
@@ -604,13 +638,7 @@ fn a_character_survives_three_hits() {
     for seed in 0..8 {
         let (world, target) = strike_a_character(seed, 3);
         assert_eq!(standing(&world, target), Some(at(2, 1)), "seed {seed}");
-        assert!(
-            world
-                .perceived_changes()
-                .iter()
-                .all(|change| matches!(change, PerceivedChange::Act { .. })),
-            "seed {seed}"
-        );
+        assert_eq!(deaths(&world), [], "seed {seed}");
     }
 }
 

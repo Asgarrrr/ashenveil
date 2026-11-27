@@ -28,8 +28,8 @@ pub(crate) enum Effect {
         entity: EntityId,
         position: TilePosition,
     },
-    /// `entity` loses `amount` hit points (A6).
-    Damage { entity: EntityId, amount: u32 },
+    /// A hit leaves `entity` these hit points (A6).
+    Damage { entity: EntityId, health: Health },
     /// `entity` leaves the world: it is no longer embodied (A8). Its id
     /// stays issued, and the scheduler keeps its entry (F2, F3).
     Remove { entity: EntityId },

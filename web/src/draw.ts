@@ -2,7 +2,7 @@
 // never changes it; the real renderer will replace this file.
 
 import type { PerceivedWorld } from "./model.js";
-import type { Action, Outcome, PerceivedChange } from "./protocol.js";
+import type { Action, Condition, Outcome, PerceivedChange, PerceivedEntity } from "./protocol.js";
 
 const TILE = 32;
 
@@ -11,6 +11,7 @@ export interface View {
   map: HTMLCanvasElement;
   status: HTMLElement;
   clock: HTMLElement;
+  entities: HTMLElement;
   actions: HTMLElement;
   log: HTMLElement;
 }
@@ -19,6 +20,9 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
   drawMap(view.map, world);
   view.status.textContent = status(world, connected);
   view.clock.textContent = String(world.time);
+  view.entities.replaceChildren(
+    ...[...world.entities.values()].map((perceived) => item(entityLine(world, perceived))),
+  );
   view.actions.replaceChildren(
     ...world.offer.map(({ action, cost }) => item(`${describe(action)}: ${cost}`)),
   );
@@ -41,6 +45,19 @@ function color(world: PerceivedWorld, entity: number): string {
   return world.entities.get(entity)?.disposition === "hostile" ? "#f55" : "#6cf";
 }
 
+/**
+ * The line the entity list shows for `perceived`: its name, then its hit
+ * points as numbers (A9) or its condition (A10).
+ */
+export function entityLine(world: PerceivedWorld, perceived: PerceivedEntity): string {
+  const { entity, health } = perceived;
+  const shown =
+    health.kind === "hit_points"
+      ? `${health.current}/${health.max} hit points`
+      : words(health.condition);
+  return `${name(world, entity)}: ${shown}`;
+}
+
 /** The line the log shows for `change`: when, who, and what it did. */
 export function logLine(world: PerceivedWorld, change: PerceivedChange): string {
   const who = `${change.time}  ${name(world, change.entity)}`;
@@ -49,6 +66,8 @@ export function logLine(world: PerceivedWorld, change: PerceivedChange): string 
       return `${who} ${happened(world, change.outcome)}`;
     case "death":
       return `${who} dies`;
+    case "condition":
+      return `${who} looks ${words(change.condition)}`;
   }
 }
 
@@ -91,6 +110,11 @@ function status(world: PerceivedWorld, connected: boolean): string {
 
 function name(world: PerceivedWorld, entity: number): string {
   return entity === world.controlled ? "@" : `entity ${entity}`;
+}
+
+/** The codec names a condition in snake case. */
+function words(condition: Condition): string {
+  return condition.replace("_", " ");
 }
 
 function happened(world: PerceivedWorld, outcome: Outcome): string {

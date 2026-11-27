@@ -25,6 +25,8 @@ mod action;
 mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
+#[path = "websocket/health.rs"]
+mod health;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -93,13 +95,14 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 
 /// The entities of the snapshot of `world`, as the server must send them.
 fn snapshot_entities(world: &World) -> Vec<PerceivedEntity> {
-    ash_sim::perception::snapshot(world)
+    ash_sim::perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .map(|perceived| PerceivedEntity {
             entity: perceived.entity,
             position: perceived.position,
             disposition: perceived.disposition.map(disposition::to_wire),
+            health: health::to_wire(perceived.health),
         })
         .collect()
 }
@@ -208,7 +211,7 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
             Some(&PerceivedChange::Act {
                 entity, outcome, ..
             }) => Some((entity, outcome)),
-            Some(PerceivedChange::Death { .. }) | None => None,
+            Some(PerceivedChange::Death { .. } | PerceivedChange::Condition { .. }) | None => None,
         };
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,

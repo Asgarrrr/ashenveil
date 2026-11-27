@@ -18,6 +18,7 @@ const view: View = {
   map: element("map") as HTMLCanvasElement,
   status: element("status"),
   clock: element("clock"),
+  entities: element("entities"),
   actions: element("actions"),
   log: element("log"),
 };

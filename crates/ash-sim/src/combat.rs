@@ -1,4 +1,5 @@
-//! Attacks between entities, their hit points and their death (A1 to A8).
+//! Attacks between entities, their hit points, their condition and their
+//! death (A1 to A10).
 
 use alloc::vec::Vec;
 
@@ -43,6 +44,34 @@ impl Health {
             ..self
         }
     }
+
+    /// A10: the condition these hit points show. A product that saturates
+    /// is above every `max`, like the product it stands for.
+    pub(crate) fn condition(self) -> Condition {
+        if self.current == self.max {
+            Condition::Unhurt
+        } else if self.current.saturating_mul(4) < self.max {
+            Condition::Dying
+        } else if self.current.saturating_mul(2) < self.max {
+            Condition::BadlyWounded
+        } else {
+            Condition::Wounded
+        }
+    }
+}
+
+/// What a character perceives of another entity's hit points (A10): a kind,
+/// never a number (R18). It derives from `Health` and is never stored (F6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condition {
+    /// All of its hit points.
+    Unhurt,
+    /// Fewer than all of them.
+    Wounded,
+    /// Fewer than half of them.
+    BadlyWounded,
+    /// Fewer than a quarter of them.
+    Dying,
 }
 
 /// A1: whether the move of `mover` toward `direction` is an attack on the
@@ -85,24 +114,34 @@ pub(crate) fn attack(
     (outcome, after)
 }
 
-/// A6, A8: what a hit on `target` changes, in order. The target loses 3 hit
-/// points. At zero it dies: it leaves the world, and every character
+/// A6, A8, A10: what a hit on `target` changes, in order. The target loses
+/// 3 hit points. At zero it dies: it leaves the world, and every character
 /// perceives its death at the time of the hit (A11). The death of a
 /// character is out of scope: its zero hit points crash through
-/// `invariant!`.
+/// `invariant!`. A target that lives on in another condition is perceived
+/// in it, at the time of the hit too.
 pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
+    let before = world.health(target);
+    let health = before.damaged(DAMAGE);
+    let time = world.clock();
     let mut effects = alloc::vec![Effect::Damage {
         entity: target,
-        amount: DAMAGE,
+        health,
     }];
-    if world.health(target).damaged(DAMAGE).current == 0 {
+    if health.current == 0 {
         if world.controller(target) == Controller::Player {
             ash_core::invariant!("the character {target:?} reaches zero hit points");
         }
         effects.push(Effect::Remove { entity: target });
         effects.push(Effect::Perceive(PerceivedChange::Death {
-            time: world.clock(),
+            time,
             entity: target,
+        }));
+    } else if health.condition() != before.condition() {
+        effects.push(Effect::Perceive(PerceivedChange::Condition {
+            time,
+            entity: target,
+            condition: health.condition(),
         }));
     }
     effects
@@ -114,7 +153,7 @@ mod tests {
     use ash_core::tile::TilePosition;
 
     use super::*;
-    use crate::action::Action;
+    use crate::action::{self, Action};
 
     /// A7. The numbers are the design's: a changed one must fail here.
     #[test]
@@ -160,6 +199,106 @@ mod tests {
                 "seed {seed}, {controller:?}"
             );
         }
+    }
+
+    /// A10: unhurt at full, wounded below full, badly wounded below half,
+    /// dying below a quarter. Each row is the last hit point of a condition
+    /// or the first of the next.
+    #[test]
+    fn a_condition_is_unhurt_wounded_badly_wounded_or_dying_by_its_threshold() {
+        use Condition::{BadlyWounded, Dying, Unhurt, Wounded};
+        let conditions = [
+            // A character: half of 10 is 5, a quarter is 2.5.
+            (10, 10, Unhurt),
+            (9, 10, Wounded),
+            (5, 10, Wounded),
+            (4, 10, BadlyWounded),
+            (3, 10, BadlyWounded),
+            (2, 10, Dying),
+            (1, 10, Dying),
+            // A creature: half of 6 is 3, a quarter is 1.5.
+            (6, 6, Unhurt),
+            (5, 6, Wounded),
+            (3, 6, Wounded),
+            (2, 6, BadlyWounded),
+            (1, 6, Dying),
+            // Exactly half and exactly a quarter are not below them.
+            (4, 8, Wounded),
+            (3, 8, BadlyWounded),
+            (2, 8, BadlyWounded),
+            (1, 8, Dying),
+            // The one hit point of an entity that has no more is all of them.
+            (1, 1, Unhurt),
+            (1, 2, Wounded),
+            // The widest hit points: no product wraps into a lower condition.
+            (u32::MAX, u32::MAX, Unhurt),
+            (u32::MAX - 1, u32::MAX, Wounded),
+            (u32::MAX / 2 + 1, u32::MAX, Wounded),
+            (u32::MAX / 2, u32::MAX, BadlyWounded),
+            (u32::MAX / 4 + 1, u32::MAX, BadlyWounded),
+            (u32::MAX / 4, u32::MAX, Dying),
+        ];
+        for (current, max, condition) in conditions {
+            assert_eq!(
+                Health { current, max }.condition(),
+                condition,
+                "{current} of {max}"
+            );
+        }
+    }
+
+    /// F4: the rule decides what a hit changes. `resolve` returns the change
+    /// of condition, after the hit (A11); `apply` only writes it.
+    #[test]
+    fn the_resolution_of_a_hit_across_a_threshold_returns_the_condition_change() {
+        // The first draw of seed 182 hits (A6).
+        let rng = Rng::new(182);
+        let mut world = World::new(0, Speed::new(1));
+        let attacker = world.awaited();
+        let target = world.create_entity(
+            Speed::new(1),
+            TilePosition { x: 2, y: 1, z: 0 },
+            Controller::Wander(Disposition::Neutral),
+        );
+        let perception = Perception::whole_map(&world);
+
+        let Ok(effects) = action::resolve(
+            &world,
+            &perception,
+            attacker,
+            Action::Attack(Direction::East),
+            &rng,
+        ) else {
+            panic!("the rules refuse the attack");
+        };
+
+        let perceived: Vec<PerceivedChange> = effects
+            .in_order
+            .into_iter()
+            .filter_map(|effect| {
+                if let Effect::Perceive(change) = effect {
+                    Some(change)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // A6, A10: 3 of 6 hit points is below full and not below half.
+        assert_eq!(
+            perceived,
+            [
+                PerceivedChange::Act {
+                    time: world.clock(),
+                    entity: attacker,
+                    outcome: Outcome::Hit(target),
+                },
+                PerceivedChange::Condition {
+                    time: world.clock(),
+                    entity: target,
+                    condition: Condition::Wounded,
+                },
+            ]
+        );
     }
 
     /// A6: an attack hits when `draw % 100 < 70`. The first draw of seed 182

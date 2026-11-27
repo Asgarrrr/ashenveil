@@ -14,7 +14,7 @@ use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    ResumeToken, ServerMessage, Snapshot,
+    PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -25,6 +25,8 @@ mod action;
 mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
+#[path = "websocket/health.rs"]
+mod health;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -110,16 +112,21 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .unwrap_or(Action::Wait)
 }
 
+/// One entity of a snapshot: who, where, its disposition, and its hit points
+/// or its condition.
+type EntityParts = (EntityId, TilePosition, Option<Disposition>, PerceivedHealth);
+
 /// R18: everything a snapshot says of an entity: a disposition is a kind,
 /// never a number. The pattern names every field, so a new one fails to
 /// compile here.
-fn entity_parts(perceived: &PerceivedEntity) -> (EntityId, TilePosition, Option<Disposition>) {
+fn entity_parts(perceived: &PerceivedEntity) -> EntityParts {
     let PerceivedEntity {
         entity,
         position,
         disposition,
+        health,
     } = *perceived;
-    (entity, position, disposition)
+    (entity, position, disposition, health)
 }
 
 /// R18: everything a change says of an entity besides its time: the entity
@@ -133,6 +140,12 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
             outcome,
         } => (entity, Some(outcome)),
         PerceivedChange::Death { time: _, entity } => (entity, None),
+        // A condition is a kind, never a number (A10).
+        PerceivedChange::Condition {
+            time: _,
+            entity,
+            condition: _,
+        } => (entity, None),
     }
 }
 
@@ -152,7 +165,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         }
         other => panic!("expected a snapshot, got {other:?}"),
     };
-    let expected: Vec<_> = ash_sim::perception::snapshot(&replay)
+    let expected: Vec<_> = ash_sim::perception::snapshot(&replay, character)
         .entities
         .iter()
         .map(|perceived| {
@@ -160,13 +173,14 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
                 perceived.entity,
                 perceived.position,
                 perceived.disposition.map(disposition::to_wire),
+                health::to_wire(perceived.health),
             )
         })
         .collect();
     assert_eq!(entities, expected);
     // A move into the neutral creature is a bump (A2).
     let creature = match entities.as_slice() {
-        [(first, ..), _, (creature, _, Some(Disposition::Neutral))] if *first == character => {
+        [(first, ..), _, (creature, _, Some(Disposition::Neutral), _)] if *first == character => {
             *creature
         }
         other => panic!("expected the character, then two creatures, the last neutral: {other:?}"),
@@ -251,7 +265,9 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
                 entity,
                 outcome,
             } if entity == creature => Some((time, outcome)),
-            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+            PerceivedChange::Act { .. }
+            | PerceivedChange::Death { .. }
+            | PerceivedChange::Condition { .. } => None,
         })
         .collect();
     assert!(creature_acts.len() > 2, "{creature_acts:?}");

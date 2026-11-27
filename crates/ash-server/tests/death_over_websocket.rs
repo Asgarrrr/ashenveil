@@ -98,7 +98,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 /// Where the characters of `world` perceive `entity`; `None` once it died
 /// and left the world (A8).
 fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
-    ash_sim::perception::snapshot(world)
+    ash_sim::perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .find(|perceived| perceived.entity == entity)
@@ -131,8 +131,9 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .map_or(Action::Wait, Action::Move)
 }
 
-/// True when `change` names `entity`: it acts, is acted on, or dies. The
-/// patterns name every field, so a new one fails to compile here.
+/// True when `change` names `entity`: it acts, is acted on, dies, or changes
+/// condition. The patterns name every field, so a new one fails to compile
+/// here.
 fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
     match *change {
         PerceivedChange::Act {
@@ -152,6 +153,11 @@ fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
             time: _,
             entity: dead,
         } => dead == entity,
+        PerceivedChange::Condition {
+            time: _,
+            entity: struck,
+            condition: _,
+        } => struck == entity,
     }
 }
 
@@ -169,6 +175,7 @@ fn names(message: &ServerMessage, entity: EntityId) -> bool {
                 entity: perceived,
                 position: _,
                 disposition: _,
+                health: _,
             } = *perceived;
             perceived == entity
         }),

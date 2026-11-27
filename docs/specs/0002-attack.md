@@ -185,7 +185,7 @@ down the signatures with a failing acceptance test.
   client and the dead id never appears again. The decoder rejects a
   malformed death change.
 
-### - [ ] S4 — The character sees the fight
+### - [x] S4 — The character sees the fight
 
 - Files: `crates/ash-sim/src/{combat,perception,effect}.rs`,
   `crates/ash-sim/tests/condition.rs` (new),
@@ -313,3 +313,35 @@ hostile, neutral, condition, death, outcome.
 - 2026-11-27, recorded (found in S3, second-model read): a creation during
   play is not in the command log, so a replay omits the new entity. No
   production code creates an entity during play. Issue #40 holds it.
+- 2026-11-27, recorded (found in S4): the S4 acceptance runs as four
+  commands: `cargo xtask accept condition`, `accept
+  condition_over_websocket`, `accept decode_any_bytes` and `accept
+  web_model`.
+- 2026-11-27, recorded (found in S4): S4 changed files outside its list.
+  `crates/ash-sim/src/world.rs` writes the health a hit leaves and holds the
+  test of a hit that crosses no threshold, because `apply` is private. The
+  new variant, the viewer of a snapshot and the health field reach the
+  existing simulation and server tests. `web/index.html` and
+  `web/src/main.ts` gain the list of entities.
+- 2026-11-27, recorded (found in S4): the snapshot is built for one
+  character, `snapshot(world, character)`. The server passes the character
+  the connection hosts, never the awaited entity.
+- 2026-11-27, recorded (found in S4): a perceived entity holds one health:
+  hit points for the viewer's own character, a condition for every other
+  entity. It never holds both. The wire form can still give hit points to
+  any entity; the server is the boundary (A10, R18). Hit points on the
+  snapshot itself would make the rule structural. That is a change of
+  shape for the human.
+- 2026-11-27, recorded (found in S4): a damage effect carries the health
+  the hit leaves, so `hit` computes it once and `apply` only writes (F4).
+  Two hits on one target in one `Effects` would lose the first. No rule
+  produces that today.
+- 2026-11-27, recorded (found in S4): with 6 or 10 hit points and a damage
+  of 3, every non-lethal hit crosses a threshold. The test of a hit that
+  crosses none uses a health built for it.
+- 2026-11-27, open (found in S4, all reviews): no message gives a struck
+  character its new hit points. Its controller receives a condition change
+  naming its own character, and the web then shows that condition instead
+  of the numbers (A9). It needs a second character in the world; a world
+  hosts one today, and only a character attacks (A13). The first spec that
+  lets a character be struck must decide the message. Issue #42 holds it.
