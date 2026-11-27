@@ -11,7 +11,7 @@ use ash_sim::world::World;
 const SEED: u64 = 7;
 
 fn waited(time: u64, entity: EntityId) -> PerceivedChange {
-    PerceivedChange {
+    PerceivedChange::Act {
         time: Time::new(time),
         entity,
         outcome: Outcome::Waited,

@@ -21,10 +21,10 @@ use tungstenite::{Message, WebSocket};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/change.rs"]
+mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
-#[path = "websocket/outcome.rs"]
-mod outcome;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -86,11 +86,8 @@ fn receive_turn(socket: &mut Socket) -> (Vec<PerceivedChange>, Option<ServerMess
 fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
     world.perceived_changes()[seen..]
         .iter()
-        .map(|change| PerceivedChange {
-            time: change.time,
-            entity: change.entity,
-            outcome: outcome::to_wire(change.outcome),
-        })
+        .copied()
+        .filter_map(change::to_wire)
         .collect()
 }
 

@@ -58,12 +58,34 @@ fn world_with_creatures(seed: u64, hostile: TilePosition, neutral: TilePosition)
     (world, cast)
 }
 
-fn changes_of(world: &World, entity: EntityId) -> Vec<PerceivedChange> {
+/// One act: when, who, and what it did.
+type Act = (Time, EntityId, Outcome);
+
+/// The act that perceived change `index` of `world` is.
+fn act_at(world: &World, index: usize) -> Act {
+    match world.perceived_changes()[index] {
+        PerceivedChange::Act {
+            time,
+            entity,
+            outcome,
+        } => (time, entity, outcome),
+        death @ PerceivedChange::Death { .. } => panic!("change {index} is {death:?}"),
+    }
+}
+
+/// What `entity` did, in order: the outcome of each of its acts.
+fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
     world
         .perceived_changes()
         .iter()
-        .copied()
-        .filter(|change| change.entity == entity)
+        .filter_map(|&change| match change {
+            PerceivedChange::Act {
+                entity: actor,
+                outcome,
+                ..
+            } if actor == entity => Some(outcome),
+            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+        })
         .collect()
 }
 
@@ -81,7 +103,7 @@ fn is_attack_on(outcome: Outcome, target: EntityId) -> bool {
 /// character waits, so the creature acts.
 fn first_outcome_of(mut world: World, creature: EntityId) -> Outcome {
     world.submit(Action::Wait).expect("a wait is never refused");
-    changes_of(&world, creature)[0].outcome
+    outcomes_of(&world, creature)[0]
 }
 
 /// The cost the awaited character is offered `action` for (R9).
@@ -139,22 +161,22 @@ fn act(world: &mut World, cast: &Cast, action: Action) -> Outcome {
 
     assert_eq!(world.submit(action), Ok(()), "{action:?}");
 
-    let change = world.perceived_changes()[seen];
-    assert_eq!((change.time, change.entity), (clock, cast.character));
+    let (time, actor, outcome) = act_at(world, seen);
+    assert_eq!((time, actor), (clock, cast.character));
     let expected = match (action, ahead) {
         (Action::Move(_), Some(creature)) if creature == cast.neutral => {
-            change.outcome == Outcome::Bumped(creature)
+            outcome == Outcome::Bumped(creature)
         }
-        (_, Some(creature)) => is_attack_on(change.outcome, creature),
-        (_, None) => change.outcome == Outcome::Stepped(direction),
+        (_, Some(creature)) => is_attack_on(outcome, creature),
+        (_, None) => outcome == Outcome::Stepped(direction),
     };
-    assert!(expected, "{action:?} toward {ahead:?} gave {change:?}");
+    assert!(expected, "{action:?} toward {ahead:?} gave {outcome:?}");
     assert_eq!(
         (world.awaited(), world.clock().units() - clock.units()),
         (cast.character, 100),
         "after {action:?}"
     );
-    change.outcome
+    outcome
 }
 
 /// The character moves into the hostile creature until it has hit and
@@ -258,11 +280,11 @@ fn a_move_into_the_hostile_creature_is_the_attack_on_it() {
 
         // A1: a hit or a miss of the creature, perceived at once (R7). The
         // mover stays in place and pays the attack.
-        let change = moved.perceived_changes()[0];
-        assert_eq!((change.time, change.entity), (Time::ZERO, cast.character));
+        let (time, actor, outcome) = act_at(&moved, 0);
+        assert_eq!((time, actor), (Time::ZERO, cast.character));
         assert!(
-            is_attack_on(change.outcome, cast.hostile),
-            "seed {seed}: {change:?}"
+            is_attack_on(outcome, cast.hostile),
+            "seed {seed}: {outcome:?}"
         );
         assert_eq!(moved.position(cast.character), at(1, 1));
         assert_eq!(
@@ -287,7 +309,7 @@ fn a_move_into_the_hostile_creature_is_the_attack_on_it() {
             attacked.perceived_changes(),
             "seed {seed}"
         );
-        outcomes.push(change.outcome);
+        outcomes.push(outcome);
     }
     // A6: some moves hit, some miss.
     assert!(
@@ -309,9 +331,9 @@ fn a_diagonal_move_into_the_hostile_creature_is_the_attack_on_it() {
 
     assert_eq!(world.submit(Action::Move(Direction::SouthEast)), Ok(()));
 
-    let change = world.perceived_changes()[0];
-    assert_eq!(change.entity, cast.character);
-    assert!(is_attack_on(change.outcome, cast.hostile), "{change:?}");
+    let (_, actor, outcome) = act_at(&world, 0);
+    assert_eq!(actor, cast.character);
+    assert!(is_attack_on(outcome, cast.hostile), "{outcome:?}");
 }
 
 #[test]
@@ -326,8 +348,8 @@ fn a_move_into_the_hostile_creature_costs_the_attack_divided_by_speed() {
 
     assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
 
-    let change = world.perceived_changes()[0];
-    assert!(is_attack_on(change.outcome, hostile), "{change:?}");
+    let (_, _, outcome) = act_at(&world, 0);
+    assert!(is_attack_on(outcome, hostile), "{outcome:?}");
     // A5, R6: the attack's 100, divided by the character's speed of 2.
     assert_eq!((world.awaited(), world.clock()), (character, Time::new(50)));
 }
@@ -348,8 +370,8 @@ fn the_move_of_any_character_into_the_hostile_creature_is_the_attack_on_it() {
 
     assert_eq!(world.submit(Action::Move(Direction::East)), Ok(()));
 
-    let change = changes_of(&world, second)[0];
-    assert!(is_attack_on(change.outcome, hostile), "{change:?}");
+    let outcome = outcomes_of(&world, second)[0];
+    assert!(is_attack_on(outcome, hostile), "{outcome:?}");
 }
 
 #[test]
@@ -364,7 +386,7 @@ fn a_move_into_another_character_is_a_bump() {
 
     assert_eq!(
         world.perceived_changes(),
-        [PerceivedChange {
+        [PerceivedChange::Act {
             time: Time::ZERO,
             entity: character,
             outcome: Outcome::Bumped(other),

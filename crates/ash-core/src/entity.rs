@@ -2,7 +2,8 @@
 
 use core::num::NonZeroU64;
 
-/// Names one entity of a world.
+/// Names one entity of a world: its identity (ADR 0001, F2). Its bits and
+/// its order carry no meaning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EntityId(u32);
 
@@ -13,6 +14,36 @@ impl EntityId {
 
     pub const fn get(self) -> u32 {
         self.0
+    }
+}
+
+/// Issues the ids of one world, each once (F2): an id is never issued
+/// again, whatever became of its entity.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EntityIds {
+    /// How many ids were issued. The width is a mechanism.
+    issued: u32,
+}
+
+impl EntityIds {
+    /// The id the next `issue` returns.
+    pub fn peek(&self) -> EntityId {
+        EntityId(0)
+    }
+
+    /// An id never issued before. Once every id is issued, the next call
+    /// crashes through `invariant!`.
+    pub fn issue(&mut self) -> EntityId {
+        self.peek()
+    }
+
+    /// Whether `id` was issued here.
+    #[expect(
+        unused_variables,
+        reason = "S3 signatures: the counter is read in the next commit"
+    )]
+    pub fn has_issued(&self, id: EntityId) -> bool {
+        false
     }
 }
 
@@ -37,6 +68,40 @@ impl Speed {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_issued_id_is_never_issued_again() {
+        let mut ids = EntityIds::default();
+        let mut issued = Vec::new();
+        for _ in 0..5 {
+            let next = ids.peek();
+            assert!(!ids.has_issued(next), "{next:?} is issued before its turn");
+            let id = ids.issue();
+            assert_eq!(id, next);
+            assert!(!issued.contains(&id), "{id:?} is issued twice");
+            issued.push(id);
+        }
+        assert!(issued.iter().all(|&id| ids.has_issued(id)));
+        assert!(!ids.has_issued(ids.peek()));
+    }
+
+    /// F2: the boundary of the id space. `u32::MAX` ids fit the counter.
+    #[test]
+    fn the_last_id_is_issued() {
+        let mut ids = EntityIds {
+            issued: u32::MAX - 1,
+        };
+        let last = ids.issue();
+        assert_eq!(last, EntityId::new(u32::MAX - 1));
+        assert!(ids.has_issued(last));
+    }
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn an_id_past_the_last_crashes() {
+        let mut ids = EntityIds { issued: u32::MAX };
+        let _ = ids.issue();
+    }
 
     #[test]
     #[should_panic(expected = "invariant violated")]

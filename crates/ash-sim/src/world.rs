@@ -8,6 +8,7 @@ use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{self, Action, AvailableAction, Refused};
+use crate::combat::Health;
 use crate::controller::{Controller, Disposition};
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
@@ -33,6 +34,17 @@ struct Entity {
     speed: Speed,
     position: TilePosition,
     controller: Controller,
+    health: Health,
+}
+
+/// F3: what a total lookup finds under an id the world issued. Never a bare
+/// absence.
+enum Lookup<'w> {
+    /// The entity is embodied in this world.
+    Embodied(&'w Entity),
+    /// The world issued the id, and no entity is embodied under it: the
+    /// entity died (A8).
+    NotEmbodied,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,6 +112,7 @@ impl World {
                 speed,
                 position,
                 controller,
+                health: Health::full(controller),
             }],
             rng_after: self.rng.clone(),
         });
@@ -222,17 +235,35 @@ impl World {
                     };
                     self.scheduler.schedule(entity, due);
                 }
+                Effect::Unschedule => {
+                    if self.scheduler.pop().is_none() {
+                        ash_core::invariant!("no entity is scheduled");
+                    }
+                }
+                Effect::Damage { entity, amount } => {
+                    let entity = self.entity_mut(entity);
+                    entity.health = entity.health.damaged(amount);
+                }
+                Effect::Remove { entity } => {
+                    let embodied = |candidate: &Entity| candidate.id == entity;
+                    let Some(row) = self.entities.iter().position(embodied) else {
+                        ash_core::invariant!("{entity:?} is not embodied")
+                    };
+                    self.entities.remove(row);
+                }
                 Effect::Create {
                     id,
                     speed,
                     position,
                     controller,
+                    health,
                 } => {
                     self.entities.push(Entity {
                         id,
                         speed,
                         position,
                         controller,
+                        health,
                     });
                     // The first entity has no turn to join: the world
                     // begins at time zero.
@@ -279,14 +310,38 @@ impl World {
         self.entity(entity).controller
     }
 
-    fn entity(&self, entity: EntityId) -> &Entity {
+    /// The hit points of `entity` (A7). Only its own controller may learn
+    /// them (R18).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "S3 signatures: the hit rule reads them in the next commit"
+        )
+    )]
+    pub(crate) fn health(&self, entity: EntityId) -> Health {
+        self.entity(entity).health
+    }
+
+    /// F3: the total lookup. An id this world never issued crashes through
+    /// `invariant!`.
+    fn lookup(&self, entity: EntityId) -> Lookup<'_> {
         match self
             .entities
             .iter()
             .find(|candidate| candidate.id == entity)
         {
-            Some(found) => found,
-            None => ash_core::invariant!("{entity:?} is not in the world"),
+            Some(found) => Lookup::Embodied(found),
+            None => Lookup::NotEmbodied,
+        }
+    }
+
+    /// `entity`, which is embodied: a rule names only entities it perceives
+    /// or the one whose turn it is.
+    fn entity(&self, entity: EntityId) -> &Entity {
+        match self.lookup(entity) {
+            Lookup::Embodied(found) => found,
+            Lookup::NotEmbodied => ash_core::invariant!("{entity:?} is not embodied"),
         }
     }
 
@@ -297,7 +352,7 @@ impl World {
             .find(|candidate| candidate.id == entity)
         {
             Some(found) => found,
-            None => ash_core::invariant!("{entity:?} is not in the world"),
+            None => ash_core::invariant!("{entity:?} is not embodied"),
         }
     }
 }
@@ -329,6 +384,38 @@ mod tests {
             wall,
             Controller::Wander(Disposition::Neutral),
         );
+    }
+
+    #[test]
+    fn a_removed_entity_is_issued_but_not_embodied_and_stays_scheduled() {
+        let mut world = World::new(0, Speed::new(1));
+        let character = world.awaited();
+        let creature = world.create_entity(
+            Speed::new(2),
+            TilePosition { x: 2, y: 1, z: 0 },
+            Controller::Wander(Disposition::Hostile),
+        );
+        let scheduled = world.scheduler.clone();
+
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Remove { entity: creature }],
+            rng_after: world.rng.clone(),
+        });
+
+        // F3: the two cases of a total lookup.
+        assert!(matches!(world.lookup(creature), Lookup::NotEmbodied));
+        assert!(matches!(world.lookup(character), Lookup::Embodied(_)));
+        // The entry outlives the embodiment: `advance` skips it later.
+        assert_eq!(world.scheduler, scheduled);
+    }
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn a_lookup_of_an_id_the_world_never_issued_crashes() {
+        // The world issued one id, the character's: the next one is the
+        // nearest id it never issued.
+        let world = World::new(0, Speed::new(1));
+        let _ = world.lookup(EntityId::new(1));
     }
 
     #[test]

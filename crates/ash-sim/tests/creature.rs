@@ -51,12 +51,32 @@ fn first_offered_move(world: &World) -> Action {
         .expect("a move is offered")
 }
 
-fn changes_of(world: &World, entity: EntityId) -> Vec<PerceivedChange> {
+/// One act: when, who, and what it did.
+type Act = (Time, EntityId, Outcome);
+
+/// Every perceived change of `world`, in order: no entity dies here, so
+/// each is an act.
+fn acts(world: &World) -> Vec<Act> {
     world
         .perceived_changes()
         .iter()
-        .copied()
-        .filter(|change| change.entity == entity)
+        .map(|&change| match change {
+            PerceivedChange::Act {
+                time,
+                entity,
+                outcome,
+            } => (time, entity, outcome),
+            PerceivedChange::Death { .. } => panic!("unexpected {change:?}"),
+        })
+        .collect()
+}
+
+/// When `entity` did what, in order.
+fn acts_of(world: &World, entity: EntityId) -> Vec<(Time, Outcome)> {
+    acts(world)
+        .into_iter()
+        .filter(|&(_, actor, _)| actor == entity)
+        .map(|(time, _, outcome)| (time, outcome))
         .collect()
 }
 
@@ -69,11 +89,10 @@ fn at_creation_the_character_acts_first_then_the_creature() {
     world.submit(Action::Wait).expect("a wait is never refused");
 
     // R8: both are due at time zero; the one created first acts first.
-    let first_two: Vec<_> = world
-        .perceived_changes()
-        .iter()
+    let first_two: Vec<_> = acts(&world)
+        .into_iter()
         .take(2)
-        .map(|change| (change.time, change.entity))
+        .map(|(time, entity, _)| (time, entity))
         .collect();
     assert_eq!(first_two, [(Time::ZERO, character), (Time::ZERO, creature)]);
 }
@@ -89,27 +108,27 @@ fn the_creature_moves_twice_per_character_move_for_50_and_waits_for_25() {
             .expect("an offered move is never refused");
     }
 
-    let character_times: Vec<u64> = changes_of(&world, character)
+    let character_times: Vec<u64> = acts_of(&world, character)
         .iter()
-        .map(|change| change.time.units())
+        .map(|(time, _)| time.units())
         .collect();
     let every_100: Vec<u64> = (0..character_moves).map(|turn| turn * 100).collect();
     assert_eq!(character_times, every_100);
 
     // R6: the time from one creature action to its next is the cost it paid.
-    let creature_changes = changes_of(&world, creature);
-    for pair in creature_changes.windows(2) {
-        let paid = pair[1].time.units() - pair[0].time.units();
-        let cost = match pair[0].outcome {
+    let creature_acts = acts_of(&world, creature);
+    for pair in creature_acts.windows(2) {
+        let paid = pair[1].0.units() - pair[0].0.units();
+        let cost = match pair[0].1 {
             Outcome::Waited => 25,
             Outcome::Stepped(_) | Outcome::Bumped(_) | Outcome::Hit(_) | Outcome::Missed(_) => 50,
         };
         assert_eq!(paid, cost, "after {:?}", pair[0]);
     }
     assert!(
-        creature_changes
+        creature_acts
             .iter()
-            .any(|change| change.outcome == Outcome::Waited),
+            .any(|&(_, outcome)| outcome == Outcome::Waited),
         "the seeded run shows no creature wait"
     );
 
@@ -117,10 +136,10 @@ fn the_creature_moves_twice_per_character_move_for_50_and_waits_for_25() {
     let per_character_move: Vec<Vec<Outcome>> = every_100
         .iter()
         .map(|&start| {
-            creature_changes
+            creature_acts
                 .iter()
-                .filter(|change| (start..start + 100).contains(&change.time.units()))
-                .map(|change| change.outcome)
+                .filter(|(time, _)| (start..start + 100).contains(&time.units()))
+                .map(|&(_, outcome)| outcome)
                 .collect()
         })
         .collect();
@@ -143,12 +162,9 @@ fn the_creature_moves_twice_per_character_move_for_50_and_waits_for_25() {
     );
 
     // R8: at a shared time, the character, due first, acts first.
-    for change in changes_of(&world, character) {
-        let first_then = world
-            .perceived_changes()
-            .iter()
-            .find(|other| other.time == change.time);
-        assert_eq!(first_then, Some(&change));
+    for (time, outcome) in acts_of(&world, character) {
+        let first_then = acts(&world).into_iter().find(|&(other, ..)| other == time);
+        assert_eq!(first_then, Some((time, character, outcome)));
     }
 }
 
@@ -171,7 +187,7 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
     // The change both entities perceive names both (R13, R16).
     assert_eq!(
         bumped.perceived_changes().first(),
-        Some(&PerceivedChange {
+        Some(&PerceivedChange::Act {
             time: Time::ZERO,
             entity: character,
             outcome: Outcome::Bumped(creature),
@@ -194,7 +210,7 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
         .expect("a wait is never refused");
     assert_eq!(waited.clock(), bumped.clock());
     assert_eq!(waited.position(creature), bumped.position(creature));
-    assert_eq!(changes_of(&waited, creature), changes_of(&bumped, creature));
+    assert_eq!(acts_of(&waited, creature), acts_of(&bumped, creature));
 }
 
 #[test]
@@ -206,18 +222,18 @@ fn the_creature_wanders_only_through_actions_the_rules_allow() {
         assert_ne!(world.position(creature), world.position(character));
     }
 
-    let creature_changes = changes_of(&world, creature);
-    let moves = creature_changes
+    let creature_acts = acts_of(&world, creature);
+    let moves = creature_acts
         .iter()
-        .filter(|change| matches!(change.outcome, Outcome::Stepped(_) | Outcome::Bumped(_)))
+        .filter(|(_, outcome)| matches!(outcome, Outcome::Stepped(_) | Outcome::Bumped(_)))
         .count();
     assert!(moves > 100, "the creature hardly wanders: {moves} moves");
     // The creature bumps the character too: the bump names it, and the
     // character stays where it waits.
     assert!(
-        creature_changes
+        creature_acts
             .iter()
-            .any(|change| change.outcome == Outcome::Bumped(character)),
+            .any(|&(_, outcome)| outcome == Outcome::Bumped(character)),
         "the seeded run shows no bump into the character"
     );
     assert_eq!(world.position(character), at(1, 1));

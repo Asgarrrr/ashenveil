@@ -29,7 +29,7 @@ fn at(x: u32, y: u32) -> TilePosition {
 }
 
 fn moved(time: u64, entity: EntityId, direction: Direction) -> PerceivedChange {
-    PerceivedChange {
+    PerceivedChange::Act {
         time: Time::new(time),
         entity,
         outcome: Outcome::Stepped(direction),

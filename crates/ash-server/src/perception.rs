@@ -7,7 +7,7 @@ use ash_protocol::message::{
     Snapshot,
 };
 use ash_sim::controller::Disposition as SimDisposition;
-use ash_sim::perception::{self, Outcome as SimOutcome};
+use ash_sim::perception::{self, Outcome as SimOutcome, PerceivedChange as SimChange};
 use ash_sim::world::World;
 
 use crate::action;
@@ -48,13 +48,24 @@ pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
 
 /// R17: the changes after the first `seen`, in the order they happened.
 pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerMessage> + '_ {
-    world.perceived_changes().iter().skip(seen).map(|change| {
-        ServerMessage::Perceived(PerceivedChange {
-            time: change.time,
-            entity: change.entity,
-            outcome: outcome_to_wire(change.outcome),
+    world
+        .perceived_changes()
+        .iter()
+        .skip(seen)
+        .filter_map(|&change| match change {
+            SimChange::Act {
+                time,
+                entity,
+                outcome,
+            } => Some(ServerMessage::Perceived(PerceivedChange {
+                time,
+                entity,
+                outcome: outcome_to_wire(outcome),
+            })),
+            // S3 signatures: no entity dies yet. The wire carries a death
+            // in a later commit.
+            SimChange::Death { .. } => None,
         })
-    })
 }
 
 fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
