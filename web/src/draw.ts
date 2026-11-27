@@ -2,7 +2,7 @@
 // never changes it; the real renderer will replace this file.
 
 import type { PerceivedWorld } from "./model.js";
-import type { Action } from "./protocol.js";
+import type { Action, Outcome } from "./protocol.js";
 
 const TILE = 32;
 
@@ -26,8 +26,8 @@ export function draw(view: View, world: PerceivedWorld, connected: boolean): voi
     ...world.log
       .slice(-20)
       .reverse()
-      .map(({ time, entity, action, bumped }) =>
-        item(`${time}  ${name(world, entity)} ${describe(action)}${bumpedInto(world, bumped)}`),
+      .map(({ time, entity, outcome }) =>
+        item(`${time}  ${name(world, entity)} ${happened(world, outcome)}`),
       ),
   );
 }
@@ -72,12 +72,23 @@ function name(world: PerceivedWorld, entity: number): string {
   return entity === world.controlled ? "@" : `entity ${entity}`;
 }
 
-function bumpedInto(world: PerceivedWorld, bumped: number | null): string {
-  return bumped === null ? "" : `, bumps into ${name(world, bumped)}`;
+function happened(world: PerceivedWorld, outcome: Outcome): string {
+  switch (outcome.kind) {
+    case "stepped":
+      return `steps ${outcome.direction}`;
+    case "waited":
+      return "waits";
+    case "bumped":
+      return `bumps into ${name(world, outcome.target)}`;
+    case "hit":
+      return `hits ${name(world, outcome.target)}`;
+    case "missed":
+      return `misses ${name(world, outcome.target)}`;
+  }
 }
 
 function describe(action: Action): string {
-  return action.kind === "wait" ? "wait" : `move ${action.direction}`;
+  return action.kind === "wait" ? "wait" : `${action.kind} ${action.direction}`;
 }
 
 function item(text: string): HTMLLIElement {

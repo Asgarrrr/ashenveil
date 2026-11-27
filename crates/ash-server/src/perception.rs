@@ -3,9 +3,9 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
+    AvailableAction, Outcome, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
 };
-use ash_sim::perception::{self, Outcome};
+use ash_sim::perception::{self, Outcome as SimOutcome};
 use ash_sim::world::World;
 
 use crate::action;
@@ -49,14 +49,19 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
         ServerMessage::Perceived(PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: action::to_wire(change.action),
-            // Until the wire carries the outcome, it carries only a bump.
-            bumped: match change.outcome {
-                Outcome::Bumped(bumped) => Some(bumped),
-                _ => None,
-            },
+            outcome: outcome_to_wire(change.outcome),
         })
     })
+}
+
+fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
+    match outcome {
+        SimOutcome::Stepped(direction) => Outcome::Stepped(direction),
+        SimOutcome::Waited => Outcome::Waited,
+        SimOutcome::Bumped(target) => Outcome::Bumped(target),
+        SimOutcome::Hit(target) => Outcome::Hit(target),
+        SimOutcome::Missed(target) => Outcome::Missed(target),
+    }
 }
 
 #[cfg(test)]

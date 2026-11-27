@@ -3,20 +3,19 @@
 use alloc::vec::Vec;
 
 use ash_core::entity::EntityId;
-use ash_core::tile::{Terrain, TilePosition};
+use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
-use crate::action::{Action, AvailableAction};
+use crate::action::AvailableAction;
 use crate::map::Map;
 use crate::world::World;
 
-/// One change, stamped with the time it happened (R17). It names the action
-/// and its outcome, never the entity's speed, cost or next turn (R18).
+/// One change, stamped with the time it happened (R17): what `entity` did.
+/// Never the entity's speed, cost or next turn (R18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
-    pub action: Action,
     pub outcome: Outcome,
 }
 
@@ -24,8 +23,8 @@ pub struct PerceivedChange {
 /// odds of a hit (A12).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    /// A move reached the neighboring tile.
-    Stepped,
+    /// A move reached the neighboring tile in this direction.
+    Stepped(Direction),
     /// A wait let time pass.
     Waited,
     /// A move ran into this entity (R13): the mover stayed in place.
@@ -114,6 +113,7 @@ mod tests {
     use ash_core::entity::Speed;
 
     use super::*;
+    use crate::action::Action;
     use crate::controller::Controller;
 
     #[test]

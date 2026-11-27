@@ -32,8 +32,7 @@ fn moved(time: u64, entity: EntityId, direction: Direction) -> PerceivedChange {
     PerceivedChange {
         time: Time::new(time),
         entity,
-        action: Action::Move(direction),
-        outcome: Outcome::Stepped,
+        outcome: Outcome::Stepped(direction),
     }
 }
 

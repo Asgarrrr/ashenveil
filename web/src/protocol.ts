@@ -3,6 +3,7 @@
 
 import init, {
   decode_server_message,
+  encode_attack,
   encode_hello,
   encode_move,
   encode_wait,
@@ -18,7 +19,18 @@ export type Direction =
   | "west"
   | "northwest";
 
-export type Action = { kind: "wait" } | { kind: "move"; direction: Direction };
+export type Action =
+  | { kind: "wait" }
+  | { kind: "move"; direction: Direction }
+  | { kind: "attack"; direction: Direction };
+
+/** What an action did (A11), naming its target where it has one. */
+export type Outcome =
+  | { kind: "stepped"; direction: Direction }
+  | { kind: "waited" }
+  | { kind: "bumped"; target: number }
+  | { kind: "hit"; target: number }
+  | { kind: "missed"; target: number };
 
 export type Terrain = "floor" | "wall";
 
@@ -48,7 +60,7 @@ export type ServerMessage =
       entities: PerceivedEntity[];
     }
   | { kind: "awaited"; time: number; entity: number; actions: AvailableAction[] }
-  | { kind: "perceived"; time: number; entity: number; action: Action; bumped: number | null }
+  | { kind: "perceived"; time: number; entity: number; outcome: Outcome }
   | { kind: "refused" }
   | { kind: "quarantined" }
   | { kind: "controller_taken" };
@@ -80,7 +92,8 @@ export function encodeCommand(entity: number, action: Action): Bytes {
   if (action.kind === "wait") {
     return encode_wait(entity) as Bytes;
   }
-  const bytes = encode_move(entity, action.direction);
+  const encode = action.kind === "move" ? encode_move : encode_attack;
+  const bytes = encode(entity, action.direction);
   if (bytes === undefined) {
     throw new Error(`the codec knows no direction ${action.direction}`);
   }

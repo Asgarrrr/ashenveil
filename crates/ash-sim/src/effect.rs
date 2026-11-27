@@ -33,9 +33,10 @@ pub(crate) enum Effect {
     /// `due`, after every entity already due then (R7, R8). The clock and
     /// the awaited entity follow the scheduler.
     EndTurn { due: Time },
-    /// A new entity at `position`, due now, with an id never issued before
+    /// A new entity at `position`, due now. `id` was never issued before
     /// (F2).
     Create {
+        id: EntityId,
         speed: Speed,
         position: TilePosition,
         controller: Controller,

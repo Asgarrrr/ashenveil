@@ -45,12 +45,12 @@ pub struct World {
 
 impl World {
     /// The fixed map holding one character, due at time zero. A player
-    /// connection controls it.
+    /// connection controls it, so the world awaits it at once (R2).
     pub fn new(seed: u64, character_speed: Speed) -> Self {
         let character = EntityId::new(0);
         let mut scheduler = Scheduler::default();
         scheduler.schedule(character, Time::ZERO);
-        let world = Self {
+        Self {
             map: Map::skeleton(),
             entities: alloc::vec![Entity {
                 id: character,
@@ -62,9 +62,7 @@ impl World {
             rng: Rng::new(seed),
             perceived_changes: Vec::new(),
             command_log: Vec::new(),
-        };
-        // A player connection controls the only entity: its turn is now.
-        world
+        }
     }
 
     /// The world of the skeleton, from `seed`: the character, then a
@@ -91,6 +89,7 @@ impl World {
         }
         self.apply(Effects {
             in_order: alloc::vec![Effect::Create {
+                id,
                 speed,
                 position,
                 controller,
@@ -217,11 +216,11 @@ impl World {
                     self.scheduler.schedule(entity, due);
                 }
                 Effect::Create {
+                    id,
                     speed,
                     position,
                     controller,
                 } => {
-                    let id = self.next_id();
                     self.entities.push(Entity {
                         id,
                         speed,
@@ -235,8 +234,9 @@ impl World {
         self.rng = effects.rng_after;
     }
 
-    /// The scheduler's next entry: the turn being played, and its time.
-    fn turn(&self) -> (Time, EntityId) {
+    /// The scheduler's next entry: the time of the turn being played, and
+    /// the entity it belongs to.
+    pub(crate) fn turn(&self) -> (Time, EntityId) {
         match self.scheduler.head() {
             Some((due, entity)) => (due, entity),
             None => ash_core::invariant!("no entity is scheduled"),

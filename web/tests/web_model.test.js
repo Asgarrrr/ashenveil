@@ -1,11 +1,12 @@
-// Acceptance of spec 0001, slice S6: the perceived-world model of the web
-// client, fed through the real WASM codec. `cargo xtask accept web_model`
+// Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
+// slice S1: the perceived-world model of the web client, fed through the
+// real WASM codec. `cargo xtask accept web_model`
 // builds the client, then runs this file with Node's test runner.
 //
 // Each fixture holds the binary messages a real server sent, in hex. The
 // client said Hello, then commanded entity 0, which starts at (1, 1). The
 // creature, entity 1, starts at (7, 4) and wanders.
-// `crates/ash-server/tests/web_fixtures.rs` records both sessions again and
+// `crates/ash-server/tests/web_fixtures.rs` records each session again and
 // fails when the server no longer sends these bytes.
 //
 // `fixtures/walk.json`: move east, move north (into the wall: refused),
@@ -14,6 +15,10 @@
 //
 // `fixtures/bump.json`: the client chased the creature until a move of
 // entity 0 bumped into it (R13).
+//
+// `fixtures/attack.json`: the same world as `bump.json`. Entity 0 moved
+// east and southeast, then attacked the creature twice: southeast, then
+// east (A3).
 //
 //   012345678
 // 0 #########
@@ -27,7 +32,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { commandForKey } from "../build/keys.js";
+import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
 
@@ -42,6 +47,7 @@ function fixture(name) {
 
 const walk = fixture("walk.json");
 const bump = fixture("bump.json");
+const attack = fixture("attack.json");
 const controllerTaken = walk.length - 1;
 
 /** The index of the first message of `stream` that `found` accepts. */
@@ -64,6 +70,7 @@ function replay(stream) {
 
 const wait = { kind: "wait" };
 const move = (direction) => ({ kind: "move", direction });
+const strike = (direction) => ({ kind: "attack", direction });
 
 test("the recorded walk gives the map, positions, clock, costs and log", () => {
   const world = replay(walk.slice(0, controllerTaken));
@@ -96,23 +103,28 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.costOf(wait), 50);
   assert.equal(world.costOf(move("northwest")), 100);
 
-  const stepped = (time, entity, action) => ({ time, entity, action, bumped: null });
+  const stepped = (time, entity, direction) => ({
+    time,
+    entity,
+    outcome: { kind: "stepped", direction },
+  });
+  const waited = (time, entity) => ({ time, entity, outcome: { kind: "waited" } });
   assert.deepEqual(world.log, [
-    stepped(0, 0, move("east")),
-    stepped(0, 1, move("west")),
-    stepped(50, 1, move("west")),
-    stepped(100, 0, wait),
-    stepped(100, 1, move("north")),
-    stepped(150, 0, move("southeast")),
-    stepped(150, 1, wait),
-    stepped(175, 1, move("west")),
-    stepped(225, 1, wait),
+    stepped(0, 0, "east"),
+    stepped(0, 1, "west"),
+    stepped(50, 1, "west"),
+    waited(100, 0),
+    stepped(100, 1, "north"),
+    stepped(150, 0, "southeast"),
+    waited(150, 1),
+    stepped(175, 1, "west"),
+    waited(225, 1),
   ]);
   assert.equal(world.refused, false);
   assert.equal(world.mayReconnect(), true);
 });
 
-test("a perceived move steps the mover toward its direction", () => {
+test("a perceived step moves the mover toward its direction", () => {
   // x grows to the east, y to the south.
   const steps = {
     north: [2, 1],
@@ -133,13 +145,16 @@ test("a perceived move steps the mover toward its direction", () => {
       terrain: Array(25).fill("floor"),
       entities: [{ entity: 4, position: { x: 2, y: 2, z: 0 } }],
     });
-    world.apply({ kind: "perceived", time: 0, entity: 4, action: move(direction), bumped: null });
+    world.apply({ kind: "perceived", time: 0, entity: 4, outcome: { kind: "stepped", direction } });
     assert.deepEqual(world.positions.get(4), { x, y, z: 0 }, direction);
   }
 });
 
 test("a bump leaves the mover in place and logs whom it bumped into", () => {
-  const at = indexOf(bump, (message) => message.kind === "perceived" && message.bumped !== null);
+  const at = indexOf(
+    bump,
+    (message) => message.kind === "perceived" && message.outcome.kind === "bumped",
+  );
   const before = replay(bump.slice(0, at));
   const bumped = replay(bump.slice(0, at + 1));
 
@@ -147,8 +162,7 @@ test("a bump leaves the mover in place and logs whom it bumped into", () => {
   assert.deepEqual(bumped.log.at(-1), {
     time: 200,
     entity: 0,
-    action: move("southeast"),
-    bumped: 1,
+    outcome: { kind: "bumped", target: 1 },
   });
   assert.deepEqual(
     [...replay(bump).positions],
@@ -157,6 +171,28 @@ test("a bump leaves the mover in place and logs whom it bumped into", () => {
       [1, { x: 6, y: 4, z: 0 }],
     ],
   );
+});
+
+test("an attack is offered toward the adjacent creature only, and logged as a hit or a miss", () => {
+  const first = indexOf(
+    attack,
+    (message) => message.kind === "perceived" && ["hit", "missed"].includes(message.outcome.kind),
+  );
+  const before = replay(attack.slice(0, first));
+  // A3, A5: offered toward the creature at 100, and nowhere else.
+  assert.equal(before.costOf(strike("southeast")), 100);
+  assert.equal(before.costOf(strike("east")), undefined);
+  assert.equal(before.costOf(move("southeast")), 100);
+
+  const world = replay(attack);
+  const strikes = world.log
+    .filter(({ entity, outcome }) => entity === 0 && ["hit", "missed"].includes(outcome.kind))
+    .map(({ outcome }) => outcome);
+  // A11: one hit and one miss, each naming the creature. No odds (A12).
+  assert.deepEqual(strikes.map(({ kind }) => kind).sort(), ["hit", "missed"]);
+  assert.ok(strikes.every(({ target }) => target === 1), JSON.stringify(strikes));
+  assert.ok(strikes.every((outcome) => Object.keys(outcome).length === 2), "an outcome says more");
+  assert.equal(replay(attack.slice(0, first + 1)).positions.get(0).x, before.positions.get(0).x);
 });
 
 test("a refused command advances nothing and keeps the offer", () => {
@@ -200,6 +236,12 @@ test("bytes that are not a message decode to nothing", () => {
   assert.equal(decodeServerMessage(walk[0].subarray(1)), undefined);
 });
 
+/** The commands `keys` complete, pressed in order on one keyboard. */
+function press(keys) {
+  const keyboard = new Keyboard();
+  return keys.map((code) => keyboard.press(code));
+}
+
 test("the letter block and the numpad map to the eight moves and wait", () => {
   const layouts = [
     ["KeyQ", "KeyW", "KeyE", "KeyA", "KeyS", "KeyD", "KeyZ", "KeyX", "KeyC"],
@@ -217,15 +259,29 @@ test("the letter block and the numpad map to the eight moves and wait", () => {
     move("southeast"),
   ];
   for (const keys of layouts) {
-    assert.deepEqual(keys.map(commandForKey), commands);
+    assert.deepEqual(press(keys), commands);
   }
-  assert.deepEqual(
-    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].map(commandForKey),
-    [move("north"), move("south"), move("west"), move("east"), wait],
-  );
-  assert.equal(commandForKey("KeyP"), undefined);
+  assert.deepEqual(press(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"]), [
+    move("north"),
+    move("south"),
+    move("west"),
+    move("east"),
+    wait,
+  ]);
+  assert.deepEqual(press(["KeyP"]), [undefined]);
 
-  const encoded = commands.map((command) => Buffer.from(encodeCommand(0, command)).toString("hex"));
-  assert.equal(new Set(encoded).size, 9, `the codec merges commands: ${encoded}`);
+  const encoded = [...commands, strike("east")].map((command) =>
+    Buffer.from(encodeCommand(0, command)).toString("hex"),
+  );
+  assert.equal(new Set(encoded).size, 10, `the codec merges commands: ${encoded}`);
   assert.ok(encoded.every((hex) => hex.length > 0), `a command encodes to nothing: ${encoded}`);
+});
+
+test("the attack key followed by a direction key attacks toward it", () => {
+  assert.deepEqual(press(["KeyF", "KeyD"]), [undefined, strike("east")]);
+  assert.deepEqual(press(["KeyF", "Numpad1"]), [undefined, strike("southwest")]);
+  assert.deepEqual(press(["KeyF", "ArrowUp", "ArrowUp"]), [undefined, strike("north"), move("north")]);
+  // Any other key cancels the attack, and is not a command of its own.
+  assert.deepEqual(press(["KeyF", "Space", "KeyD"]), [undefined, undefined, move("east")]);
+  assert.deepEqual(press(["KeyF", "KeyP", "KeyD"]), [undefined, undefined, move("east")]);
 });

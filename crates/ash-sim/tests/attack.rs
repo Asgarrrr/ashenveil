@@ -49,6 +49,11 @@ fn offered_attack(world: &World) -> Option<AvailableAction> {
         .find(|offered| matches!(offered.action, Action::Attack(_)))
 }
 
+/// A11: an attack is perceived as a hit or a miss.
+fn is_attack(outcome: Outcome) -> bool {
+    matches!(outcome, Outcome::Hit(_) | Outcome::Missed(_))
+}
+
 fn changes_of(world: &World, entity: EntityId) -> Vec<PerceivedChange> {
     world
         .perceived_changes()
@@ -66,8 +71,8 @@ fn fight(seed: u64) -> (World, EntityId, EntityId) {
     let attacks = |world: &World| {
         changes_of(world, character)
             .into_iter()
-            .filter(|change| matches!(change.action, Action::Attack(_)))
             .map(|change| change.outcome)
+            .filter(|&outcome| is_attack(outcome))
             .collect::<Vec<_>>()
     };
     for _ in 0..FIGHT_TURNS {
@@ -122,25 +127,24 @@ fn an_adjacent_entity_can_be_attacked_for_100() {
 #[test]
 fn explicit_attacks_on_the_creature_are_perceived_hits_and_misses() {
     let (world, character, creature) = fight(SEED);
-    let attacks: Vec<PerceivedChange> = changes_of(&world, character)
+    let outcomes: Vec<Outcome> = changes_of(&world, character)
         .into_iter()
-        .filter(|change| matches!(change.action, Action::Attack(_)))
+        .map(|change| change.outcome)
+        .filter(|&outcome| is_attack(outcome))
         .collect();
-    // A11: each attack is perceived as a hit or a miss naming its target.
-    for change in &attacks {
+    // A11: each attack is perceived once, as a hit or a miss naming its
+    // target.
+    let attacks = world
+        .command_log()
+        .iter()
+        .filter(|action| matches!(action, Action::Attack(_)))
+        .count();
+    assert_eq!(outcomes.len(), attacks, "{outcomes:?}");
+    for outcome in outcomes {
         assert!(
-            matches!(
-                change.outcome,
-                Outcome::Hit(target) | Outcome::Missed(target) if target == creature
-            ),
-            "{change:?}"
+            matches!(outcome, Outcome::Hit(target) | Outcome::Missed(target) if target == creature),
+            "{outcome:?}"
         );
-    }
-    // The other changes keep their outcomes: a wait is a wait.
-    for change in changes_of(&world, character) {
-        if change.action == Action::Wait {
-            assert_eq!(change.outcome, Outcome::Waited, "{change:?}");
-        }
     }
 }
 
@@ -187,13 +191,19 @@ fn the_wander_draws_only_among_the_offers_that_are_not_attacks() {
     // seed gives the same first action.
     for seed in 0..64 {
         let first_creature_action = |character_move| {
-            let (mut world, _, creature) = world_with_creature(seed, at(3, 1));
+            let (mut world, character, creature) = world_with_creature(seed, at(3, 1));
             world
                 .submit(Action::Move(character_move))
                 .expect("a move from the start is never refused");
             changes_of(&world, creature)
                 .first()
-                .map(|change| change.action)
+                .map(|change| match change.outcome {
+                    // Next to the character, the move west bumps it.
+                    Outcome::Bumped(bumped) if bumped == character => {
+                        Outcome::Stepped(Direction::West)
+                    }
+                    outcome => outcome,
+                })
         };
         // East to (2, 1), next to the creature; south to (1, 2), two tiles
         // away.
@@ -221,7 +231,7 @@ fn the_wander_never_attacks_the_character_next_to_it() {
     assert!(
         creature_changes
             .iter()
-            .all(|change| !matches!(change.action, Action::Attack(_))),
+            .all(|change| !is_attack(change.outcome)),
         "the wander chose an attack"
     );
 }

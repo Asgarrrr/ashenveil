@@ -1,11 +1,15 @@
-// The keys of the nine commands: the eight moves and wait (R4). Keys are
-// matched by physical position (`KeyboardEvent.code`), so the letter block
-// keeps its compass shape on AZERTY as on QWERTY.
+// The keys of the commands: the eight moves, wait (R4), and the attack key
+// followed by a direction (A3). Keys are matched by physical position
+// (`KeyboardEvent.code`), so the letter block keeps its compass shape on
+// AZERTY as on QWERTY.
 
 import type { Action, Direction } from "./protocol.js";
 
 const move = (direction: Direction): Action => ({ kind: "move", direction });
 const wait: Action = { kind: "wait" };
+
+/** The key that turns the next direction key into an attack toward it. */
+const ATTACK = "KeyF";
 
 /** Row by row from the north-west: letter block, numpad, command. */
 const COMPASS: [string, string, Action][] = [
@@ -32,7 +36,25 @@ const COMMANDS = new Map<string, Action>([
   ["Space", wait],
 ]);
 
-/** The command the key at `code` (a `KeyboardEvent.code`) stands for, if any. */
-export function commandForKey(code: string): Action | undefined {
-  return COMMANDS.get(code);
+/** Turns key presses, given as `KeyboardEvent.code`, into commands. */
+export class Keyboard {
+  /** The attack key was the last key pressed. */
+  private attacking = false;
+
+  /**
+   * The command the key at `code` completes, if any. After the attack key, a
+   * direction key attacks toward its direction; any other key cancels.
+   */
+  press(code: string): Action | undefined {
+    if (code === ATTACK) {
+      this.attacking = true;
+      return undefined;
+    }
+    const command = COMMANDS.get(code);
+    if (!this.attacking) {
+      return command;
+    }
+    this.attacking = false;
+    return command?.kind === "move" ? { kind: "attack", direction: command.direction } : undefined;
+  }
 }

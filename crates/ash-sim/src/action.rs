@@ -83,6 +83,10 @@ pub(crate) fn resolve(
     action: Action,
     rng: &Rng,
 ) -> Result<Effects, Refused> {
+    // R2, R8: `EndTurn` ends the turn of the scheduler's next entity.
+    if world.turn().1 != actor {
+        ash_core::invariant!("{actor:?} acts out of its turn");
+    }
     if !allowed(perception, actor, action) {
         return Err(Refused);
     }
@@ -100,7 +104,7 @@ pub(crate) fn resolve(
                         entity: actor,
                         position: to,
                     });
-                    Outcome::Stepped
+                    Outcome::Stepped(direction)
                 }
             };
             (outcome, rng.clone())
@@ -111,7 +115,6 @@ pub(crate) fn resolve(
     in_order.push(Effect::Perceive(PerceivedChange {
         time: world.clock(),
         entity: actor,
-        action,
         outcome,
     }));
     in_order.push(Effect::EndTurn {
@@ -121,4 +124,25 @@ pub(crate) fn resolve(
         in_order,
         rng_after,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use ash_core::tile::TilePosition;
+
+    use super::*;
+    use crate::controller::Controller;
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn an_entity_out_of_its_turn_crashes() {
+        let mut world = World::new(0, Speed::new(1));
+        let other = world.create_entity(
+            Speed::new(1),
+            TilePosition { x: 3, y: 1, z: 0 },
+            Controller::Player,
+        );
+        let perception = Perception::whole_map(&world);
+        let _ = resolve(&world, &perception, other, Action::Wait, &Rng::new(0));
+    }
 }
