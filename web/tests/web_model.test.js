@@ -1,8 +1,7 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
 // slices S1 to S4, and of spec 0003, slice S1: the perceived-world model
-// of the web client, fed
-// through the real WASM codec. `cargo xtask accept web_model`
-// builds the client, then runs this file with Node's test runner.
+// of the web client, fed through the real WASM codec. `cargo xtask accept
+// web_model` builds the client, then runs this file with Node's test runner.
 //
 // Each fixture holds the binary messages a real server sent, in hex. The
 // client said Hello, then commanded entity 0, which starts at (1, 1). The

@@ -61,7 +61,8 @@ pub struct World {
     rng: Rng,
     /// F6, D12: every corpse, each under its rank among the deaths of this
     /// world. The rank is the explicit key of their order (ADR 0001, point
-    /// 5).
+    /// 5). It is the count of the earlier corpses: an effect that removes a
+    /// corpse needs a saved counter of deaths first.
     corpses: Vec<(u64, Corpse)>,
     perceived_changes: Vec<PerceivedChange>,
     command_log: Vec<Action>,
