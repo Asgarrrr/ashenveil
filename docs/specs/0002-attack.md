@@ -293,8 +293,8 @@ hostile, neutral, condition, death, outcome.
   the number of ids issued, so the last value of `u32` is never issued.
 - 2026-11-27, recorded (found in S3): a character whose hit points reach
   zero is a violated invariant, raised in `resolve` before any write. The
-  design holds no rule for the death of a character (A8 names a creature),
-  and only a character attacks (A13).
+  design puts the death of a character out of scope, and only a character
+  attacks (A13).
 - 2026-11-27, recorded (found in S3): the snapshot lists the entities in
   creation order. That order equals the storage order today, and a test
   pins it. A storage change must produce the order from a key, not from the

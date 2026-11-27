@@ -34,8 +34,8 @@ impl Action {
     }
 }
 
-/// A move the rules refuse (R10, R11). It is not an action: it costs nothing,
-/// and nothing in the world changes.
+/// A move or an attack the rules refuse (R10, R11, A3). It is not an action:
+/// it costs nothing, and nothing in the world changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Refused;
 

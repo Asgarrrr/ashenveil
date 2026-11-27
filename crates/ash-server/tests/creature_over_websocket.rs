@@ -1,6 +1,6 @@
 //! Acceptance of spec 0001, slice S7, over WebSocket: the client perceives
-//! a creature only through its position, its disposition and perceived
-//! outcomes (R18).
+//! a creature only through its position, its disposition, its condition and
+//! perceived changes (R18, A10).
 //!
 //! The client chases the neutral creature until a bump, planning each
 //! command on a replay of the accepted commands.
@@ -150,14 +150,14 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
 }
 
 #[test]
-fn the_client_perceives_the_creature_only_through_positions_and_actions() {
+fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive() {
     let address = start_server();
     let mut replay = World::skeleton(ash_server::world_seed(TOKEN));
     let character = replay.awaited();
     let mut socket = connect(address, TOKEN);
 
-    // R16, R18: the snapshot gives each entity an id, a position and, for
-    // a creature, a disposition.
+    // R16, R18: the snapshot gives each entity an id, a position, a health
+    // and, for a creature, a disposition.
     let entities = match receive(&mut socket) {
         Some(ServerMessage::Snapshot(Snapshot { time, entities, .. })) => {
             assert_eq!(time, Time::ZERO);

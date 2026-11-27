@@ -2,8 +2,9 @@
 //!
 //! Nothing here can carry another entity's speed, cost or next turn (R18):
 //! only the awaited entity's own costs, sent to its controller (R9). A
-//! disposition and a condition are kinds, never numbers. Hit points go to
-//! their own character alone, in its snapshot (A9).
+//! disposition and a condition are kinds, never numbers. The server sends
+//! hit points to their own character alone, in its snapshot (A9); these
+//! types do not enforce it.
 
 use alloc::vec::Vec;
 
