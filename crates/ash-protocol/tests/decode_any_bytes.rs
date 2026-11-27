@@ -254,7 +254,7 @@ fn an_unknown_disposition_is_refused() {
         assert_eq!(dispositions, [disposition], "tag {tag}");
     }
 
-    for tag in [3, u8::MAX] {
+    for tag in 3..=u8::MAX {
         assert!(
             ServerMessage::decode(&snapshot_bytes(&[tag])).is_err(),
             "a disposition tag of {tag} decodes"
