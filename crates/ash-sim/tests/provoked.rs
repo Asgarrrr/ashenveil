@@ -225,12 +225,12 @@ fn the_next_move_into_the_provoked_creature_is_an_attack_that_adds_no_change_of_
             ..
         } = passage(seed);
         // The control: before the attack, the move into the neutral creature
-        // is a bump (A2).
+        // is a bump and nothing else (A2). A bump provokes nothing.
         let mut neutral = world.clone();
         let bump = strike(&mut neutral, hunter, Action::Move(Direction::South));
         assert_eq!(
-            bump[0].kind,
-            ChangeKind::Act(Outcome::Bumped(creature)),
+            bump.iter().map(|change| change.kind).collect::<Vec<_>>(),
+            [ChangeKind::Act(Outcome::Bumped(creature))],
             "seed {seed}"
         );
 
