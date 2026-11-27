@@ -54,8 +54,8 @@ fn first_offered_move(world: &World) -> Action {
 /// One act: when, who, and what it did.
 type Act = (Time, EntityId, Outcome);
 
-/// Every perceived change of `world`, in order: no entity dies here, so
-/// each is an act.
+/// Every perceived change of `world`, in order: no entity is struck here,
+/// so each is an act.
 fn acts(world: &World) -> Vec<Act> {
     world
         .perceived_changes()
@@ -66,7 +66,9 @@ fn acts(world: &World) -> Vec<Act> {
                 entity,
                 outcome,
             } => (time, entity, outcome),
-            PerceivedChange::Death { .. } => panic!("unexpected {change:?}"),
+            PerceivedChange::Death { .. } | PerceivedChange::Condition { .. } => {
+                panic!("unexpected {change:?}")
+            }
         })
         .collect()
 }

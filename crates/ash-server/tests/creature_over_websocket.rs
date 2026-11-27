@@ -152,7 +152,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         }
         other => panic!("expected a snapshot, got {other:?}"),
     };
-    let expected: Vec<_> = ash_sim::perception::snapshot(&replay)
+    let expected: Vec<_> = ash_sim::perception::snapshot(&replay, character)
         .entities
         .iter()
         .map(|perceived| {

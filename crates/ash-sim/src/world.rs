@@ -355,6 +355,8 @@ mod tests {
     use ash_core::tile::Direction;
 
     use super::*;
+    use crate::combat::Condition;
+    use crate::perception::Outcome;
 
     #[test]
     #[should_panic(expected = "invariant violated")]
@@ -448,6 +450,56 @@ mod tests {
             .map(|(_, entity)| entity)
             .collect();
         assert_eq!(scheduled, [character, wounded]);
+    }
+
+    /// A11: a hit is followed by a change of condition only when it crosses
+    /// a threshold of A10. Of 20 hit points, half is 10 and a quarter is 5;
+    /// a hit removes 3 (A6).
+    #[test]
+    fn a_hit_changes_the_condition_only_when_it_crosses_a_threshold() {
+        let hits = [
+            (20, Some(Condition::Wounded)),
+            (17, None),
+            // To exactly half, then below it.
+            (13, None),
+            (12, Some(Condition::BadlyWounded)),
+            (9, None),
+            // To exactly a quarter, then below it.
+            (8, None),
+            (7, Some(Condition::Dying)),
+            (4, None),
+        ];
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        for (current, crossed) in hits {
+            // The first draw of seed 182 hits (A6). The target is a
+            // character, so the world stops at its turn.
+            let mut world = World::new(182, Speed::new(1));
+            let attacker = world.awaited();
+            world.apply(Effects {
+                in_order: alloc::vec![Effect::Create {
+                    speed: Speed::new(1),
+                    position: east,
+                    controller: Controller::Player,
+                    health: Health { current, max: 20 },
+                }],
+                rng_after: world.rng.clone(),
+            });
+            let target = world.occupant(east).expect("the target stands east");
+
+            assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
+
+            let mut expected = alloc::vec![PerceivedChange::Act {
+                time: Time::ZERO,
+                entity: attacker,
+                outcome: Outcome::Hit(target),
+            }];
+            expected.extend(crossed.map(|condition| PerceivedChange::Condition {
+                time: Time::ZERO,
+                entity: target,
+                condition,
+            }));
+            assert_eq!(world.perceived_changes, expected, "{current} of 20");
+        }
     }
 
     #[test]

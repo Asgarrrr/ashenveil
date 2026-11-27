@@ -1,4 +1,5 @@
-//! Attacks between entities, their hit points and their death (A1 to A8).
+//! Attacks between entities, their hit points, their condition and their
+//! death (A1 to A10).
 
 use alloc::vec::Vec;
 
@@ -43,6 +44,26 @@ impl Health {
             ..self
         }
     }
+
+    /// A10: the condition these hit points show.
+    pub(crate) fn condition(self) -> Condition {
+        // S4 signatures: every entity looks unhurt.
+        Condition::Unhurt
+    }
+}
+
+/// What a character perceives of another entity's hit points (A10): a kind,
+/// never a number (R18). It derives from `Health` and is never stored (F6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condition {
+    /// All of its hit points.
+    Unhurt,
+    /// Fewer than all of them.
+    Wounded,
+    /// Fewer than half of them.
+    BadlyWounded,
+    /// Fewer than a quarter of them.
+    Dying,
 }
 
 /// A1: whether the move of `mover` toward `direction` is an attack on the
@@ -158,6 +179,52 @@ mod tests {
                 world.health(target),
                 Health { current, max },
                 "seed {seed}, {controller:?}"
+            );
+        }
+    }
+
+    /// A10: unhurt at full, wounded below full, badly wounded below half,
+    /// dying below a quarter. Each row is the last hit point of a condition
+    /// or the first of the next.
+    #[test]
+    fn a_condition_is_unhurt_wounded_badly_wounded_or_dying_by_its_threshold() {
+        use Condition::{BadlyWounded, Dying, Unhurt, Wounded};
+        let conditions = [
+            // A character: half of 10 is 5, a quarter is 2.5.
+            (10, 10, Unhurt),
+            (9, 10, Wounded),
+            (5, 10, Wounded),
+            (4, 10, BadlyWounded),
+            (3, 10, BadlyWounded),
+            (2, 10, Dying),
+            (1, 10, Dying),
+            // A creature: half of 6 is 3, a quarter is 1.5.
+            (6, 6, Unhurt),
+            (5, 6, Wounded),
+            (3, 6, Wounded),
+            (2, 6, BadlyWounded),
+            (1, 6, Dying),
+            // Exactly half and exactly a quarter are not below them.
+            (4, 8, Wounded),
+            (3, 8, BadlyWounded),
+            (2, 8, BadlyWounded),
+            (1, 8, Dying),
+            // The one hit point of an entity that has no more is all of them.
+            (1, 1, Unhurt),
+            (1, 2, Wounded),
+            // The widest hit points: no product wraps into a lower condition.
+            (u32::MAX, u32::MAX, Unhurt),
+            (u32::MAX - 1, u32::MAX, Wounded),
+            (u32::MAX / 2 + 1, u32::MAX, Wounded),
+            (u32::MAX / 2, u32::MAX, BadlyWounded),
+            (u32::MAX / 4 + 1, u32::MAX, BadlyWounded),
+            (u32::MAX / 4, u32::MAX, Dying),
+        ];
+        for (current, max, condition) in conditions {
+            assert_eq!(
+                Health { current, max }.condition(),
+                condition,
+                "{current} of {max}"
             );
         }
     }

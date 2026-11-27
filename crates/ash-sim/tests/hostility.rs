@@ -69,7 +69,9 @@ fn act_at(world: &World, index: usize) -> Act {
             entity,
             outcome,
         } => (time, entity, outcome),
-        death @ PerceivedChange::Death { .. } => panic!("change {index} is {death:?}"),
+        other @ (PerceivedChange::Death { .. } | PerceivedChange::Condition { .. }) => {
+            panic!("change {index} is {other:?}")
+        }
     }
 }
 
@@ -84,7 +86,9 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
                 outcome,
                 ..
             } if actor == entity => Some(outcome),
-            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+            PerceivedChange::Act { .. }
+            | PerceivedChange::Death { .. }
+            | PerceivedChange::Condition { .. } => None,
         })
         .collect()
 }
@@ -115,10 +119,10 @@ fn offered_cost(world: &World, action: Action) -> Option<ActionCost> {
         .map(|offered| offered.cost)
 }
 
-/// Where the characters perceive `entity`; `None` once it died and left
-/// the world (A8).
+/// Where the awaited character perceives `entity`; `None` once it died and
+/// left the world (A8).
 fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
-    perception::snapshot(world)
+    perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .find(|perceived| perceived.entity == entity)
@@ -265,7 +269,7 @@ fn a_character_perceives_the_disposition_of_each_creature() {
     let other = world.create_entity(Speed::new(1), at(4, 4), Controller::Player);
 
     // A4: a kind for each creature. A character has no disposition.
-    let dispositions: Vec<_> = perception::snapshot(&world)
+    let dispositions: Vec<_> = perception::snapshot(&world, cast.character)
         .entities
         .iter()
         .map(|perceived| (perceived.entity, perceived.disposition))

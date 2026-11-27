@@ -31,26 +31,29 @@ fn at(x: u32, y: u32) -> TilePosition {
     TilePosition { x, y, z: 0 }
 }
 
-/// The entities the characters perceive, in the order of the snapshot.
+/// The entities the awaited character perceives, in the order of the
+/// snapshot.
 fn embodied(world: &World) -> Vec<EntityId> {
-    perception::snapshot(world)
+    perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .map(|perceived| perceived.entity)
         .collect()
 }
 
-/// Where the characters perceive `entity`; `None` once it left the world.
+/// Where the awaited character perceives `entity`; `None` once it left the
+/// world.
 fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
-    perception::snapshot(world)
+    perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .find(|perceived| perceived.entity == entity)
         .map(|perceived| perceived.position)
 }
 
-/// True when `change` names `entity`, as the one that acts, is acted on, or
-/// dies. The patterns name every field, so a new one fails to compile here.
+/// True when `change` names `entity`, as the one that acts, is acted on,
+/// dies, or changes condition. The patterns name every field, so a new one
+/// fails to compile here.
 fn names(change: PerceivedChange, entity: EntityId) -> bool {
     match change {
         PerceivedChange::Act {
@@ -70,6 +73,11 @@ fn names(change: PerceivedChange, entity: EntityId) -> bool {
             time: _,
             entity: dead,
         } => dead == entity,
+        PerceivedChange::Condition {
+            time: _,
+            entity: struck,
+            condition: _,
+        } => struck == entity,
     }
 }
 
@@ -80,7 +88,7 @@ fn deaths(world: &World) -> Vec<EntityId> {
         .iter()
         .filter_map(|&change| match change {
             PerceivedChange::Death { entity, .. } => Some(entity),
-            PerceivedChange::Act { .. } => None,
+            PerceivedChange::Act { .. } | PerceivedChange::Condition { .. } => None,
         })
         .collect()
 }
@@ -237,7 +245,7 @@ fn a_creature_dies_at_its_second_hit_and_its_death_is_perceived_right_after() {
                             outcome: did,
                             ..
                         } => (entity, did) == (character, outcome),
-                        PerceivedChange::Death { .. } => false,
+                        PerceivedChange::Death { .. } | PerceivedChange::Condition { .. } => false,
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>()
@@ -352,7 +360,9 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
                     entity,
                     outcome,
                 } if entity == neutral => Some((time, outcome)),
-                PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+                PerceivedChange::Act { .. }
+                | PerceivedChange::Death { .. }
+                | PerceivedChange::Condition { .. } => None,
             })
             .collect();
         assert!(turns.len() > 30, "seed {seed}: {} turns", turns.len());

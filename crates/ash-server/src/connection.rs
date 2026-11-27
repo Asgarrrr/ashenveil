@@ -60,7 +60,7 @@ fn control(
         controlled.take(controller);
         let world = &controlled.world;
         let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
-        greeting.push(perception::snapshot(world));
+        greeting.push(perception::snapshot(world, hosted.character));
         greeting.extend(perception::awaited(world, hosted.character));
         greeting
     });

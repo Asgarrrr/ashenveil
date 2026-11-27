@@ -7,6 +7,7 @@ use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::AvailableAction;
+use crate::combat::Condition;
 use crate::controller::{Controller, Disposition};
 use crate::map::Map;
 use crate::world::World;
@@ -24,6 +25,13 @@ pub enum PerceivedChange {
     /// `entity` died and left the world (A8). Its lethal hit is the change
     /// before, at the same time.
     Death { time: Time, entity: EntityId },
+    /// A hit left `entity` in another `condition` (A10). That hit is the
+    /// change before, at the same time.
+    Condition {
+        time: Time,
+        entity: EntityId,
+        condition: Condition,
+    },
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -45,7 +53,8 @@ pub enum Outcome {
 /// What a character perceives of the world: the only view a refusal reads
 /// (R10, F4). It shows no entity's speed, cost or next turn (R18). Under
 /// whole-map perception (R16), every character perceives the whole map,
-/// where every entity stands and the disposition of every creature (A4).
+/// where every entity stands, the disposition of every creature (A4) and the
+/// condition of every entity (A10).
 pub(crate) struct Perception<'w> {
     world: &'w World,
 }
@@ -79,10 +88,26 @@ impl<'w> Perception<'w> {
             Controller::Wander(disposition) => Some(disposition),
         }
     }
+
+    /// The condition of `entity` (A10, R16): a kind, never its hit points
+    /// (R18).
+    pub(crate) fn condition(&self, entity: EntityId) -> Condition {
+        self.world.health(entity).condition()
+    }
 }
 
-/// An entity a character perceives: where it stands and, for a creature,
-/// its disposition.
+/// What a character perceives of the hit points of an entity: its own as
+/// numbers (A9), those of any other entity as a condition (A10, R18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PerceivedHealth {
+    /// The hit points of the character itself.
+    HitPoints { current: u32, max: u32 },
+    /// The condition of another entity.
+    Condition(Condition),
+}
+
+/// An entity a character perceives: where it stands, its hit points or its
+/// condition and, for a creature, its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedEntity {
     pub entity: EntityId,
@@ -90,9 +115,10 @@ pub struct PerceivedEntity {
     /// A4: a kind, never a number (R18). `None` for a character: it has no
     /// disposition.
     pub disposition: Option<Disposition>,
+    pub health: PerceivedHealth,
 }
 
-/// Everything a character perceives at `time` (R16).
+/// Everything one character perceives at `time` (R16).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
     pub time: Time,
@@ -104,9 +130,13 @@ pub struct Snapshot {
     pub entities: Vec<PerceivedEntity>,
 }
 
-/// R16: the whole map and every entity, stamped with the clock. Positions
-/// and dispositions only: no speed, cost or next turn (R18).
-pub fn snapshot(world: &World) -> Snapshot {
+/// R16: the whole map and every entity as `character` perceives them,
+/// stamped with the clock. Hit points for `character` alone (A9); a
+/// position, a disposition and a condition for the others: no speed, cost,
+/// next turn or hit points (R18).
+pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
+    // S4 signatures: `character` perceives itself like any other entity.
+    let _ = character;
     let perception = Perception::whole_map(world);
     Snapshot {
         time: world.clock(),
@@ -118,6 +148,7 @@ pub fn snapshot(world: &World) -> Snapshot {
                 entity,
                 position: perception.position(entity),
                 disposition: perception.disposition(entity),
+                health: PerceivedHealth::Condition(perception.condition(entity)),
             })
             .collect(),
     }

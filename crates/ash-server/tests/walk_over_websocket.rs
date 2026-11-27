@@ -118,7 +118,7 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
 
 /// What the server must send for `world`, built from the simulation alone.
 fn expected_snapshot(world: &World) -> ServerMessage {
-    let snapshot = ash_sim::perception::snapshot(world);
+    let snapshot = ash_sim::perception::snapshot(world, world.awaited());
     ServerMessage::Snapshot(Snapshot {
         time: snapshot.time,
         width: snapshot.width,

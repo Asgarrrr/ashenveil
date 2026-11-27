@@ -90,7 +90,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 /// Where the characters of `world` perceive `entity`; `None` once it died
 /// and left the world (A8).
 fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
-    ash_sim::perception::snapshot(world)
+    ash_sim::perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .find(|perceived| perceived.entity == entity)

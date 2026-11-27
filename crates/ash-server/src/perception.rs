@@ -12,9 +12,9 @@ use ash_sim::world::World;
 
 use crate::action;
 
-/// R16: what every character perceives, as a protocol message.
-pub fn snapshot(world: &World) -> ServerMessage {
-    let snapshot = perception::snapshot(world);
+/// R16: what `character` perceives, as a protocol message.
+pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
+    let snapshot = perception::snapshot(world, character);
     ServerMessage::Snapshot(Snapshot {
         time: snapshot.time,
         width: snapshot.width,
@@ -67,6 +67,11 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
             outcome: outcome_to_wire(outcome),
         },
         SimChange::Death { time, entity } => PerceivedChange::Death { time, entity },
+        // S4 signatures: no hit changes a condition yet. The wire carries
+        // the change in a later commit.
+        SimChange::Condition { .. } => {
+            ash_core::invariant!("the wire carries no change of condition")
+        }
     }
 }
 

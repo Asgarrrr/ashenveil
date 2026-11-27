@@ -69,7 +69,9 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
                 outcome,
                 ..
             } if actor == entity => Some(outcome),
-            PerceivedChange::Act { .. } | PerceivedChange::Death { .. } => None,
+            PerceivedChange::Act { .. }
+            | PerceivedChange::Death { .. }
+            | PerceivedChange::Condition { .. } => None,
         })
         .collect()
 }

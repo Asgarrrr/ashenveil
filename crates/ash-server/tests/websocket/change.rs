@@ -17,6 +17,9 @@ pub fn to_wire(change: SimChange) -> WireChange {
             outcome: outcome_to_wire(outcome),
         },
         SimChange::Death { time, entity } => WireChange::Death { time, entity },
+        // S4 signatures: no hit changes a condition yet. The wire carries
+        // the change in a later commit.
+        SimChange::Condition { .. } => panic!("the wire carries no change of condition"),
     }
 }
 

@@ -93,7 +93,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
 
 /// The entities of the snapshot of `world`, as the server must send them.
 fn snapshot_entities(world: &World) -> Vec<PerceivedEntity> {
-    ash_sim::perception::snapshot(world)
+    ash_sim::perception::snapshot(world, world.awaited())
         .entities
         .iter()
         .map(|perceived| PerceivedEntity {
