@@ -140,3 +140,20 @@ fn the_bump_fixture_is_what_the_server_sends() {
     );
     assert_eq!(hex(&messages), fixture("bump.json"));
 }
+
+#[test]
+fn the_attack_fixture_is_what_the_server_sends() {
+    const TOKEN: ResumeToken = ResumeToken(19);
+    let address = start_server();
+    let mut socket = connect(address, TOKEN);
+    let messages = record(
+        &mut socket,
+        &[
+            Action::Move(East),
+            Action::Move(SouthEast),
+            Action::Attack(SouthEast),
+            Action::Attack(East),
+        ],
+    );
+    assert_eq!(hex(&messages), fixture("attack.json"));
+}

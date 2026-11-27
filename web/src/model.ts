@@ -5,6 +5,7 @@ import type {
   Action,
   AvailableAction,
   Direction,
+  Outcome,
   Position,
   ServerMessage,
   Terrain,
@@ -14,9 +15,7 @@ import type {
 export interface LogEntry {
   time: number;
   entity: number;
-  action: Action;
-  /** The entity a move bumped into (R13): the mover stayed in place. */
-  bumped: number | null;
+  outcome: Outcome;
 }
 
 /** Why the server ended the connection for good. */
@@ -24,8 +23,8 @@ export type End = "quarantined" | "controller_taken";
 
 /**
  * One step toward each direction, as the change of x (east) and of y
- * (south). A perceived move carries no position: the client steps it,
- * unless the move bumped (R13). A test in `crates/ash-wasm/src/lib.rs`
+ * (south). A perceived step carries no position: the client takes it.
+ * A bump leaves the mover in place (R13). A test in `crates/ash-wasm/src/lib.rs`
  * holds this table to the server's offsets.
  */
 const STEPS: Record<Direction, [number, number]> = {
@@ -75,13 +74,8 @@ export class PerceivedWorld {
         break;
       case "perceived":
         this.time = message.time;
-        this.log.push({
-          time: message.time,
-          entity: message.entity,
-          action: message.action,
-          bumped: message.bumped,
-        });
-        this.perceive(message.entity, message.action, message.bumped);
+        this.log.push({ time: message.time, entity: message.entity, outcome: message.outcome });
+        this.perceive(message.entity, message.outcome);
         break;
       case "refused":
         this.refused = true;
@@ -115,18 +109,21 @@ export class PerceivedWorld {
     return this.ended === undefined;
   }
 
-  private perceive(entity: number, action: Action, bumped: number | null): void {
+  private perceive(entity: number, outcome: Outcome): void {
     if (entity === this.controlled) {
       this.offer = [];
     }
     const position = this.positions.get(entity);
-    if (action.kind === "move" && bumped === null && position !== undefined) {
-      const [east, south] = STEPS[action.direction];
+    if (outcome.kind === "stepped" && position !== undefined) {
+      const [east, south] = STEPS[outcome.direction];
       this.positions.set(entity, { ...position, x: position.x + east, y: position.y + south });
     }
   }
 }
 
 function sameAction(a: Action, b: Action): boolean {
-  return a.kind === "move" && b.kind === "move" ? a.direction === b.direction : a.kind === b.kind;
+  if (a.kind === "wait" || b.kind === "wait") {
+    return a.kind === b.kind;
+  }
+  return a.kind === b.kind && a.direction === b.direction;
 }

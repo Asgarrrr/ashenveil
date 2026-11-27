@@ -19,6 +19,11 @@ impl Scheduler {
         self.entries.insert(position, (due, entity));
     }
 
+    /// The entity that acts next, with its due time.
+    pub fn head(&self) -> Option<(Time, EntityId)> {
+        self.entries.last().copied()
+    }
+
     /// Removes and returns the entity that acts next, with its due time.
     pub fn pop(&mut self) -> Option<(Time, EntityId)> {
         self.entries.pop()

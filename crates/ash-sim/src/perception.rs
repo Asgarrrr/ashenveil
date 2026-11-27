@@ -3,22 +3,66 @@
 use alloc::vec::Vec;
 
 use ash_core::entity::EntityId;
-use ash_core::tile::{Terrain, TilePosition};
+use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
-use crate::action::{Action, AvailableAction};
+use crate::action::AvailableAction;
+use crate::map::Map;
 use crate::world::World;
 
-/// One change, stamped with the time it happened (R17). It names the action,
-/// never the entity's speed, cost or next turn (R18).
+/// One change, stamped with the time it happened (R17): what `entity` did.
+/// Never the entity's speed, cost or next turn (R18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
-    pub action: Action,
-    /// The entity a move bumped into (R13): the mover stayed in place. None
-    /// for a move that stepped, and for a wait.
-    pub bumped: Option<EntityId>,
+    pub outcome: Outcome,
+}
+
+/// What an action did (A11), naming its target where it has one. Never the
+/// odds of a hit (A12).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// A move reached the neighboring tile in this direction.
+    Stepped(Direction),
+    /// A wait let time pass.
+    Waited,
+    /// A move ran into this entity (R13): the mover stayed in place.
+    Bumped(EntityId),
+    /// An attack struck this entity (A6).
+    Hit(EntityId),
+    /// An attack missed this entity (A6).
+    Missed(EntityId),
+}
+
+/// What a character perceives of the world: the only view a refusal reads
+/// (R10, F4). It shows no entity's speed, cost or next turn (R18). Under
+/// whole-map perception (R16), every character perceives the whole map and
+/// where every entity stands.
+pub(crate) struct Perception<'w> {
+    world: &'w World,
+}
+
+impl<'w> Perception<'w> {
+    /// R16: every character perceives the whole of `world`.
+    pub(crate) fn whole_map(world: &'w World) -> Self {
+        Self { world }
+    }
+
+    /// The map, every tile of it (R16).
+    pub(crate) fn map(&self) -> &'w Map {
+        self.world.map()
+    }
+
+    /// Where `entity` stands (R16).
+    pub(crate) fn position(&self, entity: EntityId) -> TilePosition {
+        self.world.position(entity)
+    }
+
+    /// The entity standing at `position`, if any (R16).
+    pub(crate) fn occupant(&self, position: TilePosition) -> Option<EntityId> {
+        self.world.occupant(position)
+    }
 }
 
 /// An entity a character perceives, and where it stands.
@@ -69,6 +113,7 @@ mod tests {
     use ash_core::entity::Speed;
 
     use super::*;
+    use crate::action::Action;
     use crate::controller::Controller;
 
     #[test]

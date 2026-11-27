@@ -1,5 +1,5 @@
 //! Acceptance of spec 0001, slice S7, over WebSocket: the client perceives
-//! the creature only through positions and perceived actions (R18).
+//! the creature only through positions and perceived outcomes (R18).
 //!
 //! The client chases the creature until a bump, planning each command on a
 //! replay of the accepted commands.
@@ -12,7 +12,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
+    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -20,6 +20,8 @@ use tungstenite::{Message, WebSocket};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/outcome.rs"]
+mod outcome;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -84,8 +86,7 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
         .map(|change| PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: action::to_wire(change.action),
-            bumped: change.bumped,
+            outcome: outcome::to_wire(change.outcome),
         })
         .collect()
 }
@@ -104,7 +105,7 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .map(|offer| offer.action)
         .min_by_key(|action| match action {
             Action::Move(direction) => distance(from.step(*direction)),
-            Action::Wait => distance(from),
+            Action::Wait | Action::Attack(_) => distance(from),
         })
         .unwrap_or(Action::Wait)
 }
@@ -118,14 +119,13 @@ fn entity_parts(perceived: &PerceivedEntity) -> (EntityId, TilePosition) {
 
 /// R18: everything a change says of an entity besides its time. The pattern
 /// names every field, so a new one fails to compile here.
-fn change_parts(change: &PerceivedChange) -> (EntityId, Action, Option<EntityId>) {
+fn change_parts(change: &PerceivedChange) -> (EntityId, Outcome) {
     let PerceivedChange {
         time: _,
         entity,
-        action,
-        bumped,
+        outcome,
     } = *change;
-    (entity, action, bumped)
+    (entity, outcome)
 }
 
 #[test]
@@ -172,14 +172,22 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         };
         for offer in &actions {
             let cost = match offer.action {
-                Action::Move(_) => 100,
+                Action::Move(_) | Action::Attack(_) => 100,
                 Action::Wait => 50,
             };
             assert_eq!(offer.cost.units(), cost, "{offer:?}");
         }
+        // R14: the offers are the simulation's, attacks included.
+        let offered: Vec<Action> = actions.iter().map(|offer| offer.action).collect();
+        let expected: Vec<Action> = replay
+            .available_actions()
+            .into_iter()
+            .map(|offer| action::to_wire(offer.action))
+            .collect();
+        assert_eq!(offered, expected);
         if received
             .iter()
-            .any(|change: &PerceivedChange| change.bumped.is_some())
+            .any(|change: &PerceivedChange| matches!(change.outcome, Outcome::Bumped(_)))
         {
             break;
         }
@@ -209,17 +217,19 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
     // mover stayed in place.
     let bump = received
         .iter()
-        .position(|change| change.bumped.is_some())
+        .position(|change| matches!(change.outcome, Outcome::Bumped(_)))
         .expect("the chase never bumped");
-    let (mover, _, bumped) = change_parts(&received[bump]);
-    let pair = [Some(mover), bumped];
+    let (mover, Outcome::Bumped(bumped)) = change_parts(&received[bump]) else {
+        unreachable!("{:?} is a bump", received[bump])
+    };
+    let pair = [mover, bumped];
     assert!(
-        pair == [Some(character), Some(creature)] || pair == [Some(creature), Some(character)],
+        pair == [character, creature] || pair == [creature, character],
         "{:?}",
         received[bump]
     );
 
-    // R6: the creature's changes decode to actions only, yet their times
+    // R6: the creature's changes decode to outcomes only, yet their times
     // show it moves for 50 and waits for 25.
     let creature_changes: Vec<_> = received
         .iter()
@@ -227,11 +237,11 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         .collect();
     assert!(creature_changes.len() > 2, "{creature_changes:?}");
     for pair in creature_changes.windows(2) {
-        let (_, action, _) = change_parts(pair[0]);
+        let (_, outcome) = change_parts(pair[0]);
         let paid = pair[1].time.units() - pair[0].time.units();
-        let cost = match action {
-            Action::Move(_) => 50,
-            Action::Wait => 25,
+        let cost = match outcome {
+            Outcome::Waited => 25,
+            Outcome::Stepped(_) | Outcome::Bumped(_) | Outcome::Hit(_) | Outcome::Missed(_) => 50,
         };
         assert_eq!(paid, cost, "after {:?}", pair[0]);
     }

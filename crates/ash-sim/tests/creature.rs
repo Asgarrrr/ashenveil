@@ -18,7 +18,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_sim::action::Action;
 use ash_sim::controller::Controller;
-use ash_sim::perception::PerceivedChange;
+use ash_sim::perception::{Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 const SEED: u64 = 13;
@@ -96,36 +96,36 @@ fn the_creature_moves_twice_per_character_move_for_50_and_waits_for_25() {
     let creature_changes = changes_of(&world, creature);
     for pair in creature_changes.windows(2) {
         let paid = pair[1].time.units() - pair[0].time.units();
-        let cost = match pair[0].action {
-            Action::Move(_) => 50,
-            Action::Wait => 25,
+        let cost = match pair[0].outcome {
+            Outcome::Waited => 25,
+            Outcome::Stepped(_) | Outcome::Bumped(_) | Outcome::Hit(_) | Outcome::Missed(_) => 50,
         };
         assert_eq!(paid, cost, "after {:?}", pair[0]);
     }
     assert!(
         creature_changes
             .iter()
-            .any(|change| change.action == Action::Wait),
+            .any(|change| change.outcome == Outcome::Waited),
         "the seeded run shows no creature wait"
     );
 
     // Between two character moves, a creature that only moves moves twice.
-    let per_character_move: Vec<Vec<Action>> = every_100
+    let per_character_move: Vec<Vec<Outcome>> = every_100
         .iter()
         .map(|&start| {
             creature_changes
                 .iter()
                 .filter(|change| (start..start + 100).contains(&change.time.units()))
-                .map(|change| change.action)
+                .map(|change| change.outcome)
                 .collect()
         })
         .collect();
     let only_moves: Vec<usize> = per_character_move
         .iter()
-        .filter(|actions| {
-            actions
+        .filter(|outcomes| {
+            outcomes
                 .iter()
-                .all(|action| matches!(action, Action::Move(_)))
+                .all(|outcome| matches!(outcome, Outcome::Stepped(_) | Outcome::Bumped(_)))
         })
         .map(Vec::len)
         .collect();
@@ -170,8 +170,7 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
         Some(&PerceivedChange {
             time: Time::ZERO,
             entity: character,
-            action: into_creature,
-            bumped: Some(creature),
+            outcome: Outcome::Bumped(creature),
         })
     );
     // The mover stays in place and pays the move: its next turn is at 100.
@@ -206,7 +205,7 @@ fn the_creature_wanders_only_through_actions_the_rules_allow() {
     let creature_changes = changes_of(&world, creature);
     let moves = creature_changes
         .iter()
-        .filter(|change| matches!(change.action, Action::Move(_)))
+        .filter(|change| matches!(change.outcome, Outcome::Stepped(_) | Outcome::Bumped(_)))
         .count();
     assert!(moves > 100, "the creature hardly wanders: {moves} moves");
     // The creature bumps the character too: the bump names it, and the
@@ -214,7 +213,7 @@ fn the_creature_wanders_only_through_actions_the_rules_allow() {
     assert!(
         creature_changes
             .iter()
-            .any(|change| change.bumped == Some(character)),
+            .any(|change| change.outcome == Outcome::Bumped(character)),
         "the seeded run shows no bump into the character"
     );
     assert_eq!(world.position(character), at(1, 1));

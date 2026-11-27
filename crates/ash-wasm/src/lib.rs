@@ -6,8 +6,8 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Direction, EntityId, PerceivedChange, PerceivedEntity,
-    ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ClientMessage, Direction, EntityId, Outcome, PerceivedChange,
+    PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -40,10 +40,20 @@ pub fn encode_wait(entity: u32) -> Vec<u8> {
 /// for any other name.
 #[wasm_bindgen]
 pub fn encode_move(entity: u32, direction: &str) -> Option<Vec<u8>> {
+    named_direction(direction).map(|direction| command(entity, Action::Move(direction)))
+}
+
+/// `entity` attacks toward `direction`, a name the decoded JSON uses; `None`
+/// for any other name.
+#[wasm_bindgen]
+pub fn encode_attack(entity: u32, direction: &str) -> Option<Vec<u8>> {
+    named_direction(direction).map(|direction| command(entity, Action::Attack(direction)))
+}
+
+fn named_direction(name: &str) -> Option<Direction> {
     Direction::ALL
         .into_iter()
-        .find(|candidate| direction_name(*candidate) == direction)
-        .map(|direction| command(entity, Action::Move(direction)))
+        .find(|candidate| direction_name(*candidate) == name)
 }
 
 fn command(entity: u32, action: Action) -> Vec<u8> {
@@ -83,14 +93,12 @@ fn message_json(message: &ServerMessage) -> String {
         ServerMessage::Perceived(PerceivedChange {
             time,
             entity,
-            action,
-            bumped,
+            outcome,
         }) => format!(
-            r#"{{"kind":"perceived","time":{},"entity":{},"action":{},"bumped":{}}}"#,
+            r#"{{"kind":"perceived","time":{},"entity":{},"outcome":{}}}"#,
             time.units(),
             entity.get(),
-            action_json(*action),
-            bumped.map_or_else(|| "null".to_owned(), |bumped| bumped.get().to_string())
+            outcome_json(*outcome)
         ),
         ServerMessage::Refused => r#"{"kind":"refused"}"#.to_owned(),
         ServerMessage::Quarantined => r#"{"kind":"quarantined"}"#.to_owned(),
@@ -140,6 +148,25 @@ fn action_json(action: Action) -> String {
             r#"{{"kind":"move","direction":"{}"}}"#,
             direction_name(direction)
         ),
+        Action::Attack(direction) => format!(
+            r#"{{"kind":"attack","direction":"{}"}}"#,
+            direction_name(direction)
+        ),
+    }
+}
+
+fn outcome_json(outcome: Outcome) -> String {
+    let target =
+        |kind: &str, target: EntityId| format!(r#"{{"kind":"{kind}","target":{}}}"#, target.get());
+    match outcome {
+        Outcome::Stepped(direction) => format!(
+            r#"{{"kind":"stepped","direction":"{}"}}"#,
+            direction_name(direction)
+        ),
+        Outcome::Waited => r#"{"kind":"waited"}"#.to_owned(),
+        Outcome::Bumped(bumped) => target("bumped", bumped),
+        Outcome::Hit(hit) => target("hit", hit),
+        Outcome::Missed(missed) => target("missed", missed),
     }
 }
 
@@ -155,7 +182,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn each_direction_name_encodes_the_move_it_names() {
+    fn each_direction_name_encodes_the_move_and_the_attack_it_names() {
         let names = [
             ("north", Direction::North),
             ("northeast", Direction::NorthEast),
@@ -176,8 +203,18 @@ mod tests {
                 }),
                 "{name}"
             );
+            let bytes = encode_attack(7, name).unwrap_or_else(|| panic!("{name} is unknown"));
+            assert_eq!(
+                ClientMessage::decode(&bytes),
+                Ok(ClientMessage::Command {
+                    entity: EntityId::new(7),
+                    action: Action::Attack(direction),
+                }),
+                "{name}"
+            );
         }
         assert_eq!(encode_move(7, "up"), None);
+        assert_eq!(encode_attack(7, "up"), None);
     }
 
     /// The web client steps a perceived move with its own copy of the

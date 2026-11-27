@@ -2,7 +2,7 @@
 // the command of each key, and redraws.
 
 import { draw, type View } from "./draw.js";
-import { commandForKey } from "./keys.js";
+import { Keyboard } from "./keys.js";
 import { PerceivedWorld } from "./model.js";
 import { decodeServerMessage, encodeCommand, encodeHello, loadCodec } from "./protocol.js";
 
@@ -22,11 +22,12 @@ const view: View = {
   log: element("log"),
 };
 const token = resumeToken();
+const keyboard = new Keyboard();
 let socket: WebSocket | undefined;
 
 connect();
 document.addEventListener("keydown", (event) => {
-  const action = commandForKey(event.code);
+  const action = keyboard.press(event.code);
   // R14: only an offered action is sent, so none is refused.
   if (action === undefined || world.controlled === undefined || world.costOf(action) === undefined) {
     return;

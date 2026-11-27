@@ -66,7 +66,7 @@ Sequential. Each slice reaches the browser: the simulation, the wire, the
 WASM codec and the web client. Inside a Rust slice, the first commit lays
 down the signatures with a failing acceptance test.
 
-### - [ ] S1 — The character strikes on purpose
+### - [x] S1 — The character strikes on purpose
 
 - Files: `crates/ash-sim/src/{lib,world,action,perception,wander}.rs`,
   `crates/ash-sim/src/combat.rs` (new), `crates/ash-sim/src/effect.rs`
@@ -223,4 +223,35 @@ hostile, neutral, condition, death, outcome.
 
 ## Proposed amendments
 
-(empty)
+- 2026-11-27, accepted by the human (found in S1, second-model read): a
+  perceived change carries one outcome and no action. The outcome is stepped
+  with its direction, waited, bumped, hit or missed; the last three name
+  their target. An impossible pair, such as a wait that hit, is then
+  unrepresentable in the simulation, on the wire and in the web model.
+  This amends:
+  - S1 Behavior: "The perceived change replaces `bumped` with an outcome"
+    reads "replaces `action` and `bumped` with one outcome".
+  - S1 Acceptance: "The decoder rejects unknown tags, truncated payloads and
+    impossible action and outcome pairs" reads "The decoder rejects unknown
+    tags, truncated payloads and an outcome whose target is its own actor".
+  - S3 Behavior: "an act (entity, action, outcome)" reads "an act (entity,
+    outcome)".
+  - Consequence for S2: a witness cannot tell a strike made by a move from
+    an explicit attack. The command log keeps the submitted action.
+- 2026-11-27, accepted by the human (second-model read): S2 says a move
+  into a creature "the actor perceives as hostile" resolves to an attack. A
+  wandering creature that moves into a hostile creature would then attack
+  it, against A13 (only the character attacks). S2 Behavior now reads: only
+  a character's move into a creature it perceives as hostile resolves to an
+  attack (A1). A creature's move into any entity stays a bump (A13, R13).
+- 2026-11-27, recorded (found in S1): the world no longer stores the clock
+  and the awaited entity. It derives both from the scheduler head, so an
+  effect cannot disagree with the scheduler. The F6 table of
+  `docs/plans/0003-ecs-brainstorm.md` is updated: both are derivable.
+- 2026-11-27, recorded (found in S1): the S1 acceptance runs as four
+  commands: `cargo xtask accept attack`, `accept attack_over_websocket`,
+  `accept decode_any_bytes` and `accept web_model`.
+- 2026-11-27, open (found in S1): an attack on the diagonal across a wall
+  corner is allowed. A3 says "adjacent", and R11 forbids only moves past a
+  corner. S1 follows A3 as written. The human questions whether diagonals
+  stay at all; that belongs to a design brainstorm, not to this spec.

@@ -21,7 +21,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
+    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -31,6 +31,8 @@ use Direction::{East, North, South, SouthEast};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/outcome.rs"]
+mod outcome;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -110,8 +112,7 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
         .map(|change| PerceivedChange {
             time: change.time,
             entity: change.entity,
-            action: action::to_wire(change.action),
-            bumped: change.bumped,
+            outcome: outcome::to_wire(change.outcome),
         })
         .collect()
 }
@@ -210,28 +211,40 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let mut received_changes = Vec::new();
     let mut accepted = Vec::new();
     let mut last_awaited = None;
-    let mut accept = |socket: &mut Socket, action: Action, time: u64, then: u64| {
-        send(socket, command(character, action));
-        let change = PerceivedChange {
-            time: Time::new(time),
-            entity: character,
-            action,
-            bumped: None,
-        };
-        let (changes, awaited) = receive_turn(socket);
-        assert_eq!(changes.first(), Some(&change));
-        match &awaited {
-            Some(ServerMessage::Awaited { time, entity, .. }) => {
-                assert_eq!((*time, *entity), (Time::new(then), character));
+    let mut accept =
+        |socket: &mut Socket, action: Action, outcome: Outcome, time: u64, then: u64| {
+            send(socket, command(character, action));
+            let change = PerceivedChange {
+                time: Time::new(time),
+                entity: character,
+                outcome,
+            };
+            let (changes, awaited) = receive_turn(socket);
+            assert_eq!(changes.first(), Some(&change));
+            match &awaited {
+                Some(ServerMessage::Awaited { time, entity, .. }) => {
+                    assert_eq!((*time, *entity), (Time::new(then), character));
+                }
+                other => panic!("expected the next turn, got {other:?}"),
             }
-            other => panic!("expected the next turn, got {other:?}"),
-        }
-        received_changes.extend(changes);
-        accepted.push(action);
-        last_awaited = awaited;
-    };
-    accept(&mut socket, Action::Move(East), 0, 100);
-    accept(&mut socket, Action::Move(East), 100, 200);
+            received_changes.extend(changes);
+            accepted.push(action);
+            last_awaited = awaited;
+        };
+    accept(
+        &mut socket,
+        Action::Move(East),
+        Outcome::Stepped(East),
+        0,
+        100,
+    );
+    accept(
+        &mut socket,
+        Action::Move(East),
+        Outcome::Stepped(East),
+        100,
+        200,
+    );
 
     // R10: a move into a wall is refused and advances nothing. So is a
     // command for an entity this controller does not drive.
@@ -241,7 +254,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     assert_eq!(receive(&mut socket), Some(ServerMessage::Refused));
 
     // The wait is stamped 200: the refusals moved no clock.
-    accept(&mut socket, Action::Wait, 200, 250);
+    accept(&mut socket, Action::Wait, Outcome::Waited, 200, 250);
 
     // R19: the controller leaves while its character is awaited.
     drop(socket);
@@ -279,8 +292,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
         Some(&PerceivedChange {
             time: Time::new(250),
             entity: character,
-            action: Action::Wait,
-            bumped: None,
+            outcome: Outcome::Waited,
         })
     );
     match awaited {

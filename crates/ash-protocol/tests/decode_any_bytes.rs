@@ -5,7 +5,7 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
+    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot, Terrain,
 };
 
@@ -37,6 +37,10 @@ fn client_messages() -> Vec<ClientMessage> {
         ClientMessage::Command {
             entity: EntityId::new(u32::MAX),
             action: Action::Wait,
+        },
+        ClientMessage::Command {
+            entity: EntityId::new(0),
+            action: Action::Attack(Direction::SouthWest),
         },
     ]
 }
@@ -75,29 +79,30 @@ fn server_messages() -> Vec<ServerMessage> {
             actions: Direction::ALL
                 .into_iter()
                 .map(Action::Move)
-                .chain([Action::Wait])
+                .chain([Action::Wait, Action::Attack(Direction::East)])
                 .map(|action| AvailableAction {
                     action,
                     cost: ActionCost::new(100),
                 })
                 .collect(),
         },
-        ServerMessage::Perceived(PerceivedChange {
-            time: Time::new(100),
-            entity: EntityId::new(2),
-            action: Action::Move(Direction::South),
-            bumped: None,
-        }),
-        ServerMessage::Perceived(PerceivedChange {
-            time: Time::new(150),
-            entity: EntityId::new(1),
-            action: Action::Move(Direction::West),
-            bumped: Some(EntityId::new(u32::MAX)),
-        }),
+        perceived(100, 2, Outcome::Stepped(Direction::South)),
+        perceived(125, 2, Outcome::Waited),
+        perceived(150, 1, Outcome::Bumped(EntityId::new(u32::MAX))),
+        perceived(200, 0, Outcome::Hit(EntityId::new(1))),
+        perceived(u64::MAX, 0, Outcome::Missed(EntityId::new(1))),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
     ]
+}
+
+fn perceived(time: u64, entity: u32, outcome: Outcome) -> ServerMessage {
+    ServerMessage::Perceived(PerceivedChange {
+        time: Time::new(time),
+        entity: EntityId::new(entity),
+        outcome,
+    })
 }
 
 fn valid_encodings() -> Vec<Vec<u8>> {
@@ -168,34 +173,65 @@ fn mutated_messages_never_panic_the_decoders() {
     }
 }
 
-/// The bytes of a perceived change at time 100 by entity 2, its action
-/// already encoded in `action`, then `bumped`, the bytes of its option.
-fn perceived_bytes(action: &[u8], bumped: &[u8]) -> Vec<u8> {
+/// The bytes of a perceived change at time 100 by entity 2, its outcome
+/// already encoded in `outcome`.
+fn perceived_bytes(outcome: &[u8]) -> Vec<u8> {
     let mut bytes = vec![2];
     bytes.extend(100_u64.to_le_bytes());
     bytes.extend(2_u32.to_le_bytes());
-    bytes.extend(action);
-    bytes.extend(bumped);
+    bytes.extend(outcome);
     bytes
 }
 
 #[test]
 fn a_change_the_simulation_cannot_make_is_refused() {
-    let wait = [0];
-    let move_south = [1, 4];
-    let some = |entity: u32| [vec![1], entity.to_le_bytes().to_vec()].concat();
-    // The control: a move bumping another entity decodes.
-    assert!(ServerMessage::decode(&perceived_bytes(&move_south, &some(1))).is_ok());
+    let targeting = |tag: u8, entity: u32| [vec![tag], entity.to_le_bytes().to_vec()].concat();
+    // The controls: a bump, a hit and a miss of another entity decode.
+    for tag in [2, 3, 4] {
+        assert!(ServerMessage::decode(&perceived_bytes(&targeting(tag, 1))).is_ok());
+    }
 
     let refused = [
-        ("a wait that bumped", perceived_bytes(&wait, &some(1))),
+        ("a bump into its mover", perceived_bytes(&targeting(2, 2))),
+        ("a hit on its attacker", perceived_bytes(&targeting(3, 2))),
+        ("a miss of its attacker", perceived_bytes(&targeting(4, 2))),
+        ("an outcome tag of 5", perceived_bytes(&[5])),
         (
-            "a move that bumped its mover",
-            perceived_bytes(&move_south, &some(2)),
+            "an outcome tag of 5 with a target",
+            perceived_bytes(&targeting(5, 1)),
         ),
-        ("an option tag of 2", perceived_bytes(&move_south, &[2])),
+        // Entity 2 acts: a missing target read as entity 0 is not its own
+        // actor, so only the missing bytes refuse these.
+        ("a bump with no target", perceived_bytes(&[2])),
+        ("a hit with no target", perceived_bytes(&[3])),
+        ("a miss with no target", perceived_bytes(&[4])),
+        ("a step toward no direction", perceived_bytes(&[0, 8])),
     ];
     for (what, bytes) in refused {
         assert!(ServerMessage::decode(&bytes).is_err(), "{what} decodes");
+    }
+}
+
+/// The bytes of a command of entity 3, its action already encoded in
+/// `action`.
+fn command_bytes(action: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![1];
+    bytes.extend(3_u32.to_le_bytes());
+    bytes.extend(action);
+    bytes
+}
+
+#[test]
+fn an_unknown_action_tag_is_refused() {
+    // The controls: a wait, a move east and an attack east decode.
+    for action in [&[0][..], &[1, 2], &[2, 2]] {
+        assert!(ClientMessage::decode(&command_bytes(action)).is_ok());
+    }
+    // An action tag of 3, alone and with a direction.
+    for action in [&[3][..], &[3, 2]] {
+        assert!(
+            ClientMessage::decode(&command_bytes(action)).is_err(),
+            "{action:?} decodes"
+        );
     }
 }

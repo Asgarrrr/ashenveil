@@ -4,7 +4,7 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::Direction;
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, AvailableAction};
-use ash_sim::perception::PerceivedChange;
+use ash_sim::perception::{Outcome, PerceivedChange};
 use ash_sim::scheduler::Scheduler;
 use ash_sim::world::World;
 
@@ -14,8 +14,7 @@ fn waited(time: u64, entity: EntityId) -> PerceivedChange {
     PerceivedChange {
         time: Time::new(time),
         entity,
-        action: Action::Wait,
-        bumped: None,
+        outcome: Outcome::Waited,
     }
 }
 

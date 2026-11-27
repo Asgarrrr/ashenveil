@@ -18,11 +18,12 @@ use crate::wire::{self, Reader, Wire};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResumeToken(pub u128);
 
-/// An action an entity can take (R4).
+/// An action an entity can take (R4, A3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Move(Direction),
     Wait,
+    Attack(Direction),
 }
 
 /// An action offered to the awaited entity, with the cost it would pay (R9).
@@ -39,15 +40,27 @@ pub struct PerceivedEntity {
     pub position: TilePosition,
 }
 
-/// One change, stamped with the time it happened (R17).
+/// One change, stamped with the time it happened (R17): what `entity` did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
-    pub action: Action,
-    /// The entity a move bumped into (R13): the mover stayed in place. None
-    /// for a move that stepped, and for a wait.
-    pub bumped: Option<EntityId>,
+    pub outcome: Outcome,
+}
+
+/// What an action did (A11), naming its target where it has one. Never the
+/// odds of a hit (A12).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// A move reached the neighboring tile in this direction.
+    Stepped(Direction),
+    Waited,
+    /// A move ran into this entity (R13): the mover stayed in place.
+    Bumped(EntityId),
+    /// An attack struck this entity (A6).
+    Hit(EntityId),
+    /// An attack missed this entity (A6).
+    Missed(EntityId),
 }
 
 /// Everything the character perceives at `time` (R16).
@@ -157,6 +170,10 @@ impl Wire for Action {
                 1_u8.write(out);
                 direction.write(out);
             }
+            Self::Attack(direction) => {
+                2_u8.write(out);
+                direction.write(out);
+            }
         }
     }
 
@@ -164,6 +181,7 @@ impl Wire for Action {
         match u8::read(input)? {
             0 => Ok(Self::Wait),
             1 => Direction::read(input).map(Self::Move),
+            2 => Direction::read(input).map(Self::Attack),
             _ => Err(DecodeError),
         }
     }
@@ -197,26 +215,62 @@ impl Wire for PerceivedEntity {
     }
 }
 
+impl Wire for Outcome {
+    fn write(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::Stepped(direction) => {
+                0_u8.write(out);
+                direction.write(out);
+            }
+            Self::Waited => 1_u8.write(out),
+            Self::Bumped(target) => {
+                2_u8.write(out);
+                target.write(out);
+            }
+            Self::Hit(target) => {
+                3_u8.write(out);
+                target.write(out);
+            }
+            Self::Missed(target) => {
+                4_u8.write(out);
+                target.write(out);
+            }
+        }
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Direction::read(input).map(Self::Stepped),
+            1 => Ok(Self::Waited),
+            2 => EntityId::read(input).map(Self::Bumped),
+            3 => EntityId::read(input).map(Self::Hit),
+            4 => EntityId::read(input).map(Self::Missed),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
 impl Wire for PerceivedChange {
     fn write(&self, out: &mut Vec<u8>) {
         self.time.write(out);
         self.entity.write(out);
-        self.action.write(out);
-        self.bumped.write(out);
+        self.outcome.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
         let change = Self {
             time: Time::read(input)?,
             entity: EntityId::read(input)?,
-            action: Action::read(input)?,
-            bumped: Option::read(input)?,
+            outcome: Outcome::read(input)?,
         };
-        // Only a move bumps, and never into its own mover (R13).
-        match (change.action, change.bumped) {
-            (_, None) => Ok(change),
-            (Action::Move(_), Some(bumped)) if bumped != change.entity => Ok(change),
-            _ => Err(DecodeError),
+        // No entity bumps or strikes itself (R13, A3).
+        match change.outcome {
+            Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target)
+                if target == change.entity =>
+            {
+                Err(DecodeError)
+            }
+            _ => Ok(change),
         }
     }
 }
