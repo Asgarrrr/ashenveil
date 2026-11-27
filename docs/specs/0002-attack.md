@@ -2,7 +2,8 @@
 
 ## Status
 
-Approved (2026-11-22).
+Delivered (2026-11-27). The human played the milestone and approved the
+glossary batch.
 
 ## Context
 
@@ -218,9 +219,9 @@ down the signatures with a failing acceptance test.
 
 ## Glossary proposals
 
-Proposed for the milestone and written to `CONTEXT.md` in the same change.
-Each definition restates the source named beside it. A second, independent
-read reworked the first draft; the human approves, edits or rejects each row.
+Approved by the human at the milestone (2026-11-27) and added to
+`CONTEXT.md`. Each definition restates the source named beside it. A second,
+independent read reworked the first draft.
 
 New entries:
 
@@ -284,15 +285,17 @@ or it is the obvious synonym the term replaces. Three cells are filled:
 A word the attack design uses stays out of the column, so "hostility",
 "blow" and "odds" are not avoided.
 
-Left for the human:
+Recorded with the approval:
 
 - "Health" rests on one line of pillar 4, where health is one item of a
   list. The attack design never uses the word.
 - "Combat" as a term makes `docs/design/attack.md` the first version of
   "the combat design" that the action and time design names.
-- The next spec can carry this table from the day it is approved, with the
+- The entry "Action cost" said the scheduler orders actions. R8 orders
+  entities, so the entry now states the cost alone.
+- The next spec carries this table from the day it is approved, with the
   code name of each term, so the milestone approves only the differences.
-  That changes `docs/templates/spec.md`.
+  A change of `docs/templates/spec.md` adds the section.
 
 ## Proposed amendments
 

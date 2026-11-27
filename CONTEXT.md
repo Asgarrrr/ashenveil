@@ -15,7 +15,7 @@ Seeded from the product decisions in `docs/plans/0000-methodology.md`.
 | Time unit | The unit of game time. | |
 | Entity | A thing of a world that acts when it is due, at its own speed, under the same rules whatever its controller. Today, a character or a creature. | |
 | Action | What an entity does when it is due. It takes effect at once, and its cost is the time the entity spends before it acts again. Today, move, wait or attack. | |
-| Action cost | The number of time units an action takes; the scheduler orders actions by it. | |
+| Action cost | The number of time units an action takes: the time its entity spends before it is due again. | |
 | Scheduler | What orders entities by the time they are due. Of two due at the same time, the one that became due first acts first. | |
 | Controller | What drives an entity: a player connection or the simulation. The player is an entity with a controller, never a global. | |
 | Catch-up | Lazy simulation of the time a world spent unloaded, run when the player returns. | |
