@@ -2,7 +2,8 @@
 
 ## Status
 
-Approved (2026-11-22).
+Delivered (2026-11-27). The human played the milestone and approved the
+glossary batch.
 
 ## Context
 
@@ -218,9 +219,9 @@ down the signatures with a failing acceptance test.
 
 ## Glossary proposals
 
-Proposed for the milestone and written to `CONTEXT.md` in the same change.
-Each definition restates the source named beside it. A second, independent
-read reworked the first draft; the human approves, edits or rejects each row.
+Approved by the human at the milestone (2026-11-27) and added to
+`CONTEXT.md`. Each definition restates the source named beside it. A second,
+independent read reworked the first draft.
 
 New entries:
 
@@ -247,6 +248,16 @@ Amended entries:
 | Snapshot | The whole state one character perceives, sent when its controller connects. | S4 Behavior, A9, A10 |
 | Quarantine | The state of a world whose simulation violated an invariant. Only that world stops. | The entry itself; "hit" is now a term |
 
+Second batch, the phase 1 names with no entry:
+
+| Term | Proposed definition | Source | Code name |
+|---|---|---|---|
+| Entity | A thing of a world that acts when it is due, at its own speed, under the same rules whatever its controller. Today, a character or a creature. | R3, R6, R8; entries Character, Creature | `EntityId`; the private row `Entity` in `world.rs`; `actor` for the entity taking an action |
+| Action | What an entity does when it is due. It takes effect at once, and its cost is the time the entity spends before it acts again. Today, move, wait or attack. | R4, R7, A3 | `Action` |
+| Scheduler | What orders entities by the time they are due. Of two due at the same time, the one that became due first acts first. | R8, ADR 0001 point 6 | `Scheduler` |
+| Refusal | The rules turning down a move or an attack, judged on what the entity perceives. A refused move or attack is not an action: it costs nothing, changes nothing and advances no clock. | R10, R11, A3, ADR 0001 point 4 | `Refused`, `ServerMessage::Refused` |
+| Offer | An action the rules allow the awaited entity, with the cost it would pay. A controller chooses only among its offers; a wait is always one. | R9, R14, ADR 0001 point 4 | `AvailableAction`, `available_actions`, `Awaited { actions }`; `offers` in `action.rs` |
+
 Choices behind the rows:
 
 - Each rule has one home. A1 lives in "Attack", and "Bump" excludes it.
@@ -267,20 +278,24 @@ Choices behind the rows:
 - The rows write "a character": a glossary states what holds for any
   character, and shared worlds must stay possible.
 
-Left for the human:
+The glossary gains an "Avoid" column: the words never to use for a term.
+A cell needs evidence: the word names the same concept in the repository,
+or it is the obvious synonym the term replaces. Three cells are filled:
+"monster" for creature, "available action" for offer, "HP" for hit points.
+A word the attack design uses stays out of the column, so "hostility",
+"blow" and "odds" are not avoided.
+
+Recorded with the approval:
 
 - "Health" rests on one line of pillar 4, where health is one item of a
   list. The attack design never uses the word.
 - "Combat" as a term makes `docs/design/attack.md` the first version of
   "the combat design" that the action and time design names.
-- A second batch for the phase 1 names with no entry: entity, action,
-  refusal, scheduler, offer. Their sources are the action and time rules.
-- An "Avoid" column in `CONTEXT.md`, one cell per term for its forbidden
-  synonyms (for example "hostility" for disposition). It changes the format
-  of the glossary.
-- The next spec can carry this table from the day it is approved, with the
+- The entry "Action cost" said the scheduler orders actions. R8 orders
+  entities, so the entry now states the cost alone.
+- The next spec carries this table from the day it is approved, with the
   code name of each term, so the milestone approves only the differences.
-  That changes `docs/templates/spec.md`.
+  A change of `docs/templates/spec.md` adds the section.
 
 ## Proposed amendments
 
