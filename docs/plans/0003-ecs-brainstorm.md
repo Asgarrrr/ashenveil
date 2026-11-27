@@ -133,6 +133,7 @@ Today's fields (`crates/ash-sim/src/world.rs`):
 | Awaited entity | derivable |
 | Id counter | saved |
 | RNG state | saved |
+| Corpses, each with its rank among the deaths | saved |
 | Clock | derivable |
 | Map | saved, or derivable from seed and content once world generation exists |
 | Indexes | derivable |
@@ -141,6 +142,10 @@ Today's fields (`crates/ash-sim/src/world.rs`):
 
 2026-11-27, found in spec 0002 S1: the awaited entity and the clock are
 derivable, not saved. The world derives both from the scheduler head.
+
+2026-11-28, spec 0003 S1: the corpses are saved (D12). The rank of a
+corpse is the explicit key of the order of the deaths (ADR 0001, point
+5).
 
 - A test restores a world while it awaits a controller. The next offers
   and the order of perceived changes must match the original run (R19).

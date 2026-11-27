@@ -488,6 +488,7 @@ impl Wire for Snapshot {
         self.width.write(out);
         self.terrain.write(out);
         self.entities.write(out);
+        self.corpses.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -496,7 +497,7 @@ impl Wire for Snapshot {
             width: u32::read(input)?,
             terrain: Vec::read(input)?,
             entities: Vec::read(input)?,
-            corpses: Vec::new(),
+            corpses: Vec::read(input)?,
         };
         let width = usize::try_from(snapshot.width).map_err(|_| DecodeError)?;
         // A zero width has no remainder: it is refused with the ragged rows.

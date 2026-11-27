@@ -36,7 +36,6 @@ pub(crate) enum Effect {
     Remove { entity: EntityId },
     /// A death leaves this corpse, after every corpse of an earlier death
     /// (D2). No effect removes or moves a corpse.
-    #[expect(dead_code, reason = "signatures commit: no death leaves a corpse yet")]
     LeaveCorpse(Corpse),
     /// Every character perceives `change` (R16, R17).
     Perceive(PerceivedChange),

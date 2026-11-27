@@ -77,7 +77,13 @@ export function logLine(world: PerceivedWorld, change: PerceivedChange): string 
   }
 }
 
-/** The terrain, then one glyph for each entity, in its color. */
+/** The color of a corpse: apart from every entity, which it never is (D2). */
+const CORPSE_COLOR = "#a87";
+
+/**
+ * The terrain, then one glyph for each corpse, then one for each entity, in
+ * its color. An entity standing on a corpse hides it (D3).
+ */
 export function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void {
   canvas.width = world.width * TILE;
   canvas.height = world.height * TILE;
@@ -94,6 +100,10 @@ export function drawMap(canvas: HTMLCanvasElement, world: PerceivedWorld): void 
   context.font = `${TILE - 6}px monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
+  context.fillStyle = CORPSE_COLOR;
+  for (const { position: { x, y } } of world.corpses) {
+    context.fillText("%", (x + 0.5) * TILE, (y + 0.5) * TILE);
+  }
   for (const [entity, { position: { x, y } }] of world.entities) {
     context.fillStyle = color(world, entity);
     context.fillText(entity === world.controlled ? "@" : "e", (x + 0.5) * TILE, (y + 0.5) * TILE);

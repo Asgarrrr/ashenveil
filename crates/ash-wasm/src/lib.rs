@@ -323,10 +323,10 @@ mod tests {
             ("dying", Condition::Dying),
         ];
         // This crate cannot name a `Time`, so the snapshot starts from its
-        // bytes: tag 0 and the time, a width of 1, one tile, a floor, and
-        // no entity.
+        // bytes: tag 0 and the time, a width of 1, one tile, a floor, no
+        // entity and no corpse.
         let empty = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         let Ok(ServerMessage::Snapshot(empty)) = ServerMessage::decode(&empty) else {
             panic!("the empty snapshot does not decode");

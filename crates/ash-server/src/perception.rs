@@ -3,11 +3,12 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    ChangeKind, Condition, Disposition, Offer, Outcome, PerceivedChange, PerceivedEntity,
-    PerceivedHealth, ServerMessage, Snapshot,
+    ChangeKind, Condition, Died, Disposition, Offer, Outcome, PerceivedChange, PerceivedCorpse,
+    PerceivedEntity, PerceivedHealth, ServerMessage, Snapshot,
 };
 use ash_sim::combat::Condition as SimCondition;
 use ash_sim::controller::Disposition as SimDisposition;
+use ash_sim::death::Died as SimDied;
 use ash_sim::perception::{
     self, ChangeKind as SimKind, Outcome as SimOutcome, PerceivedChange as SimChange,
     PerceivedHealth as SimHealth,
@@ -36,7 +37,15 @@ pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
                 health: health_to_wire(perceived.health),
             })
             .collect(),
-        corpses: Vec::new(),
+        corpses: snapshot
+            .corpses
+            .into_iter()
+            .map(|corpse| PerceivedCorpse {
+                position: corpse.position,
+                died: died_to_wire(corpse.died),
+                entity: corpse.entity,
+            })
+            .collect(),
     })
 }
 
@@ -99,6 +108,13 @@ fn condition_to_wire(condition: SimCondition) -> Condition {
         SimCondition::Wounded => Condition::Wounded,
         SimCondition::BadlyWounded => Condition::BadlyWounded,
         SimCondition::Dying => Condition::Dying,
+    }
+}
+
+fn died_to_wire(died: SimDied) -> Died {
+    match died {
+        SimDied::Character => Died::Character,
+        SimDied::Creature => Died::Creature,
     }
 }
 

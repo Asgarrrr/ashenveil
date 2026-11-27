@@ -6,6 +6,7 @@ use alloc::vec::Vec;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 
+use crate::controller::Controller;
 use crate::effect::Effect;
 use crate::perception::{ChangeKind, PerceivedChange};
 use crate::world::World;
@@ -33,8 +34,17 @@ pub enum Died {
 /// order: it leaves the world, its corpse lies on its tile, and every
 /// character perceives its death at the time of the lethal hit (A11).
 pub(crate) fn effects(world: &World, entity: EntityId) -> Vec<Effect> {
+    let died = match world.controller(entity) {
+        Controller::Player => Died::Character,
+        Controller::Wander(_) => Died::Creature,
+    };
     alloc::vec![
         Effect::Remove { entity },
+        Effect::LeaveCorpse(Corpse {
+            entity,
+            position: world.position(entity),
+            died,
+        }),
         Effect::Perceive(PerceivedChange {
             time: world.clock(),
             entity,
