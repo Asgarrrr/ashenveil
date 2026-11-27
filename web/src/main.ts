@@ -31,6 +31,8 @@ document.addEventListener("keydown", (event) => {
   const action = keyboard.press(event);
   // R14: only an offered action is sent, so none is refused.
   if (action === undefined || world.controlled === undefined || world.costOf(action) === undefined) {
+    // The key may have armed or cancelled the attack, which the status shows.
+    redraw();
     return;
   }
   event.preventDefault();
@@ -71,7 +73,7 @@ function connect(): void {
 }
 
 function redraw(): void {
-  draw(view, world, socket !== undefined);
+  draw(view, world, socket !== undefined, keyboard.attacking);
 }
 
 /** The token of this browser's world, chosen once and kept. */

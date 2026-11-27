@@ -38,14 +38,22 @@ const COMMANDS = new Map<string, Action>([
 
 /** Turns key presses into commands. */
 export class Keyboard {
-  /** The attack key was the last key pressed. */
-  private attacking = false;
+  /** The attack key was the last key pressed. The page shows it. */
+  attacking = false;
 
   /**
    * The command the press `key` completes, if any. After the attack key, a
    * direction key attacks toward its direction; any other key cancels.
+   *
+   * A key pressed with a modifier is a shortcut of the browser. It completes
+   * no command and cancels the attack: Cmd+F or Ctrl+F, then a direction,
+   * would strike with no purpose (A3).
    */
   press(key: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey">): Action | undefined {
+    if (key.metaKey || key.ctrlKey || key.altKey) {
+      this.attacking = false;
+      return undefined;
+    }
     if (key.code === ATTACK) {
       this.attacking = true;
       return undefined;
