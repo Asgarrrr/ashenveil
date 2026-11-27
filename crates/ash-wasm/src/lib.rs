@@ -117,11 +117,10 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
              disposition,
              health,
          }| {
-            let disposition = match disposition {
-                None => "null",
-                Some(Disposition::Hostile) => r#""hostile""#,
-                Some(Disposition::Neutral) => r#""neutral""#,
-            };
+            let disposition = disposition.map_or_else(
+                || "null".to_owned(),
+                |disposition| format!(r#""{}""#, disposition_name(disposition)),
+            );
             let health = match *health {
                 PerceivedHealth::HitPoints { current, max } => {
                     format!(r#"{{"kind":"hit_points","current":{current},"max":{max}}}"#)
@@ -196,6 +195,10 @@ fn change_json(change: PerceivedChange) -> String {
             "condition",
             format!(r#","condition":"{}""#, condition_name(condition)),
         ),
+        ChangeKind::Disposition(disposition) => (
+            "disposition",
+            format!(r#","disposition":"{}""#, disposition_name(disposition)),
+        ),
     };
     format!(
         r#"{{"kind":"{kind}","time":{},"entity":{}{field}}}"#,
@@ -210,6 +213,13 @@ fn condition_name(condition: Condition) -> &'static str {
         Condition::Wounded => "wounded",
         Condition::BadlyWounded => "badly_wounded",
         Condition::Dying => "dying",
+    }
+}
+
+fn disposition_name(disposition: Disposition) -> &'static str {
+    match disposition {
+        Disposition::Hostile => "hostile",
+        Disposition::Neutral => "neutral",
     }
 }
 
@@ -412,7 +422,7 @@ mod tests {
             5_u32.to_le_bytes(),
         );
         // Tag 2 is a perceived change; its next tag is the kind of change.
-        let changes: [(&[&[u8]], &str); 7] = [
+        let changes: [(&[&[u8]], &str); 8] = [
             (
                 &[&[2, 0], &time, &entity, &[0, 4]],
                 r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"stepped","direction":"south"}}"#,
@@ -440,6 +450,10 @@ mod tests {
             (
                 &[&[2, 2], &time, &entity, &[2]],
                 r#"{"kind":"condition","time":25,"entity":2,"condition":"badly_wounded"}"#,
+            ),
+            (
+                &[&[2, 3], &time, &entity, &[1]],
+                r#"{"kind":"disposition","time":25,"entity":2,"disposition":"hostile"}"#,
             ),
         ];
         for (fields, change) in changes {

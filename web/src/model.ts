@@ -131,6 +131,9 @@ export class PerceivedWorld {
       }
       return;
     }
+    if (change.kind === "disposition") {
+      return;
+    }
     const { outcome } = change;
     if (entity === this.controlled) {
       this.offers = [];

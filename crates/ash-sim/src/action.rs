@@ -125,10 +125,9 @@ pub(crate) fn resolve(
         entity: actor,
         kind: ChangeKind::Act(outcome),
     }));
-    // A11: what a hit does to its target is perceived after the hit.
-    if let Outcome::Hit(target) = outcome {
-        in_order.extend(combat::hit(world, target));
-    }
+    // A11: what an attack does to its target is perceived after the hit or
+    // the miss.
+    in_order.extend(combat::struck(world, outcome));
     in_order.push(Effect::EndTurn {
         due: world.clock().after(action.cost(world.speed(actor))),
     });

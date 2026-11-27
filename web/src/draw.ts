@@ -74,6 +74,8 @@ export function logLine(world: PerceivedWorld, change: PerceivedChange): string 
       return `${who} dies`;
     case "condition":
       return `${who} looks ${words(change.condition)}`;
+    case "disposition":
+      return who;
   }
 }
 

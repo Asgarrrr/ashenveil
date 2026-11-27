@@ -1,6 +1,6 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S4, and of spec 0003, slice S1: the perceived-world model
-// of the web client, fed through the real WASM codec. `cargo xtask accept
+// slices S1 to S4, and of spec 0003, slices S1 and S2: the perceived-world
+// model of the web client, fed through the real WASM codec. `cargo xtask accept
 // web_model` builds the client, then runs this file with Node's test runner.
 //
 // Each fixture holds the binary messages a real server sent, in hex. The
@@ -19,7 +19,7 @@
 //
 // `fixtures/attack.json`: the same world as `bump.json`. Entity 0 moved
 // southeast twice, then attacked the neutral creature twice: northwest,
-// then west (A3).
+// then west (A3). The first attack made it hostile (A4).
 //
 // `fixtures/death.json`: another world. Entity 0 moved east, then
 // southeast, then attacked the hostile creature to the southeast twice.
@@ -108,6 +108,11 @@ const outcomeOf = (message) =>
 const isDeath = (message) => message.kind === "perceived" && message.change.kind === "death";
 const isConditionChange = (message) =>
   message.kind === "perceived" && message.change.kind === "condition";
+const isDispositionChange = (message) =>
+  message.kind === "perceived" && message.change.kind === "disposition";
+/** The disposition `world` holds for each entity. */
+const dispositions = (world) =>
+  [...world.entities.values()].map(({ entity, disposition }) => [entity, disposition]);
 
 /** The hit points or the condition of each entity `world` holds. */
 const healths = (world) => [...world.entities.values()].map(({ entity, health }) => [entity, health]);
@@ -689,6 +694,81 @@ test("the log line of a change of condition says how the entity looks", () => {
   assert.equal(looks("wounded"), "200  entity 2 looks wounded");
   assert.equal(looks("badly_wounded"), "200  entity 2 looks badly wounded");
   assert.equal(looks("dying"), "200  entity 2 looks dying");
+});
+
+test("the recorded attack makes the neutral creature hostile, right after the hit and its condition", () => {
+  const changed = indexOf(attack, isDispositionChange);
+  const before = replay(attack.slice(0, changed));
+  const after = replay(attack.slice(0, changed + 1));
+
+  // A4: entity 2 was neutral, and stays hostile to the end.
+  assert.deepEqual(dispositions(before), [
+    [0, null],
+    [1, "hostile"],
+    [2, "neutral"],
+  ]);
+  assert.deepEqual(dispositions(after), [
+    [0, null],
+    [1, "hostile"],
+    [2, "hostile"],
+  ]);
+  assert.deepEqual(dispositions(replay(attack)), dispositions(after));
+  // A11: the hit, its change of condition, then the change of disposition.
+  assert.deepEqual(after.log.slice(-3), [
+    act(200, 0, { kind: "hit", target: 2 }),
+    { kind: "condition", time: 200, entity: 2, condition: "wounded" },
+    { kind: "disposition", time: 200, entity: 2, disposition: "hostile" },
+  ]);
+  // The second attack changed no disposition.
+  assert.equal(replay(attack).log.filter(({ kind }) => kind === "disposition").length, 1);
+});
+
+test("a change of disposition changes the disposition of its creature alone", () => {
+  const world = new PerceivedWorld();
+  world.apply(
+    snapshot([
+      perceivedEntity(0, 1, 1, null, hitPoints(10, 10)),
+      perceivedEntity(3, 2, 1, "neutral", inCondition("wounded")),
+      perceivedEntity(5, 3, 1, "neutral"),
+    ]),
+  );
+  const change = { kind: "disposition", time: 0, entity: 3, disposition: "hostile" };
+  world.apply({ kind: "perceived", change });
+
+  // Its position and its condition stay.
+  assert.deepEqual(world.entities.get(3), perceivedEntity(3, 2, 1, "hostile", inCondition("wounded")));
+  assert.deepEqual(dispositions(world), [
+    [0, null],
+    [3, "hostile"],
+    [5, "neutral"],
+  ]);
+  assert.deepEqual(world.log, [change]);
+  // A change that names an entity the client does not hold adds none.
+  world.apply({ kind: "perceived", change: { ...change, entity: 9 } });
+  assert.deepEqual([...world.entities.keys()], [0, 3, 5]);
+});
+
+test("a change of disposition decodes to the disposition its tag names", () => {
+  // A change is tag 2, then kind 3 for a change of disposition, the time
+  // and the entity, little-endian, then the tag of a disposition.
+  const names = { 1: "hostile", 2: "neutral" };
+  for (const [tag, disposition] of Object.entries(names)) {
+    const bytes = Uint8Array.of(2, 3, 44, 1, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, Number(tag));
+    assert.deepEqual(decodeServerMessage(bytes), {
+      kind: "perceived",
+      change: { kind: "disposition", time: 300, entity: 7, disposition },
+    });
+  }
+});
+
+test("the page logs a change of disposition as the creature turning hostile", () => {
+  const world = replay(attack.slice(0, indexOf(attack, isDispositionChange) + 1));
+  // The log shows the newest change first.
+  assert.deepEqual(drawn(world).log.lines.slice(0, 3), [
+    "200  entity 2 turns hostile",
+    "200  entity 2 looks wounded",
+    "200  @ hits entity 2",
+  ]);
 });
 
 test("a refused command advances nothing and keeps the offers", () => {

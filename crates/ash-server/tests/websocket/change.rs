@@ -3,10 +3,11 @@
 //! alone. It repeats the server's mapping on purpose, like `action.rs`.
 
 use ash_protocol::message::{
-    ChangeKind as WireKind, Condition as WireCondition, Outcome as WireOutcome,
-    PerceivedChange as WireChange,
+    ChangeKind as WireKind, Condition as WireCondition, Disposition as WireDisposition,
+    Outcome as WireOutcome, PerceivedChange as WireChange,
 };
 use ash_sim::combat::Condition as SimCondition;
+use ash_sim::controller::Disposition as SimDisposition;
 use ash_sim::perception::{
     ChangeKind as SimKind, Outcome as SimOutcome, PerceivedChange as SimChange,
 };
@@ -19,6 +20,10 @@ pub fn to_wire(change: SimChange) -> WireChange {
             SimKind::Act(outcome) => WireKind::Act(outcome_to_wire(outcome)),
             SimKind::Death => WireKind::Death,
             SimKind::Condition(condition) => WireKind::Condition(condition_to_wire(condition)),
+            SimKind::Disposition(disposition) => WireKind::Disposition(match disposition {
+                SimDisposition::Hostile => WireDisposition::Hostile,
+                SimDisposition::Neutral => WireDisposition::Neutral,
+            }),
         },
     }
 }

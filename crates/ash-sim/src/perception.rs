@@ -33,6 +33,9 @@ pub enum ChangeKind {
     /// A hit left the entity in another condition (A10). That hit is the
     /// change before, at the same time.
     Condition(Condition),
+    /// A character's attack left the creature in this disposition (A4): the
+    /// last change of that attack, at the same time (A11).
+    Disposition(Disposition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the

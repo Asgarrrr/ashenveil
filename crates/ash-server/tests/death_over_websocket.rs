@@ -145,7 +145,8 @@ fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
         || match kind {
             ChangeKind::Act(Outcome::Stepped(_) | Outcome::Waited)
             | ChangeKind::Death
-            | ChangeKind::Condition(_) => false,
+            | ChangeKind::Condition(_)
+            | ChangeKind::Disposition(_) => false,
             ChangeKind::Act(
                 Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target),
             ) => target == entity,

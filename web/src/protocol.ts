@@ -48,13 +48,15 @@ export type PerceivedHealth =
 
 /**
  * A change every character perceives, stamped with the time it happened
- * (R17): an entity acts, an entity dies and leaves the world (A8), or a hit
- * leaves an entity in another condition (A10).
+ * (R17): an entity acts, an entity dies and leaves the world (A8), a hit
+ * leaves an entity in another condition (A10), or an attack leaves a
+ * creature in another disposition (A4).
  */
 export type PerceivedChange = { time: number; entity: number } & (
   | { kind: "act"; outcome: Outcome }
   | { kind: "death" }
   | { kind: "condition"; condition: Condition }
+  | { kind: "disposition"; disposition: Disposition }
 );
 
 export type Terrain = "floor" | "wall";

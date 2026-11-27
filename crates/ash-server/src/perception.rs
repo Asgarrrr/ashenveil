@@ -81,6 +81,9 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
             SimKind::Act(outcome) => ChangeKind::Act(outcome_to_wire(outcome)),
             SimKind::Death => ChangeKind::Death,
             SimKind::Condition(condition) => ChangeKind::Condition(condition_to_wire(condition)),
+            SimKind::Disposition(disposition) => {
+                ChangeKind::Disposition(disposition_to_wire(disposition))
+            }
         },
     }
 }

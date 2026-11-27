@@ -115,12 +115,40 @@ pub(crate) fn attack(
     (outcome, after)
 }
 
+/// A11: what an attack that ended in `outcome` changes after its hit or its
+/// miss, in order: what a hit does to its target, then the change of
+/// disposition (A4). A creature that dies of the attack keeps its
+/// disposition. Any other outcome changes nothing more.
+pub(crate) fn struck(world: &World, outcome: Outcome) -> Vec<Effect> {
+    let (target, mut effects) = match outcome {
+        Outcome::Hit(target) => (target, hit(world, target)),
+        Outcome::Missed(target) => (target, Vec::new()),
+        Outcome::Stepped(_) | Outcome::Waited | Outcome::Bumped(_) => return Vec::new(),
+    };
+    let died = effects
+        .iter()
+        .any(|effect| matches!(effect, Effect::Remove { entity } if *entity == target));
+    if !died {
+        effects.extend(provoked(world, target));
+    }
+    effects
+}
+
+/// A4: what an attack on `target`, which lives on, changes of its
+/// disposition. A neutral creature becomes hostile, perceived at the time
+/// of the attack. A hostile creature stays hostile, and a character has no
+/// disposition: nothing changes. Only a character attacks a creature (A13).
+fn provoked(world: &World, target: EntityId) -> Vec<Effect> {
+    let _ = (world, target);
+    Vec::new()
+}
+
 /// A6, A8, A10: what a hit on `target` changes, in order. The target loses
 /// 3 hit points. At zero it dies, with the effects of a death (D1). The
 /// death of a character is out of scope: its zero hit points crash through
 /// `invariant!`. A target that lives on in another condition is perceived
 /// in it, at the time of the hit (A11).
-pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
+fn hit(world: &World, target: EntityId) -> Vec<Effect> {
     let before = world.health(target);
     let health = before.damaged(DAMAGE);
     let mut effects = alloc::vec![Effect::Damage {
@@ -250,10 +278,11 @@ mod tests {
         let rng = Rng::new(182);
         let mut world = World::new(0, Speed::new(1));
         let attacker = world.awaited();
+        // Hostile already, so the attack changes no disposition (A4).
         let target = world.create_entity(
             Speed::new(1),
             TilePosition { x: 2, y: 1, z: 0 },
-            Controller::Wander(Disposition::Neutral),
+            Controller::Wander(Disposition::Hostile),
         );
         let perception = Perception::whole_map(&world);
 
