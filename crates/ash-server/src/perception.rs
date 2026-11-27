@@ -5,7 +5,7 @@ use ash_core::entity::EntityId;
 use ash_protocol::message::{
     AvailableAction, PerceivedChange, PerceivedEntity, ServerMessage, Snapshot,
 };
-use ash_sim::perception;
+use ash_sim::perception::{self, Outcome};
 use ash_sim::world::World;
 
 use crate::action;
@@ -50,7 +50,11 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
             time: change.time,
             entity: change.entity,
             action: action::to_wire(change.action),
-            bumped: change.bumped,
+            // Until the wire carries the outcome, it carries only a bump.
+            bumped: match change.outcome {
+                Outcome::Bumped(bumped) => Some(bumped),
+                _ => None,
+            },
         })
     })
 }

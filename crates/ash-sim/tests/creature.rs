@@ -18,7 +18,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_sim::action::Action;
 use ash_sim::controller::Controller;
-use ash_sim::perception::PerceivedChange;
+use ash_sim::perception::{Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 const SEED: u64 = 13;
@@ -97,7 +97,7 @@ fn the_creature_moves_twice_per_character_move_for_50_and_waits_for_25() {
     for pair in creature_changes.windows(2) {
         let paid = pair[1].time.units() - pair[0].time.units();
         let cost = match pair[0].action {
-            Action::Move(_) => 50,
+            Action::Move(_) | Action::Attack(_) => 50,
             Action::Wait => 25,
         };
         assert_eq!(paid, cost, "after {:?}", pair[0]);
@@ -171,7 +171,7 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
             time: Time::ZERO,
             entity: character,
             action: into_creature,
-            bumped: Some(creature),
+            outcome: Outcome::Bumped(creature),
         })
     );
     // The mover stays in place and pays the move: its next turn is at 100.
@@ -214,7 +214,7 @@ fn the_creature_wanders_only_through_actions_the_rules_allow() {
     assert!(
         creature_changes
             .iter()
-            .any(|change| change.bumped == Some(character)),
+            .any(|change| change.outcome == Outcome::Bumped(character)),
         "the seeded run shows no bump into the character"
     );
     assert_eq!(world.position(character), at(1, 1));

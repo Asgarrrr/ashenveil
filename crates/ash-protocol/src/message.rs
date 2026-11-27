@@ -18,11 +18,12 @@ use crate::wire::{self, Reader, Wire};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ResumeToken(pub u128);
 
-/// An action an entity can take (R4).
+/// An action an entity can take (R4, A3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Move(Direction),
     Wait,
+    Attack(Direction),
 }
 
 /// An action offered to the awaited entity, with the cost it would pay (R9).
@@ -157,6 +158,10 @@ impl Wire for Action {
                 1_u8.write(out);
                 direction.write(out);
             }
+            Self::Attack(direction) => {
+                2_u8.write(out);
+                direction.write(out);
+            }
         }
     }
 
@@ -164,6 +169,7 @@ impl Wire for Action {
         match u8::read(input)? {
             0 => Ok(Self::Wait),
             1 => Direction::read(input).map(Self::Move),
+            2 => Direction::read(input).map(Self::Attack),
             _ => Err(DecodeError),
         }
     }

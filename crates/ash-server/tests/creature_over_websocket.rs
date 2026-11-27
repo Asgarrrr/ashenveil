@@ -15,6 +15,7 @@ use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot,
 };
+use ash_sim::perception::Outcome;
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
@@ -85,7 +86,10 @@ fn changes_since(world: &World, seen: usize) -> Vec<PerceivedChange> {
             time: change.time,
             entity: change.entity,
             action: action::to_wire(change.action),
-            bumped: change.bumped,
+            bumped: match change.outcome {
+                Outcome::Bumped(bumped) => Some(bumped),
+                _ => None,
+            },
         })
         .collect()
 }
@@ -104,7 +108,7 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
         .map(|offer| offer.action)
         .min_by_key(|action| match action {
             Action::Move(direction) => distance(from.step(*direction)),
-            Action::Wait => distance(from),
+            Action::Wait | Action::Attack(_) => distance(from),
         })
         .unwrap_or(Action::Wait)
 }
@@ -172,7 +176,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         };
         for offer in &actions {
             let cost = match offer.action {
-                Action::Move(_) => 100,
+                Action::Move(_) | Action::Attack(_) => 100,
                 Action::Wait => 50,
             };
             assert_eq!(offer.cost.units(), cost, "{offer:?}");
@@ -230,7 +234,7 @@ fn the_client_perceives_the_creature_only_through_positions_and_actions() {
         let (_, action, _) = change_parts(pair[0]);
         let paid = pair[1].time.units() - pair[0].time.units();
         let cost = match action {
-            Action::Move(_) => 50,
+            Action::Move(_) | Action::Attack(_) => 50,
             Action::Wait => 25,
         };
         assert_eq!(paid, cost, "after {:?}", pair[0]);

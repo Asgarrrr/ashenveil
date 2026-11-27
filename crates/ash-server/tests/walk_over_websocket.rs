@@ -24,6 +24,7 @@ use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, PerceivedChange, PerceivedEntity, ResumeToken,
     ServerMessage, Snapshot,
 };
+use ash_sim::perception::Outcome;
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
 
@@ -111,7 +112,10 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
             time: change.time,
             entity: change.entity,
             action: action::to_wire(change.action),
-            bumped: change.bumped,
+            bumped: match change.outcome {
+                Outcome::Bumped(bumped) => Some(bumped),
+                _ => None,
+            },
         })
         .collect()
 }

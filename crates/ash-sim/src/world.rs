@@ -9,8 +9,9 @@ use ash_core::time::Time;
 
 use crate::action::{Action, AvailableAction, Refused};
 use crate::controller::Controller;
+use crate::effect::Effects;
 use crate::map::Map;
-use crate::perception::PerceivedChange;
+use crate::perception::{Outcome, PerceivedChange};
 use crate::scheduler::Scheduler;
 use crate::wander;
 
@@ -184,26 +185,32 @@ impl World {
     /// `entity` takes `action` under the rules every controller follows
     /// (R3), and becomes due once its cost is paid.
     fn act(&mut self, entity: EntityId, action: Action) -> Result<(), Refused> {
-        let mut bumped = None;
-        if let Action::Move(direction) = action {
-            let from = self.position(entity);
-            if !self.map.allows_move(from, direction) {
-                return Err(Refused);
+        let outcome = match action {
+            Action::Wait => Outcome::Waited,
+            Action::Move(direction) => {
+                let from = self.position(entity);
+                if !self.map.allows_move(from, direction) {
+                    return Err(Refused);
+                }
+                let to = from.step(direction);
+                // R13: a move into an occupied tile is a bump. The mover stays
+                // and pays the move; nothing else changes.
+                match self.occupant(to) {
+                    Some(occupant) => Outcome::Bumped(occupant),
+                    None => {
+                        self.entity_mut(entity).position = to;
+                        Outcome::Stepped
+                    }
+                }
             }
-            let to = from.step(direction);
-            // R13: a move into an occupied tile is a bump. The mover stays
-            // and pays the move; nothing else changes.
-            match self.occupant(to) {
-                Some(occupant) => bumped = Some(occupant),
-                None => self.entity_mut(entity).position = to,
-            }
-        }
+            Action::Attack(_) => return Err(Refused),
+        };
         // R7: the effect happens now; the cost delays the entity's next turn.
         self.perceived_changes.push(PerceivedChange {
             time: self.clock,
             entity,
             action,
-            bumped,
+            outcome,
         });
         let due = self.clock.after(action.cost(self.speed(entity)));
         self.scheduler.schedule(entity, due);
@@ -225,7 +232,8 @@ impl World {
                 }
                 Controller::Wander => {
                     let offered = self.actions_of(entity);
-                    let action = wander::choose(&mut self.rng, &offered);
+                    let (action, rng) = wander::choose(&self.rng, &offered);
+                    self.rng = rng;
                     if self.act(entity, action).is_err() {
                         ash_core::invariant!("the wander of {entity:?} chose a refused action");
                     }
@@ -233,6 +241,15 @@ impl World {
             }
         }
     }
+
+    /// F4: the only write path. Writes `effects` in order, then the RNG
+    /// they carry.
+    #[expect(
+        dead_code,
+        unused_variables,
+        reason = "S1 signatures: every write goes through apply from the next commit"
+    )]
+    pub(crate) fn apply(&mut self, effects: Effects) {}
 
     /// The entity standing at `position`, if any.
     fn occupant(&self, position: TilePosition) -> Option<EntityId> {

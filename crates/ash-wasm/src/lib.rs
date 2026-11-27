@@ -140,6 +140,10 @@ fn action_json(action: Action) -> String {
             r#"{{"kind":"move","direction":"{}"}}"#,
             direction_name(direction)
         ),
+        Action::Attack(direction) => format!(
+            r#"{{"kind":"attack","direction":"{}"}}"#,
+            direction_name(direction)
+        ),
     }
 }
 

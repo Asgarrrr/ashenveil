@@ -9,16 +9,53 @@ use ash_core::time::Time;
 use crate::action::{Action, AvailableAction};
 use crate::world::World;
 
-/// One change, stamped with the time it happened (R17). It names the action,
-/// never the entity's speed, cost or next turn (R18).
+/// One change, stamped with the time it happened (R17). It names the action
+/// and its outcome, never the entity's speed, cost or next turn (R18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedChange {
     pub time: Time,
     pub entity: EntityId,
     pub action: Action,
-    /// The entity a move bumped into (R13): the mover stayed in place. None
-    /// for a move that stepped, and for a wait.
-    pub bumped: Option<EntityId>,
+    pub outcome: Outcome,
+}
+
+/// What an action did (A11), naming its target where it has one. Never the
+/// odds of a hit (A12).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// A move reached the neighboring tile.
+    Stepped,
+    /// A wait let time pass.
+    Waited,
+    /// A move ran into this entity (R13): the mover stayed in place.
+    Bumped(EntityId),
+    /// An attack struck this entity (A6).
+    Hit(EntityId),
+    /// An attack missed this entity (A6).
+    Missed(EntityId),
+}
+
+/// What a character perceives of the world: the only view a refusal reads
+/// (R10, F4). It holds no other entity's speed, cost or next turn (R18).
+/// Under whole-map perception (R16), every character perceives the whole
+/// map and every entity.
+#[expect(
+    dead_code,
+    reason = "S1 signatures: resolve reads it from the next commit"
+)]
+pub(crate) struct Perception<'w> {
+    world: &'w World,
+}
+
+#[expect(
+    dead_code,
+    reason = "S1 signatures: resolve reads it from the next commit"
+)]
+impl<'w> Perception<'w> {
+    /// R16: every character perceives the whole of `world`.
+    pub(crate) fn whole_map(world: &'w World) -> Self {
+        Self { world }
+    }
 }
 
 /// An entity a character perceives, and where it stands.

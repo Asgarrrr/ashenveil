@@ -10,6 +10,7 @@ pub fn to_wire(action: SimAction) -> WireAction {
     match action {
         SimAction::Move(direction) => WireAction::Move(direction),
         SimAction::Wait => WireAction::Wait,
+        SimAction::Attack(direction) => WireAction::Attack(direction),
     }
 }
 
@@ -17,5 +18,6 @@ pub fn to_sim(action: WireAction) -> SimAction {
     match action {
         WireAction::Move(direction) => SimAction::Move(direction),
         WireAction::Wait => SimAction::Wait,
+        WireAction::Attack(direction) => SimAction::Attack(direction),
     }
 }
