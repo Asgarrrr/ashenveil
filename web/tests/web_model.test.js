@@ -257,6 +257,17 @@ test("an attack is offered toward the adjacent creature only, and logged as a hi
   assert.deepEqual(replay(attack.slice(0, first + 1)).entities, before.entities);
 });
 
+test("a hit on the hostile creature is logged as a hit", () => {
+  // A1, A11: the strike a move made is a hit like any other, whatever the
+  // disposition of its target.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 1, 1, null), perceivedEntity(1, 2, 1, "hostile")]));
+  const hit = { time: 0, entity: 0, outcome: { kind: "hit", target: 1 } };
+  world.apply({ kind: "perceived", ...hit });
+
+  assert.deepEqual(world.log, [hit]);
+});
+
 test("the log line of a strike says whether it hit or missed", () => {
   // The recorded world controls entity 0, drawn as "@".
   const world = replay(attack);
