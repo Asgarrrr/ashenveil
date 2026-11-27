@@ -218,70 +218,69 @@ down the signatures with a failing acceptance test.
 
 ## Glossary proposals
 
-Proposed for the milestone. Each definition restates the rules named beside
-it; the human approves, edits or rejects each row.
+Proposed for the milestone and written to `CONTEXT.md` in the same change.
+Each definition restates the source named beside it. A second, independent
+read reworked the first draft; the human approves, edits or rejects each row.
+
+New entries:
 
 | Term | Proposed definition | Source |
 |---|---|---|
-| Attack | An action that strikes an adjacent entity: it hits or it misses. A character's move into a creature it perceives as hostile is an attack. | A1, A3, A6 |
-| Hit | An attack that removes hit points from its target. | A6 |
-| Miss | An attack that does not hit. The attacker still pays the action cost; nothing else changes. | A6 |
-| Hit points | A number each entity has: a hit lowers it, and at zero the entity dies. A character sees its own as a number and never perceives those of another entity. A placeholder, to be replaced by body parts. | A6 to A10, Out of scope |
-| Condition | What a character perceives of another entity's hit points: unhurt, wounded, badly wounded or dying. A kind, never a number. | A10 |
-| Disposition | Whether a creature is hostile or neutral. A character perceives it. | A4 |
-| Hostile | One of the two dispositions. A character's move into a creature it perceives as hostile is an attack. | A1, A4 |
-| Neutral | One of the two dispositions. A character's move into a creature it perceives as neutral is a bump. | A2, A4 |
-| Death | The end of an entity's embodiment, at zero hit points: the entity leaves the world. Its identity is never given to another entity. | A8, entries "Identity" and "Embodiment" |
-| Outcome | What an action did, as its perceived change says it: stepped, waited, bumped, hit or missed. The last three name their target. | A11, accepted amendment of S1 |
-| Bump (amended) | A move into a tile another entity holds: the mover stays, pays the move, and both perceive it. A character's move into a creature it perceives as hostile is an attack, not a bump. | A1, A2, entry "Bump", proposed amendment of S2 |
-| Wander (amended) | A simulation controller that picks evenly among the actions the rules allow, except attacks. | A13, entry "Wander", S1 invariant |
+| Combat | The system of attacks between entities. | Pillar 3; action and time, "the combat design" |
+| Attack | An action that strikes an adjacent entity: it hits or it misses. A character's move into a tile held by a creature it perceives as hostile is an attack on that creature. | A1, A3, A6 |
+| Hit | An attack that lowers its target's health. | A6 |
+| Miss | An attack that does not hit. The attacker still pays the action cost. | A6 |
+| Damage | How much a hit lowers its target's health. Today, a fixed number of hit points. | A6, Out of scope |
+| Health | The bodily state of an entity. A character knows its own in numbers and perceives another entity's only as a condition. | Pillar 4, A9, A10 |
+| Hit points | Today's measure of health: a current and a maximum number. A hit lowers the current number; at zero the entity dies. | A6 to A8, Out of scope |
+| Condition | An entity's health as a kind, never a number: unhurt, wounded, badly wounded or dying. All a character perceives of another entity's health. | A10 |
+| Disposition | Whether a creature is hostile or neutral. A character perceives which. | A4 |
+| Death | The end of an entity's embodiment for good: the entity leaves the world. Today, at zero hit points. | A8, ADR 0001 point 3 |
+| Outcome | What an action did: today stepped, waited, bumped, hit or missed. A character perceives the outcome, never the action submitted. | A11, accepted amendment of S1 |
 
-Questions for the human. Each count is the number of lines that hold the
-word, whole and in any case, at commit 5fcb076: first in `crates`,
-`docs/design`, `docs/specs` and `CONTEXT.md` together, then in `crates` alone.
+Amended entries:
 
-1. Hit points and `Health`. The type of an entity's hit points is `Health`
-   (`crates/ash-sim/src/combat.rs:24`). `Effect::Damage { entity, health }`
-   carries it. `PerceivedHealth` holds hit points or a condition, so the
-   code uses "health" for two things. The docs of these types say "hit
-   points", and the JSON kind is `hit_points`. Counts: "health" 101 and 94;
-   "hit points" 91 and 69. Options:
-   - "health" becomes a term of its own: the current and maximum hit points
-     of an entity;
-   - the types take the term "hit points" in a later change.
-2. Attack and `combat`. The module `combat`
-   (`crates/ash-sim/src/lib.rs:15`) holds attack, hit points, condition and
-   death. One module names one glossary concept (`.claude/rules/sim.md`).
-   The action and time design names the system "combat": "the combat
-   design". Counts: "combat" 25 and 13; "attack" 159 and 123. Options:
-   - "combat" becomes a term;
-   - the module takes the name of a term;
-   - the module splits when a second verb needs it.
-3. "Strike". The design uses it as the verb of an attack (A3, A13), and a
-   strike can miss. Comments and test names follow the design. Counts:
-   "strike" 28 and 23; "strikes" 46 and 42; "struck" 20 and 18. Options:
-   - plain English, kept as the verb of the term "attack";
-   - a synonym of "attack" that the glossary forbids.
-4. "Damage". It names the constant `DAMAGE`
-   (`crates/ash-sim/src/combat.rs:19`) and the effect `Effect::Damage`
-   (`crates/ash-sim/src/effect.rs:32`). The design uses it once, under "Out
-   of scope". Counts: 19 and 12. Options:
-   - a term: the hit points a hit removes;
-   - plain English.
-5. Snapshot. The entry says "The whole perceived state, sent when a
-   controller connects." Since S4 a snapshot is built for one character (S4
-   Behavior, A9, A10). Counts: 146 and 127. Options:
-   - amend the entry in this batch, for example: "The whole state one
-     character perceives, sent when its controller connects.";
-   - keep the entry.
-6. Phase 1 names with no entry. The modules `action` and `scheduler`, the
-   command log (`World::command_log`, `crates/ash-sim/src/world.rs:206`) and
-   the refusal (the type is `Refused`, `crates/ash-sim/src/action.rs:40`).
-   Counts: "action" 518 and 475; "scheduler" 38 and 28; "command log" 10 and
-   2, `command_log` 23 and 23; "refusal" 8 and 6, "refused" 81 and 70.
-   Options:
-   - a second batch;
-   - no entry.
+| Term | Proposed definition | Source |
+|---|---|---|
+| Bump | A move into a tile another entity holds that is not an attack: the mover stays, pays the move, and both perceive it. | A1, A2, R13 |
+| Wander | A simulation controller that picks evenly among the actions the rules allow, except attacks. | A13, S1 invariant |
+| Snapshot | The whole state one character perceives, sent when its controller connects. | S4 Behavior, A9, A10 |
+| Quarantine | The state of a world whose simulation violated an invariant. Only that world stops. | The entry itself; "hit" is now a term |
+
+Choices behind the rows:
+
+- Each rule has one home. A1 lives in "Attack", and "Bump" excludes it.
+  "Hostile" and "neutral" have no row: the values of a kind live in the
+  entry of the kind, as floor and wall live in "Terrain".
+- "Health" is the term, and hit points are today's measure of it. The types
+  `Health` and `PerceivedHealth`, the field `health` and the wire key keep
+  their names: `PerceivedHealth` holds hit points or a condition, and both
+  are health. No rename follows.
+- "Combat" is the term of the system, so the module `combat` keeps its
+  name. `Health` and `Condition` move to a module `health` when the first
+  rule outside combat reads or writes health.
+- "Strike" stays plain English, the verb of "attack": the design uses it
+  (A3, A13), and a strike can miss. Two doc comments used "struck" for
+  "hit"; this change corrects them.
+- `Effect::Damage` carries the health a hit leaves, not the damage. Rename
+  it when the first effect that raises health exists.
+- The rows write "a character": a glossary states what holds for any
+  character, and shared worlds must stay possible.
+
+Left for the human:
+
+- "Health" rests on one line of pillar 4, where health is one item of a
+  list. The attack design never uses the word.
+- "Combat" as a term makes `docs/design/attack.md` the first version of
+  "the combat design" that the action and time design names.
+- A second batch for the phase 1 names with no entry: entity, action,
+  refusal, scheduler, offer. Their sources are the action and time rules.
+- An "Avoid" column in `CONTEXT.md`, one cell per term for its forbidden
+  synonyms (for example "hostility" for disposition). It changes the format
+  of the glossary.
+- The next spec can carry this table from the day it is approved, with the
+  code name of each term, so the milestone approves only the differences.
+  That changes `docs/templates/spec.md`.
 
 ## Proposed amendments
 

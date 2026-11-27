@@ -110,7 +110,7 @@ pub enum Outcome {
     Waited,
     /// A move ran into this entity (R13): the mover stayed in place.
     Bumped(EntityId),
-    /// An attack struck this entity (A6).
+    /// An attack hit this entity (A6).
     Hit(EntityId),
     /// An attack missed this entity (A6).
     Missed(EntityId),
