@@ -2,7 +2,8 @@
 
 ## Status
 
-Draft.
+Approved (2026-11-27). The human approved the spec, its slicing and the
+three readings of the sources below, as proposed.
 
 ## Context
 
@@ -49,7 +50,7 @@ Constraints found in the code, with the slice that treats each:
   only, and no creature strikes before S6. No hosted world can strike a
   character in S4 or S5. S4 adds a test entry.
 
-Readings of the sources, for the human to confirm:
+Readings of the sources, confirmed by the human with the approval:
 
 - A6 still says "A miss changes nothing else". A4, as amended, makes a
   missed attack provoke, and decision 3 of 0005 rejects "hostile only
@@ -558,8 +559,8 @@ Choices behind the rows:
   the word would mislead as a term. The acceptance tests take the term:
   `aggression`.
 - The second-model read proposes "hostile behavior" in place of
-  "aggression". The `advisor` found no better term. The human chooses at
-  the approval of this spec: the code names follow.
+  "aggression". The `advisor` found no better term. The human kept
+  "aggression" at the approval of this spec: the code names follow.
 - "Pursuit" is a different concept, out of scope (attack design). It is
   no synonym, so it stays out of the Avoid column.
 - "Body" is avoided for a corpse: body parts are a later design.
