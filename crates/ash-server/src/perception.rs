@@ -126,6 +126,9 @@ pub mod tests {
 
     use super::*;
 
+    /// Turns after which a fight that has not landed its next hit fails.
+    const STRIKE_TURNS: usize = 2_000;
+
     /// A world whose character has acted, so it awaits a second entity that
     /// another player connection controls. Returns both entities.
     pub fn world_awaiting_another_player() -> (World, EntityId, EntityId) {
@@ -176,7 +179,13 @@ pub mod tests {
         ];
         for (left, condition) in hits {
             // The attacker strikes until a hit, which changes the condition.
+            let mut turns = 0;
             let changed = loop {
+                assert!(
+                    turns < STRIKE_TURNS,
+                    "no hit leaves {left} hit points in {STRIKE_TURNS} turns"
+                );
+                turns += 1;
                 if world.awaited() == target {
                     assert_eq!(world.submit(Action::Wait), Ok(()));
                     continue;

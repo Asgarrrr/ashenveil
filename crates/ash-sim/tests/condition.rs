@@ -253,7 +253,13 @@ fn each_hit_on_a_character_shows_its_next_condition_to_the_other_and_its_hit_poi
             (1, Condition::Dying),
         ];
         for (left, condition) in hits {
+            let mut turns = 0;
             let time = loop {
+                assert!(
+                    turns < HUNT_TURNS,
+                    "seed {seed}: no hit leaves {left} hit points in {HUNT_TURNS} turns"
+                );
+                turns += 1;
                 if world.awaited() == target {
                     assert_eq!(world.submit(Action::Wait), Ok(()));
                     continue;

@@ -84,3 +84,35 @@ impl Map {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tile east of the last one of a row. Its index is the first tile
+    /// of the next row: without the bound, a wall would answer.
+    #[test]
+    #[should_panic(expected = "is outside the map")]
+    fn a_position_east_of_the_map_crashes() {
+        let map = Map::skeleton();
+        let _ = map.terrain(TilePosition {
+            x: map.width(),
+            y: 0,
+            z: 0,
+        });
+    }
+
+    /// The map holds level 0 alone. Without the bound, the floor below
+    /// would answer.
+    #[test]
+    #[should_panic(expected = "is outside the map")]
+    fn a_position_above_level_0_crashes() {
+        let _ = Map::skeleton().terrain(TilePosition { x: 1, y: 1, z: 1 });
+    }
+
+    #[test]
+    #[should_panic(expected = "is outside the map")]
+    fn a_position_south_of_the_map_crashes() {
+        let _ = Map::skeleton().terrain(TilePosition { x: 1, y: 6, z: 0 });
+    }
+}
