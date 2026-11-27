@@ -10,7 +10,7 @@ use ash_core::time::ActionCost;
 
 use crate::combat;
 use crate::effect::{Effect, Effects};
-use crate::perception::{Outcome, PerceivedChange, Perception};
+use crate::perception::{ChangeKind, Outcome, PerceivedChange, Perception};
 use crate::world::World;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,10 +120,10 @@ pub(crate) fn resolve(
         Action::Attack(direction) => combat::attack(world, actor, direction, rng),
     };
     // R7: the effect happens now; the cost delays the actor's next turn.
-    in_order.push(Effect::Perceive(PerceivedChange::Act {
+    in_order.push(Effect::Perceive(PerceivedChange {
         time: world.clock(),
         entity: actor,
-        outcome,
+        kind: ChangeKind::Act(outcome),
     }));
     // A11: what a hit does to its target is perceived after the hit.
     if let Outcome::Hit(target) = outcome {

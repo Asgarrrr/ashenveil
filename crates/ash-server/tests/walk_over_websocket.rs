@@ -21,7 +21,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity,
+    Action, AvailableAction, ChangeKind, ClientMessage, Outcome, PerceivedChange, PerceivedEntity,
     PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -225,10 +225,10 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let mut accept =
         |socket: &mut Socket, action: Action, outcome: Outcome, time: u64, then: u64| {
             send(socket, command(character, action));
-            let change = PerceivedChange::Act {
+            let change = PerceivedChange {
                 time: Time::new(time),
                 entity: character,
-                outcome,
+                kind: ChangeKind::Act(outcome),
             };
             let (changes, awaited) = receive_turn(socket);
             assert_eq!(changes.first(), Some(&change));
@@ -302,10 +302,10 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let (changes, awaited) = receive_turn(&mut socket);
     assert_eq!(
         changes.first(),
-        Some(&PerceivedChange::Act {
+        Some(&PerceivedChange {
             time: Time::new(250),
             entity: character,
-            outcome: Outcome::Waited,
+            kind: ChangeKind::Act(Outcome::Waited),
         })
     );
     match awaited {

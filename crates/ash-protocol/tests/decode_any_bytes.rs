@@ -5,8 +5,9 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Condition, Disposition, Outcome, PerceivedChange,
-    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Disposition, Outcome,
+    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -104,9 +105,10 @@ fn server_messages() -> Vec<ServerMessage> {
         perceived(150, 1, Outcome::Bumped(EntityId::new(u32::MAX))),
         perceived(200, 0, Outcome::Hit(EntityId::new(1))),
         perceived(u64::MAX, 0, Outcome::Missed(EntityId::new(1))),
-        ServerMessage::Perceived(PerceivedChange::Death {
+        ServerMessage::Perceived(PerceivedChange {
             time: Time::new(u64::MAX),
             entity: EntityId::new(u32::MAX),
+            kind: ChangeKind::Death,
         }),
         condition_change(0, 3, Condition::Unhurt),
         condition_change(300, 1, Condition::Wounded),
@@ -119,18 +121,18 @@ fn server_messages() -> Vec<ServerMessage> {
 }
 
 fn perceived(time: u64, entity: u32, outcome: Outcome) -> ServerMessage {
-    ServerMessage::Perceived(PerceivedChange::Act {
+    ServerMessage::Perceived(PerceivedChange {
         time: Time::new(time),
         entity: EntityId::new(entity),
-        outcome,
+        kind: ChangeKind::Act(outcome),
     })
 }
 
 fn condition_change(time: u64, entity: u32, condition: Condition) -> ServerMessage {
-    ServerMessage::Perceived(PerceivedChange::Condition {
+    ServerMessage::Perceived(PerceivedChange {
         time: Time::new(time),
         entity: EntityId::new(entity),
-        condition,
+        kind: ChangeKind::Condition(condition),
     })
 }
 
@@ -253,9 +255,10 @@ fn a_malformed_death_is_refused() {
     // at its time, and nothing more.
     assert_eq!(
         ServerMessage::decode(&change_bytes(1, &[])),
-        Ok(ServerMessage::Perceived(PerceivedChange::Death {
+        Ok(ServerMessage::Perceived(PerceivedChange {
             time: Time::new(100),
             entity: EntityId::new(2),
+            kind: ChangeKind::Death,
         }))
     );
 
@@ -290,10 +293,10 @@ fn a_malformed_change_of_condition_is_refused() {
     for (tag, condition) in known {
         assert_eq!(
             ServerMessage::decode(&change_bytes(2, &[tag])),
-            Ok(ServerMessage::Perceived(PerceivedChange::Condition {
+            Ok(ServerMessage::Perceived(PerceivedChange {
                 time: Time::new(100),
                 entity: EntityId::new(2),
-                condition,
+                kind: ChangeKind::Condition(condition),
             })),
             "tag {tag}"
         );

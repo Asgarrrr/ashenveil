@@ -17,7 +17,7 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, AvailableAction, Refused};
-use ash_sim::perception::{Outcome, PerceivedChange};
+use ash_sim::perception::{ChangeKind, Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 use Direction::{East, North, NorthEast, NorthWest, South, SouthEast, SouthWest, West};
@@ -29,10 +29,10 @@ fn at(x: u32, y: u32) -> TilePosition {
 }
 
 fn moved(time: u64, entity: EntityId, direction: Direction) -> PerceivedChange {
-    PerceivedChange::Act {
+    PerceivedChange {
         time: Time::new(time),
         entity,
-        outcome: Outcome::Stepped(direction),
+        kind: ChangeKind::Act(Outcome::Stepped(direction)),
     }
 }
 

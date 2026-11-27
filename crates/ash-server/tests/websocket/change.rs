@@ -3,31 +3,22 @@
 //! alone. It repeats the server's mapping on purpose, like `action.rs`.
 
 use ash_protocol::message::{
-    Condition as WireCondition, Outcome as WireOutcome, PerceivedChange as WireChange,
+    ChangeKind as WireKind, Condition as WireCondition, Outcome as WireOutcome,
+    PerceivedChange as WireChange,
 };
 use ash_sim::combat::Condition as SimCondition;
-use ash_sim::perception::{Outcome as SimOutcome, PerceivedChange as SimChange};
+use ash_sim::perception::{
+    ChangeKind as SimKind, Outcome as SimOutcome, PerceivedChange as SimChange,
+};
 
 pub fn to_wire(change: SimChange) -> WireChange {
-    match change {
-        SimChange::Act {
-            time,
-            entity,
-            outcome,
-        } => WireChange::Act {
-            time,
-            entity,
-            outcome: outcome_to_wire(outcome),
-        },
-        SimChange::Death { time, entity } => WireChange::Death { time, entity },
-        SimChange::Condition {
-            time,
-            entity,
-            condition,
-        } => WireChange::Condition {
-            time,
-            entity,
-            condition: condition_to_wire(condition),
+    WireChange {
+        time: change.time,
+        entity: change.entity,
+        kind: match change.kind {
+            SimKind::Act(outcome) => WireKind::Act(outcome_to_wire(outcome)),
+            SimKind::Death => WireKind::Death,
+            SimKind::Condition(condition) => WireKind::Condition(condition_to_wire(condition)),
         },
     }
 }

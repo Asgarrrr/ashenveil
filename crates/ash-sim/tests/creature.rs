@@ -18,7 +18,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_sim::action::Action;
 use ash_sim::controller::{Controller, Disposition};
-use ash_sim::perception::{Outcome, PerceivedChange};
+use ash_sim::perception::{ChangeKind, Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 const SEED: u64 = 13;
@@ -60,15 +60,9 @@ fn acts(world: &World) -> Vec<Act> {
     world
         .perceived_changes()
         .iter()
-        .map(|&change| match change {
-            PerceivedChange::Act {
-                time,
-                entity,
-                outcome,
-            } => (time, entity, outcome),
-            PerceivedChange::Death { .. } | PerceivedChange::Condition { .. } => {
-                panic!("unexpected {change:?}")
-            }
+        .map(|&change| match change.kind {
+            ChangeKind::Act(outcome) => (change.time, change.entity, outcome),
+            ChangeKind::Death | ChangeKind::Condition(_) => panic!("unexpected {change:?}"),
         })
         .collect()
 }
@@ -189,10 +183,10 @@ fn a_bump_leaves_the_mover_in_place_costs_the_move_and_nothing_else() {
     // The change both entities perceive names both (R13, R16).
     assert_eq!(
         bumped.perceived_changes().first(),
-        Some(&PerceivedChange::Act {
+        Some(&PerceivedChange {
             time: Time::ZERO,
             entity: character,
-            outcome: Outcome::Bumped(creature),
+            kind: ChangeKind::Act(Outcome::Bumped(creature)),
         })
     );
     // The mover stays in place and pays the move: its next turn is at 100.

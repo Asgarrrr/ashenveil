@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    ResumeToken, ServerMessage, Snapshot,
+    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    PerceivedEntity, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -207,12 +207,10 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
         let (changes, then) = receive_turn(&mut socket);
         assert_eq!(changes, changes_since(&replay, seen));
 
-        let did = match changes.first() {
-            Some(&PerceivedChange::Act {
-                entity, outcome, ..
-            }) => Some((entity, outcome)),
-            Some(PerceivedChange::Death { .. } | PerceivedChange::Condition { .. }) | None => None,
-        };
+        let did = changes.first().and_then(|change| match change.kind {
+            ChangeKind::Act(outcome) => Some((change.entity, outcome)),
+            ChangeKind::Death | ChangeKind::Condition(_) => None,
+        });
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,
             // and the next turn comes 100 later.

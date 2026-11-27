@@ -51,10 +51,11 @@ export type PerceivedHealth =
  * (R17): an entity acts, an entity dies and leaves the world (A8), or a hit
  * leaves an entity in another condition (A10).
  */
-export type PerceivedChange =
-  | { kind: "act"; time: number; entity: number; outcome: Outcome }
-  | { kind: "death"; time: number; entity: number }
-  | { kind: "condition"; time: number; entity: number; condition: Condition };
+export type PerceivedChange = { time: number; entity: number } & (
+  | { kind: "act"; outcome: Outcome }
+  | { kind: "death" }
+  | { kind: "condition"; condition: Condition }
+);
 
 export type Terrain = "floor" | "wall";
 

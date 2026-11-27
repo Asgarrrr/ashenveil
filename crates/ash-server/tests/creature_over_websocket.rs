@@ -13,8 +13,8 @@ use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -133,20 +133,18 @@ fn entity_parts(perceived: &PerceivedEntity) -> EntityParts {
 /// it names and, for an act, the outcome. The patterns name every field, so
 /// a new one fails to compile here.
 fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
-    match *change {
-        PerceivedChange::Act {
-            time: _,
-            entity,
-            outcome,
-        } => (entity, Some(outcome)),
-        PerceivedChange::Death { time: _, entity } => (entity, None),
+    let PerceivedChange {
+        time: _,
+        entity,
+        kind,
+    } = *change;
+    let outcome = match kind {
+        ChangeKind::Act(outcome) => Some(outcome),
+        ChangeKind::Death => None,
         // A condition is a kind, never a number (A10).
-        PerceivedChange::Condition {
-            time: _,
-            entity,
-            condition: _,
-        } => (entity, None),
-    }
+        ChangeKind::Condition(_) => None,
+    };
+    (entity, outcome)
 }
 
 #[test]
@@ -259,15 +257,10 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
     // show it moves for 50 and waits for 25.
     let creature_acts: Vec<(Time, Outcome)> = received
         .iter()
-        .filter_map(|change| match *change {
-            PerceivedChange::Act {
-                time,
-                entity,
-                outcome,
-            } if entity == creature => Some((time, outcome)),
-            PerceivedChange::Act { .. }
-            | PerceivedChange::Death { .. }
-            | PerceivedChange::Condition { .. } => None,
+        .filter(|change| change.entity == creature)
+        .filter_map(|change| match change.kind {
+            ChangeKind::Act(outcome) => Some((change.time, outcome)),
+            ChangeKind::Death | ChangeKind::Condition(_) => None,
         })
         .collect();
     assert!(creature_acts.len() > 2, "{creature_acts:?}");

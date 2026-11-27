@@ -4,17 +4,17 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::Direction;
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, AvailableAction};
-use ash_sim::perception::{Outcome, PerceivedChange};
+use ash_sim::perception::{ChangeKind, Outcome, PerceivedChange};
 use ash_sim::scheduler::Scheduler;
 use ash_sim::world::World;
 
 const SEED: u64 = 7;
 
 fn waited(time: u64, entity: EntityId) -> PerceivedChange {
-    PerceivedChange::Act {
+    PerceivedChange {
         time: Time::new(time),
         entity,
-        outcome: Outcome::Waited,
+        kind: ChangeKind::Act(Outcome::Waited),
     }
 }
 

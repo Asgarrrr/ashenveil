@@ -19,7 +19,9 @@ use ash_core::time::Time;
 use ash_sim::action::Action;
 use ash_sim::combat::Condition;
 use ash_sim::controller::{Controller, Disposition};
-use ash_sim::perception::{self, Outcome, PerceivedChange, PerceivedEntity, PerceivedHealth};
+use ash_sim::perception::{
+    self, ChangeKind, Outcome, PerceivedChange, PerceivedEntity, PerceivedHealth,
+};
 use ash_sim::world::World;
 
 /// Character turns after which a hunt that has not hit its target fails.
@@ -60,11 +62,7 @@ fn health(world: &World, viewer: EntityId, entity: EntityId) -> PerceivedHealth 
 
 /// True when `change` is a hit of `attacker` on `target`.
 fn is_hit(change: PerceivedChange, attacker: EntityId, target: EntityId) -> bool {
-    matches!(
-        change,
-        PerceivedChange::Act { entity, outcome, .. }
-            if (entity, outcome) == (attacker, Outcome::Hit(target))
-    )
+    (change.entity, change.kind) == (attacker, ChangeKind::Act(Outcome::Hit(target)))
 }
 
 /// The index of each change of condition among the perceived changes.
@@ -73,7 +71,7 @@ fn condition_changes(world: &World) -> Vec<usize> {
         .perceived_changes()
         .iter()
         .enumerate()
-        .filter(|(_, change)| matches!(change, PerceivedChange::Condition { .. }))
+        .filter(|(_, change)| matches!(change.kind, ChangeKind::Condition(_)))
         .map(|(index, _)| index)
         .collect()
 }
@@ -148,10 +146,10 @@ fn the_first_hit_moves_a_creature_from_unhurt_to_wounded_perceived_right_after_t
             let changes = world.perceived_changes();
             assert_eq!(
                 changes.get(hit + 1),
-                Some(&PerceivedChange::Condition {
+                Some(&PerceivedChange {
                     time,
                     entity: target,
-                    condition: Condition::Wounded,
+                    kind: ChangeKind::Condition(Condition::Wounded),
                 }),
                 "seed {seed}, prey {prey}"
             );
@@ -162,12 +160,9 @@ fn the_first_hit_moves_a_creature_from_unhurt_to_wounded_perceived_right_after_t
                 [hit + 1],
                 "seed {seed}, prey {prey}"
             );
-            let missed_first = changes[..hit].iter().any(|&change| {
-                matches!(
-                    change,
-                    PerceivedChange::Act { outcome, .. } if outcome == Outcome::Missed(target)
-                )
-            });
+            let missed_first = changes[..hit]
+                .iter()
+                .any(|change| change.kind == ChangeKind::Act(Outcome::Missed(target)));
             hunts_with_a_miss_first += usize::from(missed_first);
 
             // A10: the character perceives the creature it struck as
@@ -199,9 +194,10 @@ fn the_lethal_hit_adds_no_condition_change() {
         // A8, A11: the death follows the lethal hit, at the same time.
         assert_eq!(
             world.perceived_changes().get(lethal + 1),
-            Some(&PerceivedChange::Death {
+            Some(&PerceivedChange {
                 time,
                 entity: hostile,
+                kind: ChangeKind::Death,
             }),
             "seed {seed}"
         );
@@ -273,10 +269,10 @@ fn each_hit_on_a_character_shows_its_next_condition_to_the_other_and_its_hit_poi
                     // same time.
                     assert_eq!(
                         changes[1..],
-                        [PerceivedChange::Condition {
+                        [PerceivedChange {
                             time,
                             entity: target,
-                            condition,
+                            kind: ChangeKind::Condition(condition),
                         }],
                         "seed {seed}, {left} hit points left"
                     );
@@ -285,10 +281,10 @@ fn each_hit_on_a_character_shows_its_next_condition_to_the_other_and_its_hit_poi
                 // A6: a miss changes nothing else.
                 assert_eq!(
                     changes,
-                    [PerceivedChange::Act {
+                    [PerceivedChange {
                         time,
                         entity: attacker,
-                        outcome: Outcome::Missed(target),
+                        kind: ChangeKind::Act(Outcome::Missed(target)),
                     }],
                     "seed {seed}"
                 );

@@ -9,7 +9,7 @@ use ash_core::tile::Direction;
 
 use crate::controller::{Controller, Disposition};
 use crate::effect::Effect;
-use crate::perception::{Outcome, PerceivedChange, Perception};
+use crate::perception::{ChangeKind, Outcome, PerceivedChange, Perception};
 use crate::world::World;
 
 /// A6: the percentage of attacks that hit.
@@ -133,15 +133,16 @@ pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
             ash_core::invariant!("the character {target:?} reaches zero hit points");
         }
         effects.push(Effect::Remove { entity: target });
-        effects.push(Effect::Perceive(PerceivedChange::Death {
+        effects.push(Effect::Perceive(PerceivedChange {
             time,
             entity: target,
+            kind: ChangeKind::Death,
         }));
     } else if health.condition() != before.condition() {
-        effects.push(Effect::Perceive(PerceivedChange::Condition {
+        effects.push(Effect::Perceive(PerceivedChange {
             time,
             entity: target,
-            condition: health.condition(),
+            kind: ChangeKind::Condition(health.condition()),
         }));
     }
     effects
@@ -287,15 +288,15 @@ mod tests {
         assert_eq!(
             perceived,
             [
-                PerceivedChange::Act {
+                PerceivedChange {
                     time: world.clock(),
                     entity: attacker,
-                    outcome: Outcome::Hit(target),
+                    kind: ChangeKind::Act(Outcome::Hit(target)),
                 },
-                PerceivedChange::Condition {
+                PerceivedChange {
                     time: world.clock(),
                     entity: target,
-                    condition: Condition::Wounded,
+                    kind: ChangeKind::Condition(Condition::Wounded),
                 },
             ]
         );
