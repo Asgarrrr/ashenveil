@@ -21,20 +21,16 @@ impl EntityId {
 /// again, whatever became of its entity.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct EntityIds {
-    /// How many ids were issued. The width is a mechanism.
+    /// How many ids were issued, at most `u32::MAX`: the id `u32::MAX` is
+    /// never issued. The width is a mechanism.
     issued: u32,
 }
 
 impl EntityIds {
-    /// The id the next `issue` returns.
-    pub fn peek(&self) -> EntityId {
-        EntityId(self.issued)
-    }
-
-    /// An id never issued before. Once every id is issued, the next call
-    /// crashes through `invariant!`.
+    /// An id never issued before. The last one is `u32::MAX - 1`: the call
+    /// after it crashes through `invariant!`.
     pub fn issue(&mut self) -> EntityId {
-        let id = self.peek();
+        let id = EntityId(self.issued);
         match self.issued.checked_add(1) {
             Some(issued) => self.issued = issued,
             None => crate::invariant!("every entity id of the world is issued"),
@@ -75,20 +71,19 @@ mod tests {
         let mut ids = EntityIds::default();
         let mut issued = Vec::new();
         for _ in 0..5 {
-            let next = ids.peek();
-            assert!(!ids.has_issued(next), "{next:?} is issued before its turn");
+            let before = ids.clone();
             let id = ids.issue();
-            assert_eq!(id, next);
+            assert!(!before.has_issued(id), "{id:?} is issued before its turn");
             assert!(!issued.contains(&id), "{id:?} is issued twice");
             issued.push(id);
         }
         assert!(issued.iter().all(|&id| ids.has_issued(id)));
-        assert!(!ids.has_issued(ids.peek()));
     }
 
-    /// F2: the boundary of the id space. `u32::MAX` ids fit the counter.
+    /// F2: the boundary of the id space. The counter holds how many ids
+    /// were issued, so it stops at `u32::MAX` ids, from 0 to `u32::MAX - 1`.
     #[test]
-    fn the_last_id_is_issued() {
+    fn the_last_id_issued_is_one_below_the_last_value_of_u32() {
         let mut ids = EntityIds {
             issued: u32::MAX - 1,
         };
@@ -99,7 +94,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "invariant violated")]
-    fn an_id_past_the_last_crashes() {
+    fn the_last_value_of_u32_is_never_issued() {
         let mut ids = EntityIds { issued: u32::MAX };
         let _ = ids.issue();
     }
