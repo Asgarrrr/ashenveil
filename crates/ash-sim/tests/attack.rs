@@ -18,7 +18,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::ActionCost;
 use ash_sim::action::{Action, AvailableAction, Refused};
 use ash_sim::controller::{Controller, Disposition};
-use ash_sim::perception::{Outcome, PerceivedChange};
+use ash_sim::perception::{ChangeKind, Outcome};
 use ash_sim::world::World;
 
 const SEED: u64 = 17;
@@ -63,15 +63,10 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
     world
         .perceived_changes()
         .iter()
-        .filter_map(|&change| match change {
-            PerceivedChange::Act {
-                entity: actor,
-                outcome,
-                ..
-            } if actor == entity => Some(outcome),
-            PerceivedChange::Act { .. }
-            | PerceivedChange::Death { .. }
-            | PerceivedChange::Condition { .. } => None,
+        .filter(|change| change.entity == entity)
+        .filter_map(|change| match change.kind {
+            ChangeKind::Act(outcome) => Some(outcome),
+            ChangeKind::Death | ChangeKind::Condition(_) => None,
         })
         .collect()
 }
@@ -105,7 +100,7 @@ fn fight(seed: u64) -> (World, EntityId, EntityId) {
         let died = world
             .perceived_changes()
             .iter()
-            .any(|change| matches!(change, PerceivedChange::Death { .. }));
+            .any(|change| change.kind == ChangeKind::Death);
         assert!(
             !died,
             "seed {seed}: the creature died before the fight saw a miss"

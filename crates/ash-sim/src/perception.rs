@@ -12,26 +12,26 @@ use crate::controller::{Controller, Disposition};
 use crate::map::Map;
 use crate::world::World;
 
-/// One change, stamped with the time it happened (R17, A11). Never an
-/// entity's speed, cost, next turn or hit points (R18).
+/// One change to `entity`, stamped with the time it happened (R17, A11).
+/// Never an entity's speed, cost, next turn or hit points (R18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PerceivedChange {
-    /// What `entity` did.
-    Act {
-        time: Time,
-        entity: EntityId,
-        outcome: Outcome,
-    },
-    /// `entity` died and left the world (A8). Its lethal hit is the change
+pub struct PerceivedChange {
+    pub time: Time,
+    pub entity: EntityId,
+    pub kind: ChangeKind,
+}
+
+/// What a perceived change says of its entity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChangeKind {
+    /// What the entity did.
+    Act(Outcome),
+    /// The entity died and left the world (A8). Its lethal hit is the change
     /// before, at the same time.
-    Death { time: Time, entity: EntityId },
-    /// A hit left `entity` in another `condition` (A10). That hit is the
+    Death,
+    /// A hit left the entity in another condition (A10). That hit is the
     /// change before, at the same time.
-    Condition {
-        time: Time,
-        entity: EntityId,
-        condition: Condition,
-    },
+    Condition(Condition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the

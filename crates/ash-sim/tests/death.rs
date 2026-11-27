@@ -20,7 +20,7 @@ use ash_core::time::Time;
 use ash_sim::action::Action;
 use ash_sim::combat::Condition;
 use ash_sim::controller::{Controller, Disposition};
-use ash_sim::perception::{self, Outcome, PerceivedChange};
+use ash_sim::perception::{self, ChangeKind, Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 const SEED: u64 = 29;
@@ -56,30 +56,20 @@ fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
 /// dies, or changes condition. The patterns name every field, so a new one
 /// fails to compile here.
 fn names(change: PerceivedChange, entity: EntityId) -> bool {
-    match change {
-        PerceivedChange::Act {
-            time: _,
-            entity: actor,
-            outcome,
-        } => {
-            actor == entity
-                || match outcome {
-                    Outcome::Stepped(_) | Outcome::Waited => false,
-                    Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target) => {
-                        target == entity
-                    }
-                }
+    let PerceivedChange {
+        time: _,
+        entity: named,
+        kind,
+    } = change;
+    named == entity
+        || match kind {
+            ChangeKind::Act(Outcome::Stepped(_) | Outcome::Waited)
+            | ChangeKind::Death
+            | ChangeKind::Condition(_) => false,
+            ChangeKind::Act(
+                Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target),
+            ) => target == entity,
         }
-        PerceivedChange::Death {
-            time: _,
-            entity: dead,
-        } => dead == entity,
-        PerceivedChange::Condition {
-            time: _,
-            entity: struck,
-            condition: _,
-        } => struck == entity,
-    }
 }
 
 /// The entities whose death the characters perceived, in order.
@@ -87,20 +77,18 @@ fn deaths(world: &World) -> Vec<EntityId> {
     world
         .perceived_changes()
         .iter()
-        .filter_map(|&change| match change {
-            PerceivedChange::Death { entity, .. } => Some(entity),
-            PerceivedChange::Act { .. } | PerceivedChange::Condition { .. } => None,
-        })
+        .filter(|change| change.kind == ChangeKind::Death)
+        .map(|change| change.entity)
         .collect()
 }
 
 /// A10: the change the first hit on `entity` makes at time zero: it comes
 /// from unhurt to wounded.
 fn wounded(entity: EntityId) -> PerceivedChange {
-    PerceivedChange::Condition {
+    PerceivedChange {
         time: Time::ZERO,
         entity,
-        condition: Condition::Wounded,
+        kind: ChangeKind::Condition(Condition::Wounded),
     }
 }
 
@@ -212,12 +200,8 @@ fn strike_a_character(seed: u64, hits: usize) -> (World, EntityId) {
         world
             .perceived_changes()
             .iter()
-            .filter(|&&change| {
-                matches!(
-                    change,
-                    PerceivedChange::Act { entity, outcome, .. }
-                        if (entity, outcome) == (attacker, Outcome::Hit(target))
-                )
+            .filter(|change| {
+                (change.entity, change.kind) == (attacker, ChangeKind::Act(Outcome::Hit(target)))
             })
             .count()
     };
@@ -256,13 +240,8 @@ fn a_creature_dies_at_its_second_hit_and_its_death_is_perceived_right_after() {
                 changes
                     .iter()
                     .enumerate()
-                    .filter(move |&(_, &change)| match change {
-                        PerceivedChange::Act {
-                            entity,
-                            outcome: did,
-                            ..
-                        } => (entity, did) == (character, outcome),
-                        PerceivedChange::Death { .. } | PerceivedChange::Condition { .. } => false,
+                    .filter(move |(_, change)| {
+                        (change.entity, change.kind) == (character, ChangeKind::Act(outcome))
                     })
                     .map(|(index, _)| index)
                     .collect::<Vec<_>>()
@@ -275,22 +254,21 @@ fn a_creature_dies_at_its_second_hit_and_its_death_is_perceived_right_after() {
             // A8, A11: the death is the change right after the lethal hit,
             // at the same time, and the only death.
             let lethal = hits[1];
-            let PerceivedChange::Act { time, .. } = changes[lethal] else {
-                panic!("the lethal hit is {:?}", changes[lethal]);
-            };
+            let time = changes[lethal].time;
             let deaths: Vec<(usize, PerceivedChange)> = changes
                 .iter()
                 .copied()
                 .enumerate()
-                .filter(|(_, change)| matches!(change, PerceivedChange::Death { .. }))
+                .filter(|(_, change)| change.kind == ChangeKind::Death)
                 .collect();
             assert_eq!(
                 deaths,
                 [(
                     lethal + 1,
-                    PerceivedChange::Death {
+                    PerceivedChange {
                         time,
-                        entity: target
+                        entity: target,
+                        kind: ChangeKind::Death,
                     }
                 )],
                 "seed {seed}, prey {prey}"
@@ -371,15 +349,10 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
         // waits for 25, from one of its acts to the next.
         let turns: Vec<(Time, Outcome)> = after
             .iter()
-            .filter_map(|&change| match change {
-                PerceivedChange::Act {
-                    time,
-                    entity,
-                    outcome,
-                } if entity == neutral => Some((time, outcome)),
-                PerceivedChange::Act { .. }
-                | PerceivedChange::Death { .. }
-                | PerceivedChange::Condition { .. } => None,
+            .filter(|change| change.entity == neutral)
+            .filter_map(|change| match change.kind {
+                ChangeKind::Act(outcome) => Some((change.time, outcome)),
+                ChangeKind::Death | ChangeKind::Condition(_) => None,
             })
             .collect();
         assert!(turns.len() > 30, "seed {seed}: {} turns", turns.len());
@@ -404,18 +377,19 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
 
         // A8, A10, A11: both strikes hit at time zero. The first wounds the
         // creature, the second is lethal.
-        let hit_by = |entity| PerceivedChange::Act {
+        let hit_by = |entity| PerceivedChange {
             time: Time::ZERO,
             entity,
-            outcome: Outcome::Hit(cast.creature),
+            kind: ChangeKind::Act(Outcome::Hit(cast.creature)),
         };
         let killed = [
             hit_by(cast.first),
             wounded(cast.creature),
             hit_by(cast.second),
-            PerceivedChange::Death {
+            PerceivedChange {
                 time: Time::ZERO,
                 entity: cast.creature,
+                kind: ChangeKind::Death,
             },
         ];
         assert_eq!(world.perceived_changes(), killed, "seed {seed}");
@@ -435,10 +409,10 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
         let mut draws = strikes(seed).skip(2);
         let (third_draw, fourth_draw) = (draws.next(), draws.next());
-        let struck = |outcome| PerceivedChange::Act {
+        let struck = |outcome| PerceivedChange {
             time: Time::ZERO,
             entity: third,
-            outcome,
+            kind: ChangeKind::Act(outcome),
         };
         let strike = if third_draw == Some(true) {
             vec![struck(Outcome::Hit(cast.second)), wounded(cast.second)]
@@ -497,7 +471,7 @@ fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing(
         assert!(
             matches!(
                 changes[4..],
-                [PerceivedChange::Act { entity, .. }] if entity == living
+                [PerceivedChange { entity, kind: ChangeKind::Act(_), .. }] if entity == living
             ),
             "seed {seed}: {changes:?}"
         );
@@ -514,10 +488,10 @@ fn at_a_tie_with_a_living_creature_the_entry_of_the_dead_creature_draws_nothing(
         };
         assert_eq!(
             world.perceived_changes()[5],
-            PerceivedChange::Act {
+            PerceivedChange {
                 time: Time::ZERO,
                 entity: third,
-                outcome,
+                kind: ChangeKind::Act(outcome),
             },
             "seed {seed}"
         );
@@ -568,10 +542,10 @@ fn the_tile_of_the_dead_creature_is_free() {
 
     assert_eq!(
         world.perceived_changes()[seen],
-        PerceivedChange::Act {
+        PerceivedChange {
             time: Time::new(100),
             entity: cast.first,
-            outcome: Outcome::Stepped(Direction::East),
+            kind: ChangeKind::Act(Outcome::Stepped(Direction::East)),
         }
     );
     assert_eq!(world.position(cast.first), at(2, 1));
@@ -622,10 +596,9 @@ fn an_entity_created_after_a_death_gets_an_id_never_issued_before() {
         }
         for creature in [newcomer, another] {
             assert!(
-                world.perceived_changes().iter().any(|&change| matches!(
-                    change,
-                    PerceivedChange::Act { entity, .. } if entity == creature
-                )),
+                world.perceived_changes().iter().any(|change| {
+                    change.entity == creature && matches!(change.kind, ChangeKind::Act(_))
+                }),
                 "third {with_third}: {creature:?} never acts"
             );
         }
@@ -676,7 +649,7 @@ fn the_run_replays_identically() {
     let deaths = first
         .perceived_changes()
         .iter()
-        .filter(|change| matches!(change, PerceivedChange::Death { .. }))
+        .filter(|change| change.kind == ChangeKind::Death)
         .count();
     assert_eq!(deaths, 1);
 

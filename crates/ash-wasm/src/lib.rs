@@ -6,9 +6,9 @@
 //! JSON numbers, exact up to 2^53 time units.
 
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Condition, Direction, Disposition, EntityId, Outcome,
-    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
-    Terrain,
+    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Direction, Disposition,
+    EntityId, Outcome, PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken,
+    ServerMessage, Snapshot, Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -170,33 +170,19 @@ fn action_json(action: Action) -> String {
 }
 
 fn change_json(change: PerceivedChange) -> String {
-    match change {
-        PerceivedChange::Act {
-            time,
-            entity,
-            outcome,
-        } => format!(
-            r#"{{"kind":"act","time":{},"entity":{},"outcome":{}}}"#,
-            time.units(),
-            entity.get(),
-            outcome_json(outcome)
+    let (kind, field) = match change.kind {
+        ChangeKind::Act(outcome) => ("act", format!(r#","outcome":{}"#, outcome_json(outcome))),
+        ChangeKind::Death => ("death", String::new()),
+        ChangeKind::Condition(condition) => (
+            "condition",
+            format!(r#","condition":"{}""#, condition_name(condition)),
         ),
-        PerceivedChange::Death { time, entity } => format!(
-            r#"{{"kind":"death","time":{},"entity":{}}}"#,
-            time.units(),
-            entity.get()
-        ),
-        PerceivedChange::Condition {
-            time,
-            entity,
-            condition,
-        } => format!(
-            r#"{{"kind":"condition","time":{},"entity":{},"condition":"{}"}}"#,
-            time.units(),
-            entity.get(),
-            condition_name(condition)
-        ),
-    }
+    };
+    format!(
+        r#"{{"kind":"{kind}","time":{},"entity":{}{field}}}"#,
+        change.time.units(),
+        change.entity.get()
+    )
 }
 
 fn condition_name(condition: Condition) -> &'static str {

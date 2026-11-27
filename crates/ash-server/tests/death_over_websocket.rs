@@ -14,8 +14,8 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    ResumeToken, ServerMessage, Snapshot,
+    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    PerceivedEntity, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -135,30 +135,20 @@ fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) 
 /// condition. The patterns name every field, so a new one fails to compile
 /// here.
 fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
-    match *change {
-        PerceivedChange::Act {
-            time: _,
-            entity: actor,
-            outcome,
-        } => {
-            actor == entity
-                || match outcome {
-                    Outcome::Stepped(_) | Outcome::Waited => false,
-                    Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target) => {
-                        target == entity
-                    }
-                }
+    let PerceivedChange {
+        time: _,
+        entity: named,
+        kind,
+    } = *change;
+    named == entity
+        || match kind {
+            ChangeKind::Act(Outcome::Stepped(_) | Outcome::Waited)
+            | ChangeKind::Death
+            | ChangeKind::Condition(_) => false,
+            ChangeKind::Act(
+                Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target),
+            ) => target == entity,
         }
-        PerceivedChange::Death {
-            time: _,
-            entity: dead,
-        } => dead == entity,
-        PerceivedChange::Condition {
-            time: _,
-            entity: struck,
-            condition: _,
-        } => struck == entity,
-    }
 }
 
 /// True when `message` names `entity` anywhere. The patterns name every
@@ -295,22 +285,20 @@ fn the_client_perceives_the_death_and_never_the_dead_creature_again() {
     let deaths: Vec<usize> = received
         .iter()
         .enumerate()
-        .filter(|(_, change)| matches!(change, PerceivedChange::Death { .. }))
+        .filter(|(_, change)| change.kind == ChangeKind::Death)
         .map(|(index, _)| index)
         .collect();
     let [died] = deaths[..] else {
         panic!("expected one death, got {deaths:?} in {received:?}");
     };
-    let PerceivedChange::Death { time, entity } = received[died] else {
-        panic!("change {died} is no death");
-    };
+    let PerceivedChange { time, entity, .. } = received[died];
     assert_eq!(entity, hostile);
     assert_eq!(
         received[died - 1],
-        PerceivedChange::Act {
+        PerceivedChange {
             time,
             entity: character,
-            outcome: Outcome::Hit(hostile),
+            kind: ChangeKind::Act(Outcome::Hit(hostile)),
         }
     );
 

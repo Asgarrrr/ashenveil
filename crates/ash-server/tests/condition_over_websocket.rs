@@ -14,8 +14,8 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Condition, Disposition, Outcome, PerceivedChange,
-    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Action, AvailableAction, ChangeKind, ClientMessage, Condition, Disposition, Outcome,
+    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -204,25 +204,25 @@ fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
             }
             Vec::new()
         }
-        ServerMessage::Perceived(
-            PerceivedChange::Act {
-                time: _,
-                entity: _,
-                outcome:
+        ServerMessage::Perceived(PerceivedChange {
+            time: _,
+            entity: _,
+            kind:
+                ChangeKind::Act(
                     Outcome::Stepped(_)
                     | Outcome::Waited
                     | Outcome::Bumped(_)
                     | Outcome::Hit(_)
                     | Outcome::Missed(_),
-            }
-            | PerceivedChange::Death { time: _, entity: _ }
-            | PerceivedChange::Condition {
-                time: _,
-                entity: _,
-                condition:
-                    Condition::Unhurt | Condition::Wounded | Condition::BadlyWounded | Condition::Dying,
-            },
-        )
+                )
+                | ChangeKind::Death
+                | ChangeKind::Condition(
+                    Condition::Unhurt
+                    | Condition::Wounded
+                    | Condition::BadlyWounded
+                    | Condition::Dying,
+                ),
+        })
         | ServerMessage::Refused
         | ServerMessage::Quarantined
         | ServerMessage::ControllerTaken => Vec::new(),
@@ -284,11 +284,9 @@ fn the_client_perceives_its_own_hit_points_and_the_condition_of_the_creature_it_
         assert_eq!(changes, changes_since(&replay, seen));
         received.extend(changes);
         next = then;
-        if matches!(
-            received[seen],
-            PerceivedChange::Act { entity, outcome, .. }
-                if (entity, outcome) == (character, Outcome::Hit(hostile))
-        ) {
+        if (received[seen].entity, received[seen].kind)
+            == (character, ChangeKind::Act(Outcome::Hit(hostile)))
+        {
             hit = Some(seen);
             break;
         }
@@ -299,23 +297,21 @@ fn the_client_perceives_its_own_hit_points_and_the_condition_of_the_creature_it_
 
     // A10, A11: the client received one change of condition: the hostile
     // creature is wounded, right after the hit and at the same time.
-    let PerceivedChange::Act { time, .. } = received[hit] else {
-        panic!("change {hit} is no act");
-    };
+    let time = received[hit].time;
     let conditions: Vec<(usize, PerceivedChange)> = received
         .iter()
         .copied()
         .enumerate()
-        .filter(|(_, change)| matches!(change, PerceivedChange::Condition { .. }))
+        .filter(|(_, change)| matches!(change.kind, ChangeKind::Condition(_)))
         .collect();
     assert_eq!(
         conditions,
         [(
             hit + 1,
-            PerceivedChange::Condition {
+            PerceivedChange {
                 time,
                 entity: hostile,
-                condition: Condition::Wounded,
+                kind: ChangeKind::Condition(Condition::Wounded),
             }
         )]
     );

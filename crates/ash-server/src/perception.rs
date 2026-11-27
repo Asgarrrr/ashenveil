@@ -3,13 +3,14 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    AvailableAction, Condition, Disposition, Outcome, PerceivedChange, PerceivedEntity,
+    AvailableAction, ChangeKind, Condition, Disposition, Outcome, PerceivedChange, PerceivedEntity,
     PerceivedHealth, ServerMessage, Snapshot,
 };
 use ash_sim::combat::Condition as SimCondition;
 use ash_sim::controller::Disposition as SimDisposition;
 use ash_sim::perception::{
-    self, Outcome as SimOutcome, PerceivedChange as SimChange, PerceivedHealth as SimHealth,
+    self, ChangeKind as SimKind, Outcome as SimOutcome, PerceivedChange as SimChange,
+    PerceivedHealth as SimHealth,
 };
 use ash_sim::world::World;
 
@@ -61,25 +62,13 @@ pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerM
 }
 
 fn change_to_wire(change: SimChange) -> PerceivedChange {
-    match change {
-        SimChange::Act {
-            time,
-            entity,
-            outcome,
-        } => PerceivedChange::Act {
-            time,
-            entity,
-            outcome: outcome_to_wire(outcome),
-        },
-        SimChange::Death { time, entity } => PerceivedChange::Death { time, entity },
-        SimChange::Condition {
-            time,
-            entity,
-            condition,
-        } => PerceivedChange::Condition {
-            time,
-            entity,
-            condition: condition_to_wire(condition),
+    PerceivedChange {
+        time: change.time,
+        entity: change.entity,
+        kind: match change.kind {
+            SimKind::Act(outcome) => ChangeKind::Act(outcome_to_wire(outcome)),
+            SimKind::Death => ChangeKind::Death,
+            SimKind::Condition(condition) => ChangeKind::Condition(condition_to_wire(condition)),
         },
     }
 }
@@ -200,10 +189,10 @@ pub mod tests {
             };
             assert_eq!(
                 changed.1,
-                PerceivedChange::Condition {
+                PerceivedChange {
                     time: changed.0,
                     entity: target,
-                    condition,
+                    kind: ChangeKind::Condition(condition),
                 }
             );
             assert_eq!(
