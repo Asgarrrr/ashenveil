@@ -2,7 +2,8 @@
 //!
 //! Nothing here can carry another entity's speed, cost or next turn (R18):
 //! only the awaited entity's own costs, sent to its controller (R9). A
-//! disposition is a kind, never a number.
+//! disposition and a condition are kinds, never numbers. Hit points go to
+//! their own character alone, in its snapshot (A9).
 
 use alloc::vec::Vec;
 
@@ -57,14 +58,25 @@ pub enum Condition {
     Dying,
 }
 
-/// An entity the character perceives: where it stands and, for a creature,
-/// its disposition.
+/// What the character perceives of the hit points of an entity: its own as
+/// numbers (A9), those of any other entity as a condition (A10, R18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PerceivedHealth {
+    /// The hit points of the character itself.
+    HitPoints { current: u32, max: u32 },
+    /// The condition of another entity.
+    Condition(Condition),
+}
+
+/// An entity the character perceives: where it stands, its hit points or its
+/// condition and, for a creature, its disposition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedEntity {
     pub entity: EntityId,
     pub position: TilePosition,
     /// `None` for a character: it has no disposition.
     pub disposition: Option<Disposition>,
+    pub health: PerceivedHealth,
 }
 
 /// One change, stamped with the time it happened (R17, A11).
@@ -103,7 +115,7 @@ pub enum Outcome {
     Missed(EntityId),
 }
 
-/// Everything the character perceives at `time` (R16).
+/// Everything one character perceives at `time` (R16).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
     pub time: Time,
@@ -285,11 +297,39 @@ impl Wire for Condition {
     }
 }
 
+impl Wire for PerceivedHealth {
+    fn write(&self, out: &mut Vec<u8>) {
+        match self {
+            Self::HitPoints { current, max } => {
+                0_u8.write(out);
+                current.write(out);
+                max.write(out);
+            }
+            Self::Condition(condition) => {
+                1_u8.write(out);
+                condition.write(out);
+            }
+        }
+    }
+
+    fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        match u8::read(input)? {
+            0 => Ok(Self::HitPoints {
+                current: u32::read(input)?,
+                max: u32::read(input)?,
+            }),
+            1 => Condition::read(input).map(Self::Condition),
+            _ => Err(DecodeError),
+        }
+    }
+}
+
 impl Wire for PerceivedEntity {
     fn write(&self, out: &mut Vec<u8>) {
         self.entity.write(out);
         self.position.write(out);
         self.disposition.write(out);
+        self.health.write(out);
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
@@ -297,6 +337,7 @@ impl Wire for PerceivedEntity {
             entity: EntityId::read(input)?,
             position: TilePosition::read(input)?,
             disposition: Option::read(input)?,
+            health: PerceivedHealth::read(input)?,
         })
     }
 }

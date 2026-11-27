@@ -175,6 +175,7 @@ fn names(message: &ServerMessage, entity: EntityId) -> bool {
                 entity: perceived,
                 position: _,
                 disposition: _,
+                health: _,
             } = *perceived;
             perceived == entity
         }),

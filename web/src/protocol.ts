@@ -39,6 +39,14 @@ export type Outcome =
 export type Condition = "unhurt" | "wounded" | "badly_wounded" | "dying";
 
 /**
+ * What a snapshot says of the hit points of an entity: numbers for the
+ * character the snapshot is for (A9), a condition for every other (A10).
+ */
+export type PerceivedHealth =
+  | { kind: "hit_points"; current: number; max: number }
+  | { kind: "condition"; condition: Condition };
+
+/**
  * A change every character perceives, stamped with the time it happened
  * (R17): an entity acts, an entity dies and leaves the world (A8), or a hit
  * leaves an entity in another condition (A10).
@@ -70,6 +78,7 @@ export interface PerceivedEntity {
   position: Position;
   /** `null` for a character: it has no disposition. */
   disposition: Disposition | null;
+  health: PerceivedHealth;
 }
 
 export type ServerMessage =

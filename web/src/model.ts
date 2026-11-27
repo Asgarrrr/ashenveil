@@ -110,14 +110,20 @@ export class PerceivedWorld {
       this.entities.delete(change.entity);
       return;
     }
+    const { entity } = change;
+    const perceived = this.entities.get(entity);
     if (change.kind === "condition") {
+      // A10: the hit left the entity in this condition.
+      if (perceived !== undefined) {
+        const { condition } = change;
+        this.entities.set(entity, { ...perceived, health: { kind: "condition", condition } });
+      }
       return;
     }
-    const { entity, outcome } = change;
+    const { outcome } = change;
     if (entity === this.controlled) {
       this.offer = [];
     }
-    const perceived = this.entities.get(entity);
     if (outcome.kind === "stepped" && perceived !== undefined) {
       const [east, south] = STEPS[outcome.direction];
       const { x, y, z } = perceived.position;

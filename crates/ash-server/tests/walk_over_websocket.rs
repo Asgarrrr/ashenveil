@@ -21,8 +21,8 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity, ResumeToken,
-    ServerMessage, Snapshot,
+    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, PerceivedEntity,
+    PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -35,6 +35,8 @@ mod action;
 mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
+#[path = "websocket/health.rs"]
+mod health;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -130,10 +132,17 @@ fn expected_snapshot(world: &World) -> ServerMessage {
                 entity: perceived.entity,
                 position: perceived.position,
                 disposition: perceived.disposition.map(disposition::to_wire),
+                health: health::to_wire(perceived.health),
             })
             .collect(),
     })
 }
+
+/// A9, A13: the hit points of the character, which nothing strikes.
+const FULL: PerceivedHealth = PerceivedHealth::HitPoints {
+    current: 10,
+    max: 10,
+};
 
 fn expected_awaited(world: &World) -> ServerMessage {
     ServerMessage::Awaited {
@@ -187,6 +196,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
                 entity: character,
                 position: at(1, 1),
                 disposition: None,
+                health: FULL,
             })
         )
     );
@@ -271,6 +281,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
                 entity: character,
                 position: at(3, 1),
                 disposition: None,
+                health: FULL,
             })
         )
     );

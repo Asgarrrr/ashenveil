@@ -6,7 +6,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, Condition, Disposition, Outcome, PerceivedChange,
-    PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
+    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot, Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -63,6 +63,10 @@ fn server_messages() -> Vec<ServerMessage> {
                     entity: EntityId::new(0),
                     position: TilePosition { x: 1, y: 1, z: 0 },
                     disposition: None,
+                    health: PerceivedHealth::HitPoints {
+                        current: 7,
+                        max: u32::MAX,
+                    },
                 },
                 PerceivedEntity {
                     entity: EntityId::new(1),
@@ -72,11 +76,13 @@ fn server_messages() -> Vec<ServerMessage> {
                         z: 7,
                     },
                     disposition: Some(Disposition::Hostile),
+                    health: PerceivedHealth::Condition(Condition::Unhurt),
                 },
                 PerceivedEntity {
                     entity: EntityId::new(2),
                     position: TilePosition { x: 1, y: 0, z: 0 },
                     disposition: Some(Disposition::Neutral),
+                    health: PerceivedHealth::Condition(Condition::Dying),
                 },
             ],
         }),
@@ -320,8 +326,9 @@ fn a_malformed_change_of_condition_is_refused() {
 }
 
 /// The bytes of a snapshot at time 0 of one floor tile, holding entity 1 at
-/// (0, 0, 0), its disposition already encoded in `disposition`.
-fn snapshot_bytes(disposition: &[u8]) -> Vec<u8> {
+/// (0, 0, 0), its disposition and its hit points or condition already
+/// encoded in `disposition` and `health`.
+fn snapshot_bytes(disposition: &[u8], health: &[u8]) -> Vec<u8> {
     let mut bytes = vec![0];
     bytes.extend(0_u64.to_le_bytes());
     // A width of 1, then one tile: floor.
@@ -333,8 +340,20 @@ fn snapshot_bytes(disposition: &[u8]) -> Vec<u8> {
     bytes.extend(1_u32.to_le_bytes());
     bytes.extend([0; 12]);
     bytes.extend(disposition);
+    bytes.extend(health);
     bytes
 }
+
+/// The entities of the snapshot `bytes` hold.
+fn snapshot_entities(bytes: &[u8]) -> Vec<PerceivedEntity> {
+    match ServerMessage::decode(bytes) {
+        Ok(ServerMessage::Snapshot(snapshot)) => snapshot.entities,
+        other => panic!("{bytes:?} give {other:?}"),
+    }
+}
+
+/// The bytes of an unhurt entity: the tag of a condition, then unhurt.
+const UNHURT: [u8; 2] = [1, 0];
 
 #[test]
 fn an_unknown_disposition_is_refused() {
@@ -346,19 +365,73 @@ fn an_unknown_disposition_is_refused() {
         (2, Some(Disposition::Neutral)),
     ];
     for (tag, disposition) in known {
-        let decoded = match ServerMessage::decode(&snapshot_bytes(&[tag])) {
-            Ok(ServerMessage::Snapshot(snapshot)) => snapshot.entities,
-            other => panic!("a disposition tag of {tag} gives {other:?}"),
-        };
+        let decoded = snapshot_entities(&snapshot_bytes(&[tag], &UNHURT));
         let dispositions: Vec<_> = decoded.iter().map(|entity| entity.disposition).collect();
         assert_eq!(dispositions, [disposition], "tag {tag}");
     }
 
     for tag in 3..=u8::MAX {
         assert!(
-            ServerMessage::decode(&snapshot_bytes(&[tag])).is_err(),
+            ServerMessage::decode(&snapshot_bytes(&[tag], &UNHURT)).is_err(),
             "a disposition tag of {tag} decodes"
         );
+    }
+}
+
+#[test]
+fn malformed_hit_points_or_condition_are_refused() {
+    // The controls: tag 0 is hit points, the current ones then the most;
+    // tag 1 is a condition, named by its own tag.
+    let known = [
+        (
+            &[0, 7, 0, 0, 0, 10, 0, 0, 0][..],
+            PerceivedHealth::HitPoints {
+                current: 7,
+                max: 10,
+            },
+        ),
+        (&[1, 0], PerceivedHealth::Condition(Condition::Unhurt)),
+        (&[1, 1], PerceivedHealth::Condition(Condition::Wounded)),
+        (&[1, 2], PerceivedHealth::Condition(Condition::BadlyWounded)),
+        (&[1, 3], PerceivedHealth::Condition(Condition::Dying)),
+    ];
+    for (bytes, health) in known {
+        let decoded = snapshot_entities(&snapshot_bytes(&[0], bytes));
+        let healths: Vec<_> = decoded.iter().map(|entity| entity.health).collect();
+        assert_eq!(healths, [health], "{bytes:?}");
+    }
+
+    let refused = [
+        ("no hit points and no condition", &[][..]),
+        ("hit points with no number", &[0]),
+        ("hit points with one number", &[0, 7, 0, 0, 0]),
+        ("a condition with no tag", &[1]),
+        ("a condition tag of 4", &[1, 4]),
+        (
+            "a condition, then hit points",
+            &[1, 1, 7, 0, 0, 0, 10, 0, 0, 0],
+        ),
+        (
+            "hit points, then a condition",
+            &[0, 7, 0, 0, 0, 10, 0, 0, 0, 1],
+        ),
+    ];
+    for (what, bytes) in refused {
+        assert!(
+            ServerMessage::decode(&snapshot_bytes(&[0], bytes)).is_err(),
+            "{what} decodes"
+        );
+    }
+    // Neither hit points nor a condition: no kind follows them, with the
+    // bytes of either.
+    for tag in 2..=u8::MAX {
+        for rest in [&[0][..], &[7, 0, 0, 0, 10, 0, 0, 0]] {
+            let bytes = [&[tag][..], rest].concat();
+            assert!(
+                ServerMessage::decode(&snapshot_bytes(&[0], &bytes)).is_err(),
+                "a tag of {tag} for hit points or a condition decodes"
+            );
+        }
     }
 }
 

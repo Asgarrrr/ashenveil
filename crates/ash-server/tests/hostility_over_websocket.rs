@@ -25,6 +25,8 @@ mod action;
 mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
+#[path = "websocket/health.rs"]
+mod health;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -100,6 +102,7 @@ fn snapshot_entities(world: &World) -> Vec<PerceivedEntity> {
             entity: perceived.entity,
             position: perceived.position,
             disposition: perceived.disposition.map(disposition::to_wire),
+            health: health::to_wire(perceived.health),
         })
         .collect()
 }

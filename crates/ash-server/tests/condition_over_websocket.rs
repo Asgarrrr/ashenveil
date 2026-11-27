@@ -1,6 +1,7 @@
 //! Acceptance of spec 0002, slice S4, over WebSocket: the character sees the
-//! fight. The client perceives the hostile creature as wounded right after
-//! the first hit (A10, A11).
+//! fight. The client perceives its own hit points (A9) and the hostile
+//! creature as wounded right after the first hit (A10, A11). No message
+//! gives it the hit points of another entity (R18).
 //!
 //! The client strikes the hostile creature when an attack toward it is
 //! offered and chases it otherwise, until a strike hits. It plans each
@@ -14,7 +15,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, Condition, Disposition, Outcome, PerceivedChange,
-    ResumeToken, ServerMessage, Snapshot,
+    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -150,24 +151,111 @@ fn turn_of<'m>(
     actions
 }
 
+/// What a snapshot says of the hit points of each entity, in its order.
+fn healths(message: &Option<ServerMessage>) -> Vec<(EntityId, PerceivedHealth)> {
+    match message {
+        Some(ServerMessage::Snapshot(Snapshot { entities, .. })) => entities
+            .iter()
+            .map(|perceived| (perceived.entity, perceived.health))
+            .collect(),
+        other => panic!("expected a snapshot, got {other:?}"),
+    }
+}
+
+/// A10, R18: the entities `message` gives hit points to. The patterns name
+/// every field of every message and every condition, so a new field, or a
+/// condition that holds a number, fails to compile here.
+fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
+    match message {
+        ServerMessage::Snapshot(Snapshot {
+            time: _,
+            width: _,
+            terrain: _,
+            entities,
+        }) => entities
+            .iter()
+            .filter_map(|perceived| {
+                let PerceivedEntity {
+                    entity,
+                    position: TilePosition { x: _, y: _, z: _ },
+                    disposition: None | Some(Disposition::Hostile | Disposition::Neutral),
+                    health,
+                } = *perceived;
+                match health {
+                    PerceivedHealth::HitPoints { current: _, max: _ } => Some(entity),
+                    PerceivedHealth::Condition(
+                        Condition::Unhurt
+                        | Condition::Wounded
+                        | Condition::BadlyWounded
+                        | Condition::Dying,
+                    ) => None,
+                }
+            })
+            .collect(),
+        ServerMessage::Awaited {
+            time: _,
+            entity: _,
+            actions,
+        } => {
+            // R9: an offer holds an action and the cost of the awaited
+            // character, never a hit point.
+            for offer in actions {
+                let AvailableAction { action: _, cost: _ } = *offer;
+            }
+            Vec::new()
+        }
+        ServerMessage::Perceived(
+            PerceivedChange::Act {
+                time: _,
+                entity: _,
+                outcome:
+                    Outcome::Stepped(_)
+                    | Outcome::Waited
+                    | Outcome::Bumped(_)
+                    | Outcome::Hit(_)
+                    | Outcome::Missed(_),
+            }
+            | PerceivedChange::Death { time: _, entity: _ }
+            | PerceivedChange::Condition {
+                time: _,
+                entity: _,
+                condition:
+                    Condition::Unhurt | Condition::Wounded | Condition::BadlyWounded | Condition::Dying,
+            },
+        )
+        | ServerMessage::Refused
+        | ServerMessage::Quarantined
+        | ServerMessage::ControllerTaken => Vec::new(),
+    }
+}
+
 #[test]
-fn the_client_perceives_the_creature_it_hit_as_wounded_right_after_the_hit() {
+fn the_client_perceives_its_own_hit_points_and_the_condition_of_the_creature_it_hits() {
     let address = start_server();
     let mut replay = World::skeleton(ash_server::world_seed(TOKEN));
     let character = replay.awaited();
     let mut socket = connect(address, TOKEN, 0);
-
-    let hostile = match receive(&mut socket) {
-        Some(ServerMessage::Snapshot(Snapshot { entities, .. })) => match entities.as_slice() {
-            [first, hostile, _] => {
-                assert_eq!(first.entity, character);
-                assert_eq!(hostile.disposition, Some(Disposition::Hostile));
-                hostile.entity
-            }
-            other => panic!("expected the character and two creatures: {other:?}"),
-        },
-        other => panic!("expected a snapshot, got {other:?}"),
+    // A9, A13: the hit points of the character, which nothing strikes.
+    let own = PerceivedHealth::HitPoints {
+        current: 10,
+        max: 10,
     };
+    let unhurt = PerceivedHealth::Condition(Condition::Unhurt);
+    let wounded = PerceivedHealth::Condition(Condition::Wounded);
+
+    // A9, A10: the snapshot gives the character its own hit points, and
+    // each creature a condition: unhurt at full.
+    let snapshot = receive(&mut socket);
+    let (hostile, neutral) = match healths(&snapshot)[..] {
+        [(first, _), (hostile, _), (neutral, _)] if first == character => (hostile, neutral),
+        ref other => panic!("expected the character and two creatures: {other:?}"),
+    };
+    assert_eq!(
+        healths(&snapshot),
+        [(character, own), (hostile, unhurt), (neutral, unhurt)]
+    );
+    // Every message the server sends.
+    let mut sent: Vec<ServerMessage> = snapshot.into_iter().collect();
 
     // The hunt: the client strikes the hostile creature until a strike
     // hits. Every change received is the change of the replayed world, in
@@ -176,6 +264,7 @@ fn the_client_perceives_the_creature_it_hit_as_wounded_right_after_the_hit() {
     let mut next = receive(&mut socket);
     let mut hit = None;
     for _ in 0..MOST_COMMANDS {
+        sent.extend(next.clone());
         let offered = turn_of(&next, &replay, character);
         let action = strike_or_chase(
             offered,
@@ -205,6 +294,8 @@ fn the_client_perceives_the_creature_it_hit_as_wounded_right_after_the_hit() {
         }
     }
     let hit = hit.unwrap_or_else(|| panic!("no hit in {MOST_COMMANDS} commands"));
+    sent.extend(received.iter().copied().map(ServerMessage::Perceived));
+    sent.extend(next.clone());
 
     // A10, A11: the client received one change of condition: the hostile
     // creature is wounded, right after the hit and at the same time.
@@ -232,16 +323,28 @@ fn the_client_perceives_the_creature_it_hit_as_wounded_right_after_the_hit() {
     // R17, R19: a later connection gets each change it missed once, in
     // order, then a snapshot and the pending turn. The client left before
     // the hit, between it and the change of condition, or after the last
-    // change.
+    // change. Each snapshot shows the hostile creature wounded (A10).
     drop(socket);
     for held in [hit, hit + 1, received.len()] {
         let mut socket = connect(address, TOKEN, held);
-        let (missed, then) = receive_turn(&mut socket);
+        let (missed, snapshot) = receive_turn(&mut socket);
         assert_eq!(missed, received[held..], "{held} changes held");
-        assert!(
-            matches!(then, Some(ServerMessage::Snapshot(_))),
-            "expected a snapshot, got {then:?}"
+        assert_eq!(
+            healths(&snapshot),
+            [(character, own), (hostile, wounded), (neutral, unhurt)],
+            "{held} changes held"
         );
+        sent.extend(snapshot);
         assert_eq!(receive(&mut socket), next);
+    }
+
+    // A10, R18: no message gives hit points to another entity. Only a
+    // snapshot gives any, to the character it is for.
+    for message in &sent {
+        let given: &[EntityId] = match message {
+            ServerMessage::Snapshot(_) => &[character],
+            _ => &[],
+        };
+        assert_eq!(given_hit_points(message), given, "{message:?}");
     }
 }

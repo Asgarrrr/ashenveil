@@ -7,7 +7,7 @@ use ash_core::tile::{Direction, Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::AvailableAction;
-use crate::combat::Condition;
+use crate::combat::{Condition, Health};
 use crate::controller::{Controller, Disposition};
 use crate::map::Map;
 use crate::world::World;
@@ -135,8 +135,9 @@ pub struct Snapshot {
 /// position, a disposition and a condition for the others: no speed, cost,
 /// next turn or hit points (R18).
 pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
-    // S4 signatures: `character` perceives itself like any other entity.
-    let _ = character;
+    // Read first: a `character` that is not embodied crashes here (F3),
+    // instead of leaving a snapshot with no hit points.
+    let Health { current, max } = world.health(character);
     let perception = Perception::whole_map(world);
     Snapshot {
         time: world.clock(),
@@ -148,7 +149,11 @@ pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
                 entity,
                 position: perception.position(entity),
                 disposition: perception.disposition(entity),
-                health: PerceivedHealth::Condition(perception.condition(entity)),
+                health: if entity == character {
+                    PerceivedHealth::HitPoints { current, max }
+                } else {
+                    PerceivedHealth::Condition(perception.condition(entity))
+                },
             })
             .collect(),
     }

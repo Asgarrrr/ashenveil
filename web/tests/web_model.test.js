@@ -38,7 +38,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { drawMap, logLine } from "../build/draw.js";
+import { drawMap, entityLine, logLine } from "../build/draw.js";
 import { Keyboard } from "../build/keys.js";
 import { PerceivedWorld } from "../build/model.js";
 import { decodeServerMessage, encodeCommand, loadCodec } from "../build/protocol.js";
@@ -84,10 +84,13 @@ const snapshot = (entities) => ({
   terrain: Array(25).fill("floor"),
   entities,
 });
-const perceivedEntity = (entity, x, y, disposition) => ({
+const hitPoints = (current, max) => ({ kind: "hit_points", current, max });
+const inCondition = (condition) => ({ kind: "condition", condition });
+const perceivedEntity = (entity, x, y, disposition, health = inCondition("unhurt")) => ({
   entity,
   position: { x, y, z: 0 },
   disposition,
+  health,
 });
 
 /** The change an act is: at `time`, `entity` did `outcome`. */
@@ -100,6 +103,9 @@ const outcomeOf = (message) =>
 const isDeath = (message) => message.kind === "perceived" && message.change.kind === "death";
 const isConditionChange = (message) =>
   message.kind === "perceived" && message.change.kind === "condition";
+
+/** The hit points or the condition of each entity `world` holds. */
+const healths = (world) => [...world.entities.values()].map(({ entity, health }) => [entity, health]);
 
 /** Where each entity `world` holds stands. */
 const positions = (world) =>
@@ -178,17 +184,49 @@ test("the snapshot gives each creature its disposition, and the character none",
   );
 });
 
+test("the snapshot gives the character its own hit points, and each creature its condition", () => {
+  // A9, A10: numbers for entity 0, which the client controls; a kind for
+  // the others.
+  assert.deepEqual(healths(replay(walk.slice(0, 1))), [
+    [0, hitPoints(10, 10)],
+    [1, inCondition("unhurt")],
+    [2, inCondition("unhurt")],
+  ]);
+});
+
+test("hit points decode as the current ones, then the most", () => {
+  // A snapshot is tag 0, the time, a width of 1 and one floor tile, then
+  // two entities: an id, a position, a disposition, then hit points (tag
+  // 0, two numbers) or a condition (tag 1, its own tag).
+  const u32 = (value) => [value, 0, 0, 0];
+  const entity = (id, health) => [...u32(id), ...u32(0), ...u32(0), ...u32(0), 0, ...health];
+  const bytes = Uint8Array.of(
+    ...[0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ...u32(1),
+    ...u32(1),
+    0,
+    ...u32(2),
+    ...entity(4, [0, ...u32(7), ...u32(10)]),
+    ...entity(5, [1, 2]),
+  );
+  const message = decodeServerMessage(bytes);
+  assert.deepEqual(
+    message.entities.map(({ health }) => health),
+    [hitPoints(7, 10), inCondition("badly_wounded")],
+  );
+});
+
 test("a later snapshot replaces every entity of the one before", () => {
   // Each reconnection sends a new snapshot. In the later one, entity 1 is
   // gone, entity 2 stands elsewhere and entity 3 is new.
   const first = [
-    perceivedEntity(0, 1, 1, null),
+    perceivedEntity(0, 1, 1, null, hitPoints(10, 10)),
     perceivedEntity(1, 3, 1, "hostile"),
-    perceivedEntity(2, 1, 3, "neutral"),
+    perceivedEntity(2, 1, 3, "neutral", inCondition("dying")),
   ];
   const later = [
-    perceivedEntity(0, 1, 1, null),
-    perceivedEntity(2, 2, 3, "neutral"),
+    perceivedEntity(0, 1, 1, null, hitPoints(7, 10)),
+    perceivedEntity(2, 2, 3, "neutral", inCondition("wounded")),
     perceivedEntity(3, 4, 4, "hostile"),
   ];
   const world = new PerceivedWorld();
@@ -375,7 +413,7 @@ test("the log line of a death says who died", () => {
   assert.equal(logLine(world, { kind: "death", time: 300, entity: 1 }), "300  entity 1 dies");
 });
 
-test("a change of condition is logged right after its hit, and moves no entity", () => {
+test("a change of condition is logged right after its hit, and changes the condition of its entity alone", () => {
   const changed = indexOf(death, isConditionChange);
   const before = replay(death.slice(0, changed));
   const after = replay(death.slice(0, changed + 1));
@@ -385,9 +423,74 @@ test("a change of condition is logged right after its hit, and moves no entity",
     act(200, 0, { kind: "hit", target: 1 }),
     { kind: "condition", time: 200, entity: 1, condition: "wounded" },
   ]);
+  assert.deepEqual(healths(before), [
+    [0, hitPoints(10, 10)],
+    [1, inCondition("unhurt")],
+    [2, inCondition("unhurt")],
+  ]);
+  assert.deepEqual(healths(after), [
+    [0, hitPoints(10, 10)],
+    [1, inCondition("wounded")],
+    [2, inCondition("unhurt")],
+  ]);
   assert.deepEqual(positions(after), positions(before));
   // The lethal hit changed no condition: the death followed it.
   assert.equal(replay(death).log.filter(({ kind }) => kind === "condition").length, 1);
+});
+
+test("a change of condition changes the entity it names, whichever it is, to the condition it names", () => {
+  const world = new PerceivedWorld();
+  world.apply(
+    snapshot([
+      perceivedEntity(0, 1, 1, null, hitPoints(10, 10)),
+      perceivedEntity(3, 2, 1, "neutral"),
+      perceivedEntity(5, 3, 1, "hostile"),
+    ]),
+  );
+  const comes = (entity, condition) =>
+    world.apply({ kind: "perceived", change: { kind: "condition", time: 0, entity, condition } });
+  const conditions = () => healths(world).slice(1);
+
+  comes(5, "badly_wounded");
+  assert.deepEqual(conditions(), [
+    [3, inCondition("unhurt")],
+    [5, inCondition("badly_wounded")],
+  ]);
+  comes(3, "wounded");
+  comes(5, "dying");
+  assert.deepEqual(conditions(), [
+    [3, inCondition("wounded")],
+    [5, inCondition("dying")],
+  ]);
+  // Its position and its disposition stay.
+  assert.deepEqual(world.entities.get(5), perceivedEntity(5, 3, 1, "hostile", inCondition("dying")));
+  // A change that names an entity the client does not hold adds none.
+  comes(9, "wounded");
+  assert.deepEqual([...world.entities.keys()], [0, 3, 5]);
+});
+
+test("the entity list shows the hit points of the character as numbers, and each condition beside its name", () => {
+  // The recorded world controls entity 0, drawn as "@".
+  const lines = (world) => [...world.entities.values()].map((perceived) => entityLine(world, perceived));
+  const changed = indexOf(death, isConditionChange);
+
+  // A9, A10.
+  assert.deepEqual(lines(replay(death.slice(0, changed))), [
+    "@: 10/10 hit points",
+    "entity 1: unhurt",
+    "entity 2: unhurt",
+  ]);
+  assert.deepEqual(lines(replay(death.slice(0, changed + 1))), [
+    "@: 10/10 hit points",
+    "entity 1: wounded",
+    "entity 2: unhurt",
+  ]);
+  const world = replay(death);
+  assert.equal(entityLine(world, perceivedEntity(4, 1, 1, null, hitPoints(7, 10))), "entity 4: 7/10 hit points");
+  assert.equal(
+    entityLine(world, perceivedEntity(4, 1, 1, "hostile", inCondition("badly_wounded"))),
+    "entity 4: badly wounded",
+  );
 });
 
 test("each condition decodes to its name", () => {

@@ -4,16 +4,19 @@
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
     AvailableAction, Condition, Disposition, Outcome, PerceivedChange, PerceivedEntity,
-    ServerMessage, Snapshot,
+    PerceivedHealth, ServerMessage, Snapshot,
 };
 use ash_sim::combat::Condition as SimCondition;
 use ash_sim::controller::Disposition as SimDisposition;
-use ash_sim::perception::{self, Outcome as SimOutcome, PerceivedChange as SimChange};
+use ash_sim::perception::{
+    self, Outcome as SimOutcome, PerceivedChange as SimChange, PerceivedHealth as SimHealth,
+};
 use ash_sim::world::World;
 
 use crate::action;
 
-/// R16: what `character` perceives, as a protocol message.
+/// R16: what `character` perceives, as a protocol message. Hit points for
+/// `character` alone (A9): every other entity shows a condition (A10).
 pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
     let snapshot = perception::snapshot(world, character);
     ServerMessage::Snapshot(Snapshot {
@@ -27,6 +30,7 @@ pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
                 entity: perceived.entity,
                 position: perceived.position,
                 disposition: perceived.disposition.map(disposition_to_wire),
+                health: health_to_wire(perceived.health),
             })
             .collect(),
     })
@@ -87,6 +91,13 @@ fn outcome_to_wire(outcome: SimOutcome) -> Outcome {
         SimOutcome::Bumped(target) => Outcome::Bumped(target),
         SimOutcome::Hit(target) => Outcome::Hit(target),
         SimOutcome::Missed(target) => Outcome::Missed(target),
+    }
+}
+
+fn health_to_wire(health: SimHealth) -> PerceivedHealth {
+    match health {
+        SimHealth::HitPoints { current, max } => PerceivedHealth::HitPoints { current, max },
+        SimHealth::Condition(condition) => PerceivedHealth::Condition(condition_to_wire(condition)),
     }
 }
 

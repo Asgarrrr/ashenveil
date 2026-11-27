@@ -7,7 +7,8 @@
 
 use ash_protocol::message::{
     Action, AvailableAction, ClientMessage, Condition, Direction, Disposition, EntityId, Outcome,
-    PerceivedChange, PerceivedEntity, ResumeToken, ServerMessage, Snapshot, Terrain,
+    PerceivedChange, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Terrain,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -114,14 +115,24 @@ fn snapshot_json(snapshot: &Snapshot) -> String {
              entity,
              position,
              disposition,
+             health,
          }| {
             let disposition = match disposition {
                 None => "null",
                 Some(Disposition::Hostile) => r#""hostile""#,
                 Some(Disposition::Neutral) => r#""neutral""#,
             };
+            let health = match *health {
+                PerceivedHealth::HitPoints { current, max } => {
+                    format!(r#"{{"kind":"hit_points","current":{current},"max":{max}}}"#)
+                }
+                PerceivedHealth::Condition(condition) => format!(
+                    r#"{{"kind":"condition","condition":"{}"}}"#,
+                    condition_name(condition)
+                ),
+            };
             format!(
-                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}},"disposition":{disposition}}}"#,
+                r#"{{"entity":{},"position":{{"x":{},"y":{},"z":{}}},"disposition":{disposition},"health":{health}}}"#,
                 entity.get(),
                 position.x,
                 position.y,
