@@ -130,14 +130,17 @@ Today's fields (`crates/ash-sim/src/world.rs`):
 |---|---|
 | Stores (entities and their components) | saved |
 | Scheduler order, with a stored sequence for R8 | saved |
-| Awaited entity | saved |
+| Awaited entity | derivable |
 | Id counter | saved |
 | RNG state | saved |
-| Clock | saved |
+| Clock | derivable |
 | Map | saved, or derivable from seed and content once world generation exists |
 | Indexes | derivable |
 | Perceived changes | external: sent to the controller, not world state |
 | Command log | external: replay evidence, cut at each version (methodology) |
+
+2026-11-27, found in spec 0002 S1: the awaited entity and the clock are
+derivable, not saved. The world derives both from the scheduler head.
 
 - A test restores a world while it awaits a controller. The next offers
   and the order of perceived changes must match the original run (R19).
