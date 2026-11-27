@@ -125,9 +125,9 @@ fn strike_or_chase(world: &World, target: TilePosition) -> Action {
         return Action::Attack(toward);
     }
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .filter_map(|offered| match offered.action {
+        .filter_map(|offer| match offer.action {
             Action::Move(direction) => Some(direction),
             Action::Wait | Action::Attack(_) => None,
         })
@@ -529,7 +529,7 @@ fn the_tile_of_the_dead_creature_is_free() {
     // offered there. Its move east is a step (R4), not a bump.
     assert_eq!(world.awaited(), cast.first);
     let offered: Vec<Action> = world
-        .available_actions()
+        .offers()
         .into_iter()
         .map(|offer| offer.action)
         .collect();

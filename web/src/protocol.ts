@@ -69,7 +69,7 @@ export interface Position {
 }
 
 /** An action offered to the awaited entity, with the cost it would pay (R9). */
-export interface AvailableAction {
+export interface Offer {
   action: Action;
   cost: number;
 }
@@ -90,7 +90,7 @@ export type ServerMessage =
       terrain: Terrain[];
       entities: PerceivedEntity[];
     }
-  | { kind: "awaited"; time: number; entity: number; actions: AvailableAction[] }
+  | { kind: "awaited"; time: number; entity: number; actions: Offer[] }
   | { kind: "perceived"; change: PerceivedChange }
   | { kind: "refused" }
   | { kind: "quarantined" }

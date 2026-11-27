@@ -21,7 +21,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Outcome, PerceivedChange, PerceivedEntity,
+    Action, ChangeKind, ClientMessage, Offer, Outcome, PerceivedChange, PerceivedEntity,
     PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -101,8 +101,8 @@ fn at(x: u32, y: u32) -> TilePosition {
     TilePosition { x, y, z: 0 }
 }
 
-fn offer(action: Action, cost: u64) -> AvailableAction {
-    AvailableAction {
+fn offer(action: Action, cost: u64) -> Offer {
+    Offer {
         action,
         cost: ActionCost::new(cost),
     }
@@ -148,12 +148,12 @@ fn expected_awaited(world: &World) -> ServerMessage {
     ServerMessage::Awaited {
         time: world.clock(),
         entity: world.awaited(),
-        actions: world
-            .available_actions()
+        offers: world
+            .offers()
             .into_iter()
-            .map(|offered| AvailableAction {
-                action: action::to_wire(offered.action),
-                cost: offered.cost,
+            .map(|offer| Offer {
+                action: action::to_wire(offer.action),
+                cost: offer.cost,
             })
             .collect(),
     }
@@ -208,7 +208,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
         Some(ServerMessage::Awaited {
             time: Time::ZERO,
             entity: character,
-            actions: vec![
+            offers: vec![
                 offer(Action::Wait, 50),
                 offer(Action::Move(East), 100),
                 offer(Action::Move(SouthEast), 100),

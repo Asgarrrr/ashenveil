@@ -94,9 +94,9 @@ fn strike_or_chase(world: &World, target: TilePosition) -> Action {
         return Action::Attack(toward);
     }
     world
-        .available_actions()
+        .offers()
         .into_iter()
-        .filter_map(|offered| match offered.action {
+        .filter_map(|offer| match offer.action {
             Action::Move(direction) => Some(direction),
             Action::Wait | Action::Attack(_) => None,
         })

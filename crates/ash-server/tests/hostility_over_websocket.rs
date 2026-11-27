@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    Action, ChangeKind, ClientMessage, Disposition, Offer, Outcome, PerceivedChange,
     PerceivedEntity, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -109,14 +109,14 @@ fn snapshot_entities(world: &World) -> Vec<PerceivedEntity> {
 
 /// The offered move that brings `from` closest to `target`: the move onto
 /// its tile once adjacent. A wait when no move is offered.
-fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) -> Action {
+fn chase(offers: &[Offer], from: TilePosition, target: TilePosition) -> Action {
     let distance = |position: TilePosition| {
         position
             .x
             .abs_diff(target.x)
             .max(position.y.abs_diff(target.y))
     };
-    offered
+    offers
         .iter()
         .filter_map(|offer| match offer.action {
             Action::Move(direction) => Some(direction),
@@ -160,31 +160,31 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
         if struck && bumped {
             return;
         }
-        let actions = match next {
+        let offers = match next {
             Some(ServerMessage::Awaited {
                 time,
                 entity,
-                actions,
+                offers,
             }) => {
                 assert_eq!((time, entity), (replay.clock(), character));
-                actions
+                offers
             }
             other => panic!("expected the character's turn, got {other:?}"),
         };
         // R9, R14: the turn offers what the simulation offers, at its costs.
-        let offers: Vec<(Action, u64)> = actions
+        let parts: Vec<(Action, u64)> = offers
             .iter()
             .map(|offer| (offer.action, offer.cost.units()))
             .collect();
         let expected: Vec<(Action, u64)> = replay
-            .available_actions()
+            .offers()
             .into_iter()
             .map(|offer| (action::to_wire(offer.action), offer.cost.units()))
             .collect();
-        assert_eq!(offers, expected);
+        assert_eq!(parts, expected);
         let from = replay.position(character);
         let target = if struck { neutral } else { hostile };
-        let action = chase(&actions, from, replay.position(target));
+        let action = chase(&offers, from, replay.position(target));
         // Read from the snapshot: on the way to the neutral creature, a
         // move may strike the hostile one again, and kill it (A8).
         let ahead = match action {

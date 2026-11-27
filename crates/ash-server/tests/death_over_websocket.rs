@@ -14,7 +14,7 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, AvailableAction, ChangeKind, ClientMessage, Disposition, Outcome, PerceivedChange,
+    Action, ChangeKind, ClientMessage, Disposition, Offer, Outcome, PerceivedChange,
     PerceivedEntity, ResumeToken, ServerMessage, Snapshot,
 };
 use ash_sim::world::World;
@@ -106,22 +106,22 @@ fn standing(world: &World, entity: EntityId) -> Option<TilePosition> {
 }
 
 /// The offered attack toward `target`, if any.
-fn strike(offered: &[AvailableAction], from: TilePosition, target: TilePosition) -> Option<Action> {
-    offered.iter().map(|offer| offer.action).find(
+fn strike(offers: &[Offer], from: TilePosition, target: TilePosition) -> Option<Action> {
+    offers.iter().map(|offer| offer.action).find(
         |action| matches!(action, Action::Attack(direction) if from.step(*direction) == target),
     )
 }
 
 /// The offered move that brings `from` closest to `target`: the move onto
 /// its tile once adjacent. A wait when no move is offered.
-fn chase(offered: &[AvailableAction], from: TilePosition, target: TilePosition) -> Action {
+fn chase(offers: &[Offer], from: TilePosition, target: TilePosition) -> Action {
     let distance = |position: TilePosition| {
         position
             .x
             .abs_diff(target.x)
             .max(position.y.abs_diff(target.y))
     };
-    offered
+    offers
         .iter()
         .filter_map(|offer| match offer.action {
             Action::Move(direction) => Some(direction),
@@ -172,11 +172,11 @@ fn names(message: &ServerMessage, entity: EntityId) -> bool {
         ServerMessage::Awaited {
             time: _,
             entity: awaited,
-            actions,
+            offers,
         } => {
             // An offer names no entity: an action and its cost.
-            for offer in actions {
-                let AvailableAction { action: _, cost: _ } = *offer;
+            for offer in offers {
+                let Offer { action: _, cost: _ } = *offer;
             }
             *awaited == entity
         }
@@ -193,27 +193,27 @@ fn turn_of<'m>(
     message: &'m Option<ServerMessage>,
     replay: &World,
     character: EntityId,
-) -> &'m [AvailableAction] {
+) -> &'m [Offer] {
     let Some(ServerMessage::Awaited {
         time,
         entity,
-        actions,
+        offers,
     }) = message
     else {
         panic!("expected the character's turn, got {message:?}");
     };
     assert_eq!((*time, *entity), (replay.clock(), character));
-    let offers: Vec<(Action, u64)> = actions
+    let parts: Vec<(Action, u64)> = offers
         .iter()
         .map(|offer| (offer.action, offer.cost.units()))
         .collect();
     let expected: Vec<(Action, u64)> = replay
-        .available_actions()
+        .offers()
         .into_iter()
         .map(|offer| (action::to_wire(offer.action), offer.cost.units()))
         .collect();
-    assert_eq!(offers, expected);
-    actions
+    assert_eq!(parts, expected);
+    offers
 }
 
 /// The client sends `action` for `character`. Returns the changes of the
@@ -267,9 +267,9 @@ fn the_client_perceives_the_death_and_never_the_dead_creature_again() {
         let Some(target) = standing(&replay, hostile) else {
             break;
         };
-        let offered = turn_of(&next, &replay, character);
+        let offers = turn_of(&next, &replay, character);
         let from = replay.position(character);
-        let action = strike(offered, from, target).unwrap_or_else(|| chase(offered, from, target));
+        let action = strike(offers, from, target).unwrap_or_else(|| chase(offers, from, target));
         let (changes, then) = command(&mut socket, &mut replay, character, action);
         received.extend(changes);
         next = then;

@@ -138,7 +138,7 @@ test("the recorded walk gives the map, positions, clock, costs and log", () => {
   assert.equal(world.time, 250);
 
   assert.equal(
-    world.offer.length,
+    world.offers.length,
     10,
     "every move is open at (3, 2), wait, and an attack on the creature at (3, 3)",
   );
@@ -574,7 +574,7 @@ test("the log line of a change of condition says how the entity looks", () => {
   assert.equal(looks("dying"), "200  entity 2 looks dying");
 });
 
-test("a refused command advances nothing and keeps the offer", () => {
+test("a refused command advances nothing and keeps the offers", () => {
   const refusal = indexOf(walk, (message) => message.kind === "refused");
   const beforeRefusal = replay(walk.slice(0, refusal));
   const refused = replay(walk.slice(0, refusal + 1));
@@ -582,14 +582,14 @@ test("a refused command advances nothing and keeps the offer", () => {
   assert.equal(refused.refused, true);
   assert.equal(refused.time, beforeRefusal.time);
   assert.deepEqual(refused.entities, beforeRefusal.entities);
-  assert.deepEqual(refused.offer, beforeRefusal.offer);
+  assert.deepEqual(refused.offers, beforeRefusal.offers);
   assert.equal(refused.costOf(move("north")), undefined, "north is a wall");
 
   assert.equal(replay(walk.slice(0, refusal + 2)).refused, false);
 });
 
-test("the offer leaves once the controlled entity acts", () => {
-  assert.deepEqual(replay(walk.slice(0, 3)).offer, []);
+test("the offers leave once the controlled entity acts", () => {
+  assert.deepEqual(replay(walk.slice(0, 3)).offers, []);
 });
 
 test("after ControllerTaken the client does not reconnect", () => {
@@ -597,7 +597,7 @@ test("after ControllerTaken the client does not reconnect", () => {
 
   assert.equal(world.ended, "controller_taken");
   assert.equal(world.mayReconnect(), false);
-  assert.deepEqual(world.offer, []);
+  assert.deepEqual(world.offers, []);
 });
 
 test("after Quarantined the client does not reconnect", () => {
@@ -607,7 +607,7 @@ test("after Quarantined the client does not reconnect", () => {
 
   assert.equal(world.ended, "quarantined");
   assert.equal(world.mayReconnect(), false);
-  assert.deepEqual(world.offer, []);
+  assert.deepEqual(world.offers, []);
 });
 
 test("bytes that are not a message decode to nothing", () => {

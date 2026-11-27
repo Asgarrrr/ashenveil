@@ -31,7 +31,7 @@ pub enum Action {
 
 /// An action offered to the awaited entity, with the cost it would pay (R9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AvailableAction {
+pub struct Offer {
     pub action: Action,
     pub cost: ActionCost,
 }
@@ -147,7 +147,7 @@ pub enum ServerMessage {
     Awaited {
         time: Time,
         entity: EntityId,
-        actions: Vec<AvailableAction>,
+        offers: Vec<Offer>,
     },
     Perceived(PerceivedChange),
     /// The last command was refused. Nothing advanced (R10).
@@ -240,7 +240,7 @@ impl Wire for Action {
     }
 }
 
-impl Wire for AvailableAction {
+impl Wire for Offer {
     fn write(&self, out: &mut Vec<u8>) {
         self.action.write(out);
         self.cost.write(out);
@@ -482,12 +482,12 @@ impl Wire for ServerMessage {
             Self::Awaited {
                 time,
                 entity,
-                actions,
+                offers,
             } => {
                 1_u8.write(out);
                 time.write(out);
                 entity.write(out);
-                actions.write(out);
+                offers.write(out);
             }
             Self::Perceived(change) => {
                 2_u8.write(out);
@@ -505,7 +505,7 @@ impl Wire for ServerMessage {
             1 => Ok(Self::Awaited {
                 time: Time::read(input)?,
                 entity: EntityId::read(input)?,
-                actions: Vec::read(input)?,
+                offers: Vec::read(input)?,
             }),
             2 => PerceivedChange::read(input).map(Self::Perceived),
             3 => Ok(Self::Refused),

@@ -41,7 +41,7 @@ pub struct Refused;
 
 /// An action offered to the awaited character, with the cost it would pay (R9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AvailableAction {
+pub struct Offer {
     pub action: Action,
     pub cost: ActionCost,
 }
@@ -60,7 +60,7 @@ pub(crate) fn allowed(perception: &Perception<'_>, actor: EntityId, action: Acti
 
 /// R14: every action `actor` is allowed, the wait first, then the moves and
 /// the attacks clockwise from the north. The same for every controller (R3).
-pub(crate) fn offers<'p>(
+pub(crate) fn offered<'p>(
     perception: &'p Perception<'_>,
     actor: EntityId,
 ) -> impl Iterator<Item = Action> + 'p {
