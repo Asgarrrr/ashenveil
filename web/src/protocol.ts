@@ -32,6 +32,14 @@ export type Outcome =
   | { kind: "hit"; target: number }
   | { kind: "missed"; target: number };
 
+/**
+ * A change every character perceives, stamped with the time it happened
+ * (R17): an entity acts, or an entity dies and leaves the world (A8).
+ */
+export type PerceivedChange =
+  | { kind: "act"; time: number; entity: number; outcome: Outcome }
+  | { kind: "death"; time: number; entity: number };
+
 export type Terrain = "floor" | "wall";
 
 /** How a creature stands toward the character (A4). */
@@ -65,7 +73,7 @@ export type ServerMessage =
       entities: PerceivedEntity[];
     }
   | { kind: "awaited"; time: number; entity: number; actions: AvailableAction[] }
-  | { kind: "perceived"; time: number; entity: number; outcome: Outcome }
+  | { kind: "perceived"; change: PerceivedChange }
   | { kind: "refused" }
   | { kind: "quarantined" }
   | { kind: "controller_taken" };

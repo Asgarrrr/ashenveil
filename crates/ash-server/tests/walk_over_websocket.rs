@@ -31,10 +31,10 @@ use Direction::{East, North, South, SouthEast};
 
 #[path = "websocket/action.rs"]
 mod action;
+#[path = "websocket/change.rs"]
+mod change;
 #[path = "websocket/disposition.rs"]
 mod disposition;
-#[path = "websocket/outcome.rs"]
-mod outcome;
 
 type Socket = WebSocket<TcpStream>;
 
@@ -111,11 +111,8 @@ fn wire_changes(world: &World) -> Vec<PerceivedChange> {
     world
         .perceived_changes()
         .iter()
-        .map(|change| PerceivedChange {
-            time: change.time,
-            entity: change.entity,
-            outcome: outcome::to_wire(change.outcome),
-        })
+        .copied()
+        .map(change::to_wire)
         .collect()
 }
 
@@ -218,7 +215,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let mut accept =
         |socket: &mut Socket, action: Action, outcome: Outcome, time: u64, then: u64| {
             send(socket, command(character, action));
-            let change = PerceivedChange {
+            let change = PerceivedChange::Act {
                 time: Time::new(time),
                 entity: character,
                 outcome,
@@ -294,7 +291,7 @@ fn a_client_walks_disconnects_and_finds_its_world_unchanged() {
     let (changes, awaited) = receive_turn(&mut socket);
     assert_eq!(
         changes.first(),
-        Some(&PerceivedChange {
+        Some(&PerceivedChange::Act {
             time: Time::new(250),
             entity: character,
             outcome: Outcome::Waited,

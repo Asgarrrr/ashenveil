@@ -120,11 +120,15 @@ pub(crate) fn resolve(
         Action::Attack(direction) => combat::attack(world, actor, direction, rng),
     };
     // R7: the effect happens now; the cost delays the actor's next turn.
-    in_order.push(Effect::Perceive(PerceivedChange {
+    in_order.push(Effect::Perceive(PerceivedChange::Act {
         time: world.clock(),
         entity: actor,
         outcome,
     }));
+    // A11: what a hit does to its target is perceived after the hit.
+    if let Outcome::Hit(target) = outcome {
+        in_order.extend(combat::hit(world, target));
+    }
     in_order.push(Effect::EndTurn {
         due: world.clock().after(action.cost(world.speed(actor))),
     });

@@ -1,4 +1,6 @@
-//! Orders entities by the time they are due (R8).
+//! Orders entities by the time they are due (R8). It holds ids, not
+//! entities: the entry of an entity that left the world stays until it is
+//! the next to act, and the world drops it then.
 
 use alloc::vec::Vec;
 

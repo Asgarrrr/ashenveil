@@ -116,7 +116,7 @@ fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u6
     );
     assert_eq!(
         receive(socket),
-        Some(ServerMessage::Perceived(PerceivedChange {
+        Some(ServerMessage::Perceived(PerceivedChange::Act {
             time: Time::new(time),
             entity: character,
             outcome: Outcome::Stepped(direction),

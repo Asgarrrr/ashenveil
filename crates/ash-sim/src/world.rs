@@ -2,12 +2,13 @@
 
 use alloc::vec::Vec;
 
-use ash_core::entity::{EntityId, Speed};
+use ash_core::entity::{EntityId, EntityIds, Speed};
 use ash_core::rng::Rng;
 use ash_core::tile::{Terrain, TilePosition};
 use ash_core::time::Time;
 
 use crate::action::{self, Action, AvailableAction, Refused};
+use crate::combat::Health;
 use crate::controller::{Controller, Disposition};
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
@@ -33,11 +34,25 @@ struct Entity {
     speed: Speed,
     position: TilePosition,
     controller: Controller,
+    health: Health,
+}
+
+/// F3: what a total lookup finds under an id the world issued. Never a bare
+/// absence.
+enum Lookup {
+    /// The entity is embodied in this world: its row in `entities`.
+    Embodied(usize),
+    /// The world issued the id, and no entity is embodied under it: the
+    /// entity died (A8).
+    NotEmbodied,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct World {
     map: Map,
+    /// F2: every id this world issued, to the living and to the dead.
+    ids: EntityIds,
+    /// The embodied entities, in creation order.
     entities: Vec<Entity>,
     /// Its next entry is the turn being played: the clock and the awaited
     /// entity derive from it.
@@ -53,6 +68,7 @@ impl World {
     pub fn new(seed: u64, character_speed: Speed) -> Self {
         let mut world = Self {
             map: Map::skeleton(),
+            ids: EntityIds::default(),
             entities: Vec::new(),
             scheduler: Scheduler::default(),
             rng: Rng::new(seed),
@@ -90,20 +106,23 @@ impl World {
         position: TilePosition,
         controller: Controller,
     ) -> EntityId {
-        let id = self.next_id();
         if self.map.terrain(position) != Terrain::Floor || self.occupant(position).is_some() {
-            ash_core::invariant!("{id:?} cannot be created on {position:?}");
+            ash_core::invariant!("no entity can be created on {position:?}");
         }
         self.apply(Effects {
             in_order: alloc::vec![Effect::Create {
-                id,
                 speed,
                 position,
                 controller,
+                health: Health::full(controller),
             }],
             rng_after: self.rng.clone(),
         });
-        id
+        // F2: `apply` issued the id of the entity it created here.
+        match self.occupant(position) {
+            Some(id) => id,
+            None => ash_core::invariant!("no entity was created on {position:?}"),
+        }
     }
 
     /// The time of the turn being played (R1).
@@ -150,14 +169,14 @@ impl World {
         self.map.tiles()
     }
 
-    /// Every entity, in creation order. Under whole-map perception (R16),
-    /// every character perceives each of them.
+    /// Every embodied entity, in creation order. Under whole-map perception
+    /// (R16), every character perceives each of them.
     pub(crate) fn entities(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.entities.iter().map(|entity| entity.id)
     }
 
-    /// Where `entity` stands. Under whole-map perception (R16), every
-    /// character perceives it.
+    /// Where `entity`, which is embodied, stands. Under whole-map perception
+    /// (R16), every character perceives it.
     pub fn position(&self, entity: EntityId) -> TilePosition {
         self.entity(entity).position
     }
@@ -188,24 +207,33 @@ impl World {
         &self.command_log
     }
 
-    /// Runs the clock entity by entity. A wandering entity acts at once; the
+    /// Runs the clock entry by entry. A wandering entity acts at once; the
     /// clock stops at the first entity a player connection controls (R2).
+    /// The entry of an entity that died is dropped: nothing acts and
+    /// nothing draws (F3).
     fn advance(&mut self) {
         loop {
             let entity = self.turn().1;
-            match self.controller(entity) {
-                Controller::Player => return,
-                Controller::Wander(_) => {
-                    let offered = self.actions_of(entity);
-                    let (action, rng) = wander::choose(&self.rng, &offered);
-                    let perception = Perception::whole_map(self);
-                    let Ok(effects) = action::resolve(self, &perception, entity, action, &rng)
-                    else {
-                        ash_core::invariant!("the wander of {entity:?} chose a refused action")
-                    };
-                    self.apply(effects);
-                }
-            }
+            let effects = match self.lookup(entity) {
+                Lookup::NotEmbodied => Effects {
+                    in_order: alloc::vec![Effect::Unschedule],
+                    rng_after: self.rng.clone(),
+                },
+                Lookup::Embodied(row) => match self.entities[row].controller {
+                    Controller::Player => return,
+                    Controller::Wander(_) => {
+                        let offered = self.actions_of(entity);
+                        let (action, rng) = wander::choose(&self.rng, &offered);
+                        let perception = Perception::whole_map(self);
+                        let Ok(effects) = action::resolve(self, &perception, entity, action, &rng)
+                        else {
+                            ash_core::invariant!("the wander of {entity:?} chose a refused action")
+                        };
+                        effects
+                    }
+                },
+            };
+            self.apply(effects);
         }
     }
 
@@ -222,17 +250,32 @@ impl World {
                     };
                     self.scheduler.schedule(entity, due);
                 }
+                Effect::Unschedule => {
+                    if self.scheduler.pop().is_none() {
+                        ash_core::invariant!("no entity is scheduled");
+                    }
+                }
+                Effect::Damage { entity, amount } => {
+                    let entity = self.entity_mut(entity);
+                    entity.health = entity.health.damaged(amount);
+                }
+                Effect::Remove { entity } => {
+                    let row = self.row(entity);
+                    self.entities.remove(row);
+                }
                 Effect::Create {
-                    id,
                     speed,
                     position,
                     controller,
+                    health,
                 } => {
+                    let id = self.ids.issue();
                     self.entities.push(Entity {
                         id,
                         speed,
                         position,
                         controller,
+                        health,
                     });
                     // The first entity has no turn to join: the world
                     // begins at time zero.
@@ -250,14 +293,6 @@ impl World {
         match self.scheduler.head() {
             Some((due, entity)) => (due, entity),
             None => ash_core::invariant!("no entity is scheduled"),
-        }
-    }
-
-    /// The id the next created entity gets.
-    fn next_id(&self) -> EntityId {
-        match u32::try_from(self.entities.len()) {
-            Ok(raw) => EntityId::new(raw),
-            Err(_) => ash_core::invariant!("the world holds more entities than ids"),
         }
     }
 
@@ -279,26 +314,39 @@ impl World {
         self.entity(entity).controller
     }
 
-    fn entity(&self, entity: EntityId) -> &Entity {
-        match self
-            .entities
-            .iter()
-            .find(|candidate| candidate.id == entity)
-        {
-            Some(found) => found,
-            None => ash_core::invariant!("{entity:?} is not in the world"),
+    /// The hit points of `entity` (A7). Only its own controller may learn
+    /// them (R18).
+    pub(crate) fn health(&self, entity: EntityId) -> Health {
+        self.entity(entity).health
+    }
+
+    /// F3: the total lookup. An id this world never issued crashes through
+    /// `invariant!`.
+    fn lookup(&self, entity: EntityId) -> Lookup {
+        let embodied = |candidate: &Entity| candidate.id == entity;
+        match self.entities.iter().position(embodied) {
+            Some(row) => Lookup::Embodied(row),
+            None if self.ids.has_issued(entity) => Lookup::NotEmbodied,
+            None => ash_core::invariant!("this world never issued {entity:?}"),
         }
     }
 
-    fn entity_mut(&mut self, entity: EntityId) -> &mut Entity {
-        match self
-            .entities
-            .iter_mut()
-            .find(|candidate| candidate.id == entity)
-        {
-            Some(found) => found,
-            None => ash_core::invariant!("{entity:?} is not in the world"),
+    /// The row of `entity`, which is embodied: a rule names only entities it
+    /// perceives or the one whose turn it is.
+    fn row(&self, entity: EntityId) -> usize {
+        match self.lookup(entity) {
+            Lookup::Embodied(row) => row,
+            Lookup::NotEmbodied => ash_core::invariant!("{entity:?} is not embodied"),
         }
+    }
+
+    fn entity(&self, entity: EntityId) -> &Entity {
+        &self.entities[self.row(entity)]
+    }
+
+    fn entity_mut(&mut self, entity: EntityId) -> &mut Entity {
+        let row = self.row(entity);
+        &mut self.entities[row]
     }
 }
 
@@ -329,6 +377,112 @@ mod tests {
             wall,
             Controller::Wander(Disposition::Neutral),
         );
+    }
+
+    #[test]
+    fn a_removed_entity_is_issued_but_not_embodied_and_stays_scheduled() {
+        let mut world = World::new(0, Speed::new(1));
+        let character = world.awaited();
+        let [removed, second, third] = [2, 4, 6].map(|x| {
+            world.create_entity(
+                Speed::new(2),
+                TilePosition { x, y: 1, z: 0 },
+                Controller::Wander(Disposition::Hostile),
+            )
+        });
+        let scheduled = world.scheduler.clone();
+
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Remove { entity: removed }],
+            rng_after: world.rng.clone(),
+        });
+
+        // F3: the two cases of a total lookup.
+        assert!(matches!(world.lookup(removed), Lookup::NotEmbodied));
+        assert!(matches!(world.lookup(character), Lookup::Embodied(_)));
+        // The others stay in creation order.
+        let embodied: Vec<EntityId> = world.entities().collect();
+        assert_eq!(embodied, [character, second, third]);
+        // The entry outlives the embodiment: `advance` drops it later.
+        assert_eq!(world.scheduler, scheduled);
+    }
+
+    #[test]
+    fn a_passed_dead_entry_acts_nothing_and_leaves_one_entry_per_embodied_entity() {
+        let mut world = World::new(0, Speed::new(1));
+        let character = world.awaited();
+        let [dead, wounded] = [2, 4].map(|x| {
+            world.create_entity(
+                Speed::new(2),
+                TilePosition { x, y: 1, z: 0 },
+                Controller::Wander(Disposition::Hostile),
+            )
+        });
+        // One creature left the world, as at its death (A8). A hit wounded
+        // the other, which lives (A6).
+        world.apply(Effects {
+            in_order: alloc::vec![
+                Effect::Remove { entity: dead },
+                Effect::Damage {
+                    entity: wounded,
+                    amount: 3,
+                },
+            ],
+            rng_after: world.rng.clone(),
+        });
+
+        // The entries of both creatures are due before the next turn of the
+        // character.
+        assert_eq!(world.submit(Action::Wait), Ok(()));
+
+        let acted = |entity| {
+            world.perceived_changes.iter().any(|change| {
+                matches!(change, PerceivedChange::Act { entity: actor, .. } if *actor == entity)
+            })
+        };
+        assert!(acted(wounded));
+        assert!(!acted(dead));
+        // From the next to act: the awaited character, then the creature.
+        let mut rest = world.scheduler.clone();
+        let scheduled: Vec<EntityId> = core::iter::from_fn(|| rest.pop())
+            .map(|(_, entity)| entity)
+            .collect();
+        assert_eq!(scheduled, [character, wounded]);
+    }
+
+    #[test]
+    #[should_panic(expected = "invariant violated")]
+    fn a_lookup_of_an_id_the_world_never_issued_crashes() {
+        // The world issued one id, the character's: the next one is the
+        // nearest id it never issued.
+        let world = World::new(0, Speed::new(1));
+        let _ = world.lookup(EntityId::new(1));
+    }
+
+    /// F3: a write names which of the two failures it met.
+    #[test]
+    #[should_panic(expected = "this world never issued")]
+    fn a_damage_to_an_id_the_world_never_issued_crashes_as_never_issued() {
+        let mut world = World::new(0, Speed::new(1));
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Damage {
+                entity: EntityId::new(1),
+                amount: 3,
+            }],
+            rng_after: world.rng.clone(),
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "this world never issued")]
+    fn a_removal_of_an_id_the_world_never_issued_crashes_as_never_issued() {
+        let mut world = World::new(0, Speed::new(1));
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Remove {
+                entity: EntityId::new(1),
+            }],
+            rng_after: world.rng.clone(),
+        });
     }
 
     #[test]

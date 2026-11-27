@@ -5,18 +5,11 @@ import type {
   Action,
   AvailableAction,
   Direction,
-  Outcome,
+  PerceivedChange,
   PerceivedEntity,
   ServerMessage,
   Terrain,
 } from "./protocol.js";
-
-/** A perceived change, stamped with the time it happened (R17). */
-export interface LogEntry {
-  time: number;
-  entity: number;
-  outcome: Outcome;
-}
 
 /** Why the server ended the connection for good. */
 export type End = "quarantined" | "controller_taken";
@@ -51,7 +44,8 @@ export class PerceivedWorld {
   controlled: number | undefined;
   /** The actions offered to the controlled entity; empty when not awaited. */
   offer: AvailableAction[] = [];
-  readonly log: LogEntry[] = [];
+  /** Every perceived change received, in order (R17). */
+  readonly log: PerceivedChange[] = [];
   /** The last command was refused; nothing advanced (R10). */
   refused = false;
   ended: End | undefined;
@@ -74,9 +68,9 @@ export class PerceivedWorld {
         this.offer = message.actions;
         break;
       case "perceived":
-        this.time = message.time;
-        this.log.push({ time: message.time, entity: message.entity, outcome: message.outcome });
-        this.perceive(message.entity, message.outcome);
+        this.time = message.change.time;
+        this.log.push(message.change);
+        this.perceive(message.change);
         break;
       case "refused":
         this.refused = true;
@@ -110,7 +104,13 @@ export class PerceivedWorld {
     return this.ended === undefined;
   }
 
-  private perceive(entity: number, outcome: Outcome): void {
+  private perceive(change: PerceivedChange): void {
+    if (change.kind === "death") {
+      // A8: the dead entity left the world.
+      this.entities.delete(change.entity);
+      return;
+    }
+    const { entity, outcome } = change;
     if (entity === this.controlled) {
       this.offer = [];
     }
