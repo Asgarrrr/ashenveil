@@ -13,7 +13,7 @@ use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_protocol::message::{
-    Action, ClientMessage, Outcome, PerceivedChange, ResumeToken, ServerMessage,
+    Action, ChangeKind, ClientMessage, Outcome, PerceivedChange, ResumeToken, ServerMessage,
 };
 use ash_sim::world::World;
 use tungstenite::{Error, Message, WebSocket};
@@ -116,10 +116,10 @@ fn walk(socket: &mut Socket, character: EntityId, direction: Direction, time: u6
     );
     assert_eq!(
         receive(socket),
-        Some(ServerMessage::Perceived(PerceivedChange::Act {
+        Some(ServerMessage::Perceived(PerceivedChange {
             time: Time::new(time),
             entity: character,
-            outcome: Outcome::Stepped(direction),
+            kind: ChangeKind::Act(Outcome::Stepped(direction)),
         }))
     );
     let mut next = receive(socket);

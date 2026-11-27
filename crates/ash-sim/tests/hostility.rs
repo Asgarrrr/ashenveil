@@ -19,7 +19,7 @@ use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_sim::action::{Action, Refused};
 use ash_sim::controller::{Controller, Disposition};
-use ash_sim::perception::{self, Outcome, PerceivedChange};
+use ash_sim::perception::{self, ChangeKind, Outcome, PerceivedChange};
 use ash_sim::world::World;
 
 const SEED: u64 = 23;
@@ -63,15 +63,10 @@ type Act = (Time, EntityId, Outcome);
 
 /// The act that perceived change `index` of `world` is.
 fn act_at(world: &World, index: usize) -> Act {
-    match world.perceived_changes()[index] {
-        PerceivedChange::Act {
-            time,
-            entity,
-            outcome,
-        } => (time, entity, outcome),
-        other @ (PerceivedChange::Death { .. } | PerceivedChange::Condition { .. }) => {
-            panic!("change {index} is {other:?}")
-        }
+    let change = world.perceived_changes()[index];
+    match change.kind {
+        ChangeKind::Act(outcome) => (change.time, change.entity, outcome),
+        ChangeKind::Death | ChangeKind::Condition(_) => panic!("change {index} is {change:?}"),
     }
 }
 
@@ -80,15 +75,10 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
     world
         .perceived_changes()
         .iter()
-        .filter_map(|&change| match change {
-            PerceivedChange::Act {
-                entity: actor,
-                outcome,
-                ..
-            } if actor == entity => Some(outcome),
-            PerceivedChange::Act { .. }
-            | PerceivedChange::Death { .. }
-            | PerceivedChange::Condition { .. } => None,
+        .filter(|change| change.entity == entity)
+        .filter_map(|change| match change.kind {
+            ChangeKind::Act(outcome) => Some(outcome),
+            ChangeKind::Death | ChangeKind::Condition(_) => None,
         })
         .collect()
 }
@@ -411,10 +401,10 @@ fn a_move_into_another_character_is_a_bump() {
 
     assert_eq!(
         world.perceived_changes(),
-        [PerceivedChange::Act {
+        [PerceivedChange {
             time: Time::ZERO,
             entity: character,
-            outcome: Outcome::Bumped(other),
+            kind: ChangeKind::Act(Outcome::Bumped(other)),
         }]
     );
 }

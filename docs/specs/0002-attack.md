@@ -366,12 +366,14 @@ word, whole and in any case, at commit 5fcb076: first in `crates`,
   takes an embodied entity and crashes on a dead id. Only tests call it
   from outside the crate, and no production code holds an id across a
   death. The first such caller exposes the two cases.
-- 2026-11-27, open (found in S3, both reviews): a perceived change as a
-  struct `{ time, entity, kind }`, with the kinds act (outcome), death and
-  later condition, is shorter than an enum that repeats the time and the
-  entity in each variant. S3 Behavior says "becomes an enum", so the code
-  follows the enum. The change of shape needs the human's decision; S4
-  adds a third variant with the same two fields.
+- 2026-11-27, accepted by the human (found in S3, both reviews): a
+  perceived change is a struct `{ time, entity, kind }`, with the kinds act
+  (outcome), death and condition. It replaces the enum that repeats the
+  time and the entity in each variant. This amends S3 Behavior:
+  "`PerceivedChange` becomes an enum: an act (entity, action, outcome) or a
+  death (entity)" reads "`PerceivedChange` is a struct: a time, an entity
+  and a kind. The kind is an act (outcome) or a death". S4 adds the kind
+  condition. The wire bytes and the JSON do not change.
 - 2026-11-27, recorded (found in S3, second-model read): a creation during
   play is not in the command log, so a replay omits the new entity. No
   production code creates an entity during play. Issue #40 holds it.

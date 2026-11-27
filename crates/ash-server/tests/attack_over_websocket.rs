@@ -12,7 +12,8 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::{Direction, TilePosition};
 use ash_protocol::message::{
-    Action, AvailableAction, ClientMessage, Outcome, PerceivedChange, ResumeToken, ServerMessage,
+    Action, AvailableAction, ChangeKind, ClientMessage, Outcome, PerceivedChange, ResumeToken,
+    ServerMessage,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -129,20 +130,18 @@ fn strike_or_chase(
 /// names and, for an act, the outcome. The patterns name every field, so a
 /// new one, such as odds, fails to compile here.
 fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
-    match *change {
-        PerceivedChange::Act {
-            time: _,
-            entity,
-            outcome,
-        } => (entity, Some(outcome)),
-        PerceivedChange::Death { time: _, entity } => (entity, None),
+    let PerceivedChange {
+        time: _,
+        entity,
+        kind,
+    } = *change;
+    let outcome = match kind {
+        ChangeKind::Act(outcome) => Some(outcome),
+        ChangeKind::Death => None,
         // A condition is a kind, never a number (A10).
-        PerceivedChange::Condition {
-            time: _,
-            entity,
-            condition: _,
-        } => (entity, None),
-    }
+        ChangeKind::Condition(_) => None,
+    };
+    (entity, outcome)
 }
 
 /// A12: everything an offer says. The pattern names every field, so odds

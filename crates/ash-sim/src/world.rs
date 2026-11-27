@@ -353,7 +353,7 @@ mod tests {
 
     use super::*;
     use crate::combat::Condition;
-    use crate::perception::Outcome;
+    use crate::perception::{ChangeKind, Outcome};
 
     #[test]
     #[should_panic(expected = "invariant violated")]
@@ -435,9 +435,10 @@ mod tests {
         assert_eq!(world.submit(Action::Wait), Ok(()));
 
         let acted = |entity| {
-            world.perceived_changes.iter().any(|change| {
-                matches!(change, PerceivedChange::Act { entity: actor, .. } if *actor == entity)
-            })
+            world
+                .perceived_changes
+                .iter()
+                .any(|change| change.entity == entity && matches!(change.kind, ChangeKind::Act(_)))
         };
         assert!(acted(wounded));
         assert!(!acted(dead));
@@ -485,15 +486,15 @@ mod tests {
 
             assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
 
-            let mut expected = alloc::vec![PerceivedChange::Act {
+            let mut expected = alloc::vec![PerceivedChange {
                 time: Time::ZERO,
                 entity: attacker,
-                outcome: Outcome::Hit(target),
+                kind: ChangeKind::Act(Outcome::Hit(target)),
             }];
-            expected.extend(crossed.map(|condition| PerceivedChange::Condition {
+            expected.extend(crossed.map(|condition| PerceivedChange {
                 time: Time::ZERO,
                 entity: target,
-                condition,
+                kind: ChangeKind::Condition(condition),
             }));
             assert_eq!(world.perceived_changes, expected, "{current} of 20");
         }
@@ -526,15 +527,15 @@ mod tests {
         assert_eq!(
             world.perceived_changes,
             [
-                PerceivedChange::Act {
+                PerceivedChange {
                     time: Time::ZERO,
                     entity: attacker,
-                    outcome: Outcome::Hit(target),
+                    kind: ChangeKind::Act(Outcome::Hit(target)),
                 },
-                PerceivedChange::Condition {
+                PerceivedChange {
                     time: Time::ZERO,
                     entity: target,
-                    condition: Condition::BadlyWounded,
+                    kind: ChangeKind::Condition(Condition::BadlyWounded),
                 },
             ]
         );

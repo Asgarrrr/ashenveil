@@ -80,25 +80,25 @@ pub struct PerceivedEntity {
     pub health: PerceivedHealth,
 }
 
-/// One change, stamped with the time it happened (R17, A11).
+/// One change to `entity`, stamped with the time it happened (R17, A11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PerceivedChange {
-    /// What `entity` did.
-    Act {
-        time: Time,
-        entity: EntityId,
-        outcome: Outcome,
-    },
-    /// `entity` died and left the world (A8). Its lethal hit is the change
+pub struct PerceivedChange {
+    pub time: Time,
+    pub entity: EntityId,
+    pub kind: ChangeKind,
+}
+
+/// What a perceived change says of its entity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChangeKind {
+    /// What the entity did.
+    Act(Outcome),
+    /// The entity died and left the world (A8). Its lethal hit is the change
     /// before, at the same time.
-    Death { time: Time, entity: EntityId },
-    /// A hit left `entity` in another `condition` (A10). That hit is the
+    Death,
+    /// A hit left the entity in another condition (A10). That hit is the
     /// change before, at the same time.
-    Condition {
-        time: Time,
-        entity: EntityId,
-        condition: Condition,
-    },
+    Condition(Condition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -380,65 +380,40 @@ impl Wire for Outcome {
 
 impl Wire for PerceivedChange {
     fn write(&self, out: &mut Vec<u8>) {
-        match self {
-            Self::Act {
-                time,
-                entity,
-                outcome,
-            } => {
-                0_u8.write(out);
-                time.write(out);
-                entity.write(out);
-                outcome.write(out);
-            }
-            Self::Death { time, entity } => {
-                1_u8.write(out);
-                time.write(out);
-                entity.write(out);
-            }
-            Self::Condition {
-                time,
-                entity,
-                condition,
-            } => {
-                2_u8.write(out);
-                time.write(out);
-                entity.write(out);
-                condition.write(out);
-            }
+        let tag: u8 = match self.kind {
+            ChangeKind::Act(_) => 0,
+            ChangeKind::Death => 1,
+            ChangeKind::Condition(_) => 2,
+        };
+        tag.write(out);
+        self.time.write(out);
+        self.entity.write(out);
+        match self.kind {
+            ChangeKind::Act(outcome) => outcome.write(out),
+            ChangeKind::Death => {}
+            ChangeKind::Condition(condition) => condition.write(out),
         }
     }
 
     fn read(input: &mut Reader<'_>) -> Result<Self, DecodeError> {
-        match u8::read(input)? {
-            0 => {
-                let time = Time::read(input)?;
-                let entity = EntityId::read(input)?;
-                // No entity bumps or strikes itself (R13, A3).
-                match Outcome::read(input)? {
-                    Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target)
-                        if target == entity =>
-                    {
-                        Err(DecodeError)
-                    }
-                    outcome => Ok(Self::Act {
-                        time,
-                        entity,
-                        outcome,
-                    }),
+        let tag = u8::read(input)?;
+        let time = Time::read(input)?;
+        let entity = EntityId::read(input)?;
+        let kind = match tag {
+            // No entity bumps or strikes itself (R13, A3).
+            0 => match Outcome::read(input)? {
+                Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target)
+                    if target == entity =>
+                {
+                    return Err(DecodeError);
                 }
-            }
-            1 => Ok(Self::Death {
-                time: Time::read(input)?,
-                entity: EntityId::read(input)?,
-            }),
-            2 => Ok(Self::Condition {
-                time: Time::read(input)?,
-                entity: EntityId::read(input)?,
-                condition: Condition::read(input)?,
-            }),
-            _ => Err(DecodeError),
-        }
+                outcome => ChangeKind::Act(outcome),
+            },
+            1 => ChangeKind::Death,
+            2 => ChangeKind::Condition(Condition::read(input)?),
+            _ => return Err(DecodeError),
+        };
+        Ok(Self { time, entity, kind })
     }
 }
 
