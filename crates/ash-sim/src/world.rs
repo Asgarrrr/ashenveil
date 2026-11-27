@@ -499,6 +499,73 @@ mod tests {
         }
     }
 
+    /// A10, A11: a hit that crosses two thresholds at once changes the
+    /// condition to the one the hit points left show, not to the next worse
+    /// one. Of 4 hit points, a hit leaves 1 (A6): below half, and not below
+    /// a quarter.
+    #[test]
+    fn a_hit_across_two_thresholds_changes_the_condition_to_the_one_reached() {
+        // The first draw of seed 182 hits (A6). The target is a character,
+        // so the world stops at its turn.
+        let mut world = World::new(182, Speed::new(1));
+        let attacker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Create {
+                speed: Speed::new(1),
+                position: east,
+                controller: Controller::Player,
+                health: Health { current: 4, max: 4 },
+            }],
+            rng_after: world.rng.clone(),
+        });
+        let target = world.occupant(east).expect("the target stands east");
+
+        assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
+
+        assert_eq!(
+            world.perceived_changes,
+            [
+                PerceivedChange::Act {
+                    time: Time::ZERO,
+                    entity: attacker,
+                    outcome: Outcome::Hit(target),
+                },
+                PerceivedChange::Condition {
+                    time: Time::ZERO,
+                    entity: target,
+                    condition: Condition::BadlyWounded,
+                },
+            ]
+        );
+    }
+
+    /// F4: `apply` writes the health a damage carries, as carried, and
+    /// decides nothing. The rule returns the change of condition.
+    #[test]
+    fn a_damage_writes_the_health_it_carries_and_perceives_nothing() {
+        let mut world = World::new(0, Speed::new(1));
+        let creature = world.create_entity(
+            Speed::new(2),
+            TilePosition { x: 2, y: 1, z: 0 },
+            Controller::Wander(Disposition::Hostile),
+        );
+        // Not what a hit leaves of 6 hit points (A6), and below every
+        // threshold (A10).
+        let health = Health { current: 1, max: 6 };
+
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Damage {
+                entity: creature,
+                health,
+            }],
+            rng_after: world.rng.clone(),
+        });
+
+        assert_eq!(world.health(creature), health);
+        assert_eq!(world.perceived_changes, []);
+    }
+
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn a_lookup_of_an_id_the_world_never_issued_crashes() {

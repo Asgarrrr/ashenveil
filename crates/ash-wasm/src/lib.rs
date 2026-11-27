@@ -308,6 +308,48 @@ mod tests {
         assert_eq!(steps, expected);
     }
 
+    /// A10: the web shows the condition a snapshot names for each entity.
+    #[test]
+    fn the_snapshot_json_names_each_condition() {
+        let names = [
+            ("unhurt", Condition::Unhurt),
+            ("wounded", Condition::Wounded),
+            ("badly_wounded", Condition::BadlyWounded),
+            ("dying", Condition::Dying),
+        ];
+        // This crate cannot name a `Time`, so the snapshot starts from its
+        // bytes: tag 0 and the time, a width of 1, one tile, a floor, and
+        // no entity.
+        let empty = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let Ok(ServerMessage::Snapshot(empty)) = ServerMessage::decode(&empty) else {
+            panic!("the empty snapshot does not decode");
+        };
+        let snapshot = Snapshot {
+            entities: names
+                .iter()
+                .map(|&(_, condition)| PerceivedEntity {
+                    entity: EntityId::new(7),
+                    position: TilePosition { x: 0, y: 0, z: 0 },
+                    disposition: None,
+                    health: PerceivedHealth::Condition(condition),
+                })
+                .collect(),
+            ..empty
+        };
+
+        let json = decode_server_message(&ServerMessage::Snapshot(snapshot).encode())
+            .expect("the snapshot decodes");
+
+        let named: Vec<&str> = json
+            .split(r#""condition":""#)
+            .skip(1)
+            .filter_map(|rest| rest.split('"').next())
+            .collect();
+        assert_eq!(named, names.map(|(name, _)| name));
+    }
+
     #[test]
     fn hello_carries_the_whole_token_and_count() {
         let token = u128::MAX - 1;

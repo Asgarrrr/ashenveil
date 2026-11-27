@@ -236,6 +236,17 @@ test("a later snapshot replaces every entity of the one before", () => {
   assert.deepEqual([...world.entities.values()], later);
 });
 
+test("a later snapshot replaces the hit points of the controlled entity", () => {
+  // The model learns which entity it controls once the server awaits it.
+  const character = (health) => perceivedEntity(0, 1, 1, null, health);
+  const world = new PerceivedWorld();
+  world.apply(snapshot([character(hitPoints(10, 10))]));
+  world.apply({ kind: "awaited", time: 0, entity: 0, actions: [] });
+  world.apply(snapshot([character(hitPoints(7, 10))]));
+
+  assert.deepEqual(healths(world), [[0, hitPoints(7, 10)]]);
+});
+
 test("the map draws the character, a hostile creature and a neutral creature apart, and no dead entity", () => {
   const world = replay(walk.slice(0, 2));
   // A canvas that keeps the fill style of each glyph drawn on it.
@@ -438,7 +449,7 @@ test("a change of condition is logged right after its hit, and changes the condi
   assert.equal(replay(death).log.filter(({ kind }) => kind === "condition").length, 1);
 });
 
-test("a change of condition changes the entity it names, whichever it is, to the condition it names", () => {
+test("a change of condition that names an entity other than the character changes it to the condition it names", () => {
   const world = new PerceivedWorld();
   world.apply(
     snapshot([
@@ -493,8 +504,8 @@ test("the entity list shows the hit points of the character as numbers, and each
   );
 });
 
-test("the page lists each entity the world holds, with its line", () => {
-  // The page elements `draw` fills: a list keeps the text of its items.
+/** The page elements `draw` fills for `world`: a list keeps the text of its items. */
+function drawn(world) {
   const list = () => ({
     lines: [],
     replaceChildren(...items) {
@@ -509,19 +520,51 @@ test("the page lists each entity the world holds, with its line", () => {
     actions: list(),
     log: list(),
   };
-  const world = replay(death.slice(0, indexOf(death, isConditionChange) + 1));
   globalThis.document = { createElement: () => ({}) };
   try {
     draw(view, world, true);
   } finally {
     delete globalThis.document;
   }
+  return view;
+}
 
-  assert.deepEqual(view.entities.lines, [
+test("the page lists each entity the world holds, with its line, and no dead entity", () => {
+  const listed = (last) => drawn(replay(death.slice(0, last + 1))).entities.lines;
+
+  assert.deepEqual(listed(indexOf(death, isConditionChange)), [
     "@: 10/10 hit points",
     "entity 1: wounded",
     "entity 2: unhurt",
   ]);
+  // A8: the page drawn after the death lists the hostile creature no more.
+  assert.deepEqual(listed(indexOf(death, isDeath)), ["@: 10/10 hit points", "entity 2: unhurt"]);
+});
+
+test("the page logs a change of condition above its hit", () => {
+  // The log shows the newest change first.
+  const world = replay(death.slice(0, indexOf(death, isConditionChange) + 1));
+  assert.deepEqual(drawn(world).log.lines.slice(0, 2), [
+    "200  entity 1 looks wounded",
+    "200  @ hits entity 1",
+  ]);
+});
+
+test("the page has the element of each part of the view, under the name of that part", () => {
+  // `main.ts` runs in a browser alone, so this reads its source: one
+  // `part: element("id"),` per line.
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const bound = [...source("../src/main.ts").matchAll(/^  (\w+): element\("([\w-]+)"\)/gm)];
+  const page = source("../index.html");
+
+  assert.deepEqual(
+    bound.map(([, part]) => part),
+    ["map", "status", "clock", "entities", "actions", "log"],
+  );
+  for (const [, part, id] of bound) {
+    assert.equal(id, part);
+    assert.ok(page.includes(`id="${id}"`), `the page has no #${id}`);
+  }
 });
 
 test("each condition decodes to its name", () => {

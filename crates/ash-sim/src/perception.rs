@@ -189,4 +189,15 @@ mod tests {
         assert_eq!(turn(&world, character), None);
         assert_eq!(turn(&world, other), Some(world.available_actions()));
     }
+
+    /// F3: a snapshot for an id the world never issued crashes as such. It
+    /// never comes back whole, with hit points for no entity.
+    #[test]
+    #[should_panic(expected = "this world never issued")]
+    fn a_snapshot_for_an_id_the_world_never_issued_crashes_as_never_issued() {
+        // The world issued one id, the character's: the next one is the
+        // nearest id it never issued.
+        let world = World::new(0, Speed::new(1));
+        let _ = snapshot(&world, EntityId::new(1));
+    }
 }

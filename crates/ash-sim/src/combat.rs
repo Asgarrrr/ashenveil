@@ -153,7 +153,7 @@ mod tests {
     use ash_core::tile::TilePosition;
 
     use super::*;
-    use crate::action::Action;
+    use crate::action::{self, Action};
 
     /// A7. The numbers are the design's: a changed one must fail here.
     #[test]
@@ -245,6 +245,60 @@ mod tests {
                 "{current} of {max}"
             );
         }
+    }
+
+    /// F4: the rule decides what a hit changes. `resolve` returns the change
+    /// of condition, after the hit (A11); `apply` only writes it.
+    #[test]
+    fn the_resolution_of_a_hit_across_a_threshold_returns_the_condition_change() {
+        // The first draw of seed 182 hits (A6).
+        let rng = Rng::new(182);
+        let mut world = World::new(0, Speed::new(1));
+        let attacker = world.awaited();
+        let target = world.create_entity(
+            Speed::new(1),
+            TilePosition { x: 2, y: 1, z: 0 },
+            Controller::Wander(Disposition::Neutral),
+        );
+        let perception = Perception::whole_map(&world);
+
+        let Ok(effects) = action::resolve(
+            &world,
+            &perception,
+            attacker,
+            Action::Attack(Direction::East),
+            &rng,
+        ) else {
+            panic!("the rules refuse the attack");
+        };
+
+        let perceived: Vec<PerceivedChange> = effects
+            .in_order
+            .into_iter()
+            .filter_map(|effect| {
+                if let Effect::Perceive(change) = effect {
+                    Some(change)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // A6, A10: 3 of 6 hit points is below full and not below half.
+        assert_eq!(
+            perceived,
+            [
+                PerceivedChange::Act {
+                    time: world.clock(),
+                    entity: attacker,
+                    outcome: Outcome::Hit(target),
+                },
+                PerceivedChange::Condition {
+                    time: world.clock(),
+                    entity: target,
+                    condition: Condition::Wounded,
+                },
+            ]
+        );
     }
 
     /// A6: an attack hits when `draw % 100 < 70`. The first draw of seed 182
