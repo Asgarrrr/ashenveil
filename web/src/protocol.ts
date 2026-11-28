@@ -82,6 +82,20 @@ export interface PerceivedEntity {
   health: PerceivedHealth;
 }
 
+/** What died (D4). */
+export type Died = "character" | "creature";
+
+/**
+ * A corpse the character perceives (D2, D4): where it lies, what died, and
+ * the entity that died when the character recognizes it.
+ */
+export interface PerceivedCorpse {
+  position: Position;
+  died: Died;
+  /** `null` when the character does not recognize the corpse. */
+  entity: number | null;
+}
+
 export type ServerMessage =
   | {
       kind: "snapshot";
@@ -89,6 +103,8 @@ export type ServerMessage =
       width: number;
       terrain: Terrain[];
       entities: PerceivedEntity[];
+      /** In the order of the deaths. */
+      corpses: PerceivedCorpse[];
     }
   | { kind: "awaited"; time: number; entity: number; actions: Offer[] }
   | { kind: "perceived"; change: PerceivedChange }

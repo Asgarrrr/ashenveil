@@ -3,11 +3,12 @@
 
 use ash_core::entity::EntityId;
 use ash_protocol::message::{
-    ChangeKind, Condition, Disposition, Offer, Outcome, PerceivedChange, PerceivedEntity,
-    PerceivedHealth, ServerMessage, Snapshot,
+    ChangeKind, Condition, Died, Disposition, Offer, Outcome, PerceivedChange, PerceivedCorpse,
+    PerceivedEntity, PerceivedHealth, ServerMessage, Snapshot,
 };
 use ash_sim::combat::Condition as SimCondition;
 use ash_sim::controller::Disposition as SimDisposition;
+use ash_sim::death::Died as SimDied;
 use ash_sim::perception::{
     self, ChangeKind as SimKind, Outcome as SimOutcome, PerceivedChange as SimChange,
     PerceivedHealth as SimHealth,
@@ -17,7 +18,9 @@ use ash_sim::world::World;
 use crate::action;
 
 /// R16: what `character` perceives, as a protocol message. Hit points for
-/// `character` alone (A9): every other entity shows a condition (A10).
+/// `character` alone (A9): every other entity shows a condition (A10). Every
+/// corpse shows what died, and the dead entity when `character` recognizes
+/// it (D4).
 pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
     let snapshot = perception::snapshot(world, character);
     ServerMessage::Snapshot(Snapshot {
@@ -32,6 +35,15 @@ pub fn snapshot(world: &World, character: EntityId) -> ServerMessage {
                 position: perceived.position,
                 disposition: perceived.disposition.map(disposition_to_wire),
                 health: health_to_wire(perceived.health),
+            })
+            .collect(),
+        corpses: snapshot
+            .corpses
+            .into_iter()
+            .map(|corpse| PerceivedCorpse {
+                position: corpse.position,
+                died: died_to_wire(corpse.died),
+                entity: corpse.entity,
             })
             .collect(),
     })
@@ -96,6 +108,13 @@ fn condition_to_wire(condition: SimCondition) -> Condition {
         SimCondition::Wounded => Condition::Wounded,
         SimCondition::BadlyWounded => Condition::BadlyWounded,
         SimCondition::Dying => Condition::Dying,
+    }
+}
+
+fn died_to_wire(died: SimDied) -> Died {
+    match died {
+        SimDied::Character => Died::Character,
+        SimDied::Creature => Died::Creature,
     }
 }
 
@@ -207,5 +226,53 @@ pub mod tests {
                 Some(PerceivedHealth::Condition(condition))
             );
         }
+    }
+
+    /// D2: the corpses reach the wire in the order of the deaths. Walls, R11
+    /// and waiting characters leave the creatures at (7, 4) and (5, 3) no
+    /// move; a striker north of the first, then one west of the second,
+    /// strikes until it dies.
+    #[test]
+    fn the_wire_snapshot_keeps_the_corpses_in_the_order_of_the_deaths() {
+        let mut world = World::new(0, Speed::new(1));
+        let viewer = world.awaited();
+        let at = |x, y| TilePosition { x, y, z: 0 };
+        let creature = Controller::Wander(SimDisposition::Neutral);
+        world.create_entity(Speed::new(2), at(5, 3), creature);
+        let second_striker = world.create_entity(Speed::new(1), at(4, 3), Controller::Player);
+        for (x, y) in [(4, 4), (5, 4), (6, 4)] {
+            world.create_entity(Speed::new(1), at(x, y), Controller::Player);
+        }
+        let first_striker = world.create_entity(Speed::new(1), at(7, 3), Controller::Player);
+        world.create_entity(Speed::new(2), at(7, 4), creature);
+
+        let mut died = 0;
+        for _ in 0..STRIKE_TURNS {
+            died = perception::snapshot(&world, viewer).corpses.len();
+            if died == 2 {
+                break;
+            }
+            let action = match (died, world.awaited()) {
+                (0, awaited) if awaited == first_striker => Action::Attack(Direction::South),
+                (1, awaited) if awaited == second_striker => Action::Attack(Direction::East),
+                _ => Action::Wait,
+            };
+            assert_eq!(world.submit(action), Ok(()), "{action:?}");
+        }
+        assert_eq!(died, 2, "no two deaths in {STRIKE_TURNS} turns");
+
+        let ServerMessage::Snapshot(wire) = snapshot(&world, viewer) else {
+            panic!("a snapshot message")
+        };
+        let expected: Vec<PerceivedCorpse> = perception::snapshot(&world, viewer)
+            .corpses
+            .into_iter()
+            .map(|corpse| PerceivedCorpse {
+                position: corpse.position,
+                died: died_to_wire(corpse.died),
+                entity: corpse.entity,
+            })
+            .collect();
+        assert_eq!(wire.corpses, expected);
     }
 }

@@ -5,8 +5,9 @@ use ash_core::rng::Rng;
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::{ActionCost, Time};
 use ash_protocol::message::{
-    Action, ChangeKind, ClientMessage, Condition, Disposition, Offer, Outcome, PerceivedChange,
-    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot, Terrain,
+    Action, ChangeKind, ClientMessage, Condition, Died, Disposition, Offer, Outcome,
+    PerceivedChange, PerceivedCorpse, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage,
+    Snapshot, Terrain,
 };
 
 const SAMPLES: usize = 200_000;
@@ -83,6 +84,22 @@ fn server_messages() -> Vec<ServerMessage> {
                     position: TilePosition { x: 1, y: 0, z: 0 },
                     disposition: Some(Disposition::Neutral),
                     health: PerceivedHealth::Condition(Condition::Dying),
+                },
+            ],
+            corpses: vec![
+                PerceivedCorpse {
+                    position: TilePosition { x: 1, y: 1, z: 0 },
+                    died: Died::Creature,
+                    entity: Some(EntityId::new(u32::MAX)),
+                },
+                PerceivedCorpse {
+                    position: TilePosition {
+                        x: 2,
+                        y: u32::MAX,
+                        z: 3,
+                    },
+                    died: Died::Character,
+                    entity: None,
                 },
             ],
         }),
@@ -327,23 +344,112 @@ fn a_malformed_change_of_condition_is_refused() {
     }
 }
 
-/// The bytes of a snapshot at time 0 of one floor tile, holding entity 1 at
-/// (0, 0, 0), its disposition and its hit points or condition already
-/// encoded in `disposition` and `health`.
-fn snapshot_bytes(disposition: &[u8], health: &[u8]) -> Vec<u8> {
+/// The bytes of a snapshot at time 0 of one floor tile: its tag, its time,
+/// a width of 1, then one tile: floor.
+fn floor_snapshot_bytes() -> Vec<u8> {
     let mut bytes = vec![0];
     bytes.extend(0_u64.to_le_bytes());
-    // A width of 1, then one tile: floor.
     bytes.extend(1_u32.to_le_bytes());
     bytes.extend(1_u32.to_le_bytes());
     bytes.push(0);
+    bytes
+}
+
+/// The bytes of a snapshot at time 0 of one floor tile, holding entity 1 at
+/// (0, 0, 0), its disposition and its hit points or condition already
+/// encoded in `disposition` and `health`, and no corpse.
+fn snapshot_bytes(disposition: &[u8], health: &[u8]) -> Vec<u8> {
+    let mut bytes = floor_snapshot_bytes();
     // One entity: its id, then its position.
     bytes.extend(1_u32.to_le_bytes());
     bytes.extend(1_u32.to_le_bytes());
     bytes.extend([0; 12]);
     bytes.extend(disposition);
     bytes.extend(health);
+    bytes.extend(0_u32.to_le_bytes());
     bytes
+}
+
+/// The bytes of a snapshot at time 0 of one floor tile, holding no entity
+/// and one corpse at (0, 0, 0), what died and its entity already encoded in
+/// `rest`.
+fn corpse_snapshot_bytes(rest: &[u8]) -> Vec<u8> {
+    let mut bytes = floor_snapshot_bytes();
+    bytes.extend(0_u32.to_le_bytes());
+    bytes.extend(1_u32.to_le_bytes());
+    bytes.extend([0; 12]);
+    bytes.extend(rest);
+    bytes
+}
+
+#[test]
+fn a_malformed_corpse_is_refused() {
+    // The controls: what died is tag 0 for a character, 1 for a creature;
+    // then tag 0 for an unrecognized corpse, or tag 1 and the dead entity.
+    let at_origin = TilePosition { x: 0, y: 0, z: 0 };
+    let known = [
+        (&[0, 0][..], Died::Character, None),
+        (&[1, 0], Died::Creature, None),
+        (&[0, 1, 7, 0, 0, 0], Died::Character, Some(EntityId::new(7))),
+        (&[1, 1, 7, 0, 0, 0], Died::Creature, Some(EntityId::new(7))),
+    ];
+    for (rest, died, entity) in known {
+        match ServerMessage::decode(&corpse_snapshot_bytes(rest)) {
+            Ok(ServerMessage::Snapshot(snapshot)) => assert_eq!(
+                snapshot.corpses,
+                [PerceivedCorpse {
+                    position: at_origin,
+                    died,
+                    entity,
+                }],
+                "{rest:?}"
+            ),
+            other => panic!("{rest:?} give {other:?}"),
+        }
+    }
+
+    for tag in 2..=u8::MAX {
+        for rest in [[tag, 0], [0, tag], [1, tag]] {
+            assert!(
+                ServerMessage::decode(&corpse_snapshot_bytes(&rest)).is_err(),
+                "a corpse of {rest:?} decodes"
+            );
+        }
+        // Only tag 1 is followed by the dead entity.
+        for died in [0, 1] {
+            let rest = [died, tag, 7, 0, 0, 0];
+            assert!(
+                ServerMessage::decode(&corpse_snapshot_bytes(&rest)).is_err(),
+                "a corpse of {rest:?} decodes"
+            );
+        }
+    }
+    let refused = [
+        ("a corpse with nothing after its tile", &[][..]),
+        ("a corpse with no tag for its entity", &[1]),
+        ("a recognized corpse with no entity", &[1, 1]),
+        (
+            "a recognized corpse with three bytes of entity",
+            &[1, 1, 7, 0, 0],
+        ),
+        ("an unrecognized corpse with an entity", &[1, 0, 7, 0, 0, 0]),
+    ];
+    for (what, rest) in refused {
+        assert!(
+            ServerMessage::decode(&corpse_snapshot_bytes(rest)).is_err(),
+            "{what} decodes"
+        );
+    }
+    // A corpse cut short inside its tile.
+    let whole = corpse_snapshot_bytes(&[1, 0]);
+    for cut in 1..=12 {
+        let mut bytes = whole.clone();
+        bytes.drain(whole.len() - 2 - cut..whole.len() - 2);
+        assert!(
+            ServerMessage::decode(&bytes).is_err(),
+            "a corpse with {cut} bytes fewer in its tile decodes"
+        );
+    }
 }
 
 /// The entities of the snapshot `bytes` hold.

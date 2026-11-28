@@ -14,6 +14,7 @@ extern crate alloc;
 pub mod action;
 pub mod combat;
 pub mod controller;
+pub mod death;
 mod effect;
 mod map;
 pub mod perception;

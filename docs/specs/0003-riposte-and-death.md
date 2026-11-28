@@ -164,7 +164,7 @@ server and the client together.
 A unit test named below is no `cargo xtask accept` target: `cargo xtask
 verify` runs it.
 
-### - [ ] S1 — A death leaves a corpse
+### - [x] S1 — A death leaves a corpse
 
 - Files: `crates/ash-sim/src/{lib,world,combat,effect,perception}.rs`,
   `crates/ash-sim/src/death.rs` (new), `crates/ash-sim/tests/corpse.rs`
@@ -571,4 +571,20 @@ Choices behind the rows:
 
 ## Proposed amendments
 
-(empty)
+- 2026-11-28, recorded (found in S1, review): the rank of a corpse is the
+  count of the earlier corpses. It is the explicit key of the order of the
+  deaths while no effect removes a corpse. An effect that removes a corpse
+  needs a saved counter of deaths first.
+- 2026-11-28, recorded (found in S1, bug injection): six bugs passed the
+  S1 tests. A fix batch adds one test for each: the order of two deaths on
+  two tiles, the order of the corpses on the wire, an entity tag out of
+  range followed by its bytes, the color and the glyph of a drawn corpse,
+  and the level of a corpse through the codec.
+- 2026-11-28, open, for the human (found in S1, bug injection): no test
+  reaches the corpse of a character before S3. Three bugs pass: the corpse
+  of a character says "creature" in the death rule, in the snapshot, or in
+  the server mapping. Proposed:
+  - S3 Acceptance, `character_death`, gains: "The corpse of the dead
+    character says a character, read through its snapshot."
+  - S4 Acceptance, `character_death_over_websocket`, gains: "The corpse of
+    the dead character crosses as a character."

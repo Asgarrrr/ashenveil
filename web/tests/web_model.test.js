@@ -1,7 +1,7 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S4: the perceived-world model of the web client, fed
-// through the real WASM codec. `cargo xtask accept web_model`
-// builds the client, then runs this file with Node's test runner.
+// slices S1 to S4, and of spec 0003, slice S1: the perceived-world model
+// of the web client, fed through the real WASM codec. `cargo xtask accept
+// web_model` builds the client, then runs this file with Node's test runner.
 //
 // Each fixture holds the binary messages a real server sent, in hex. The
 // client said Hello, then commanded entity 0, which starts at (1, 1). The
@@ -76,14 +76,19 @@ function replay(stream) {
   return world;
 }
 
-/** A snapshot at time 0 of a floor of 5 by 5 tiles holding `entities`. */
-const snapshot = (entities) => ({
+/** A snapshot at time 0 of a floor of 5 by 5 tiles holding `entities` and `corpses`. */
+const snapshot = (entities, corpses = []) => ({
   kind: "snapshot",
   time: 0,
   width: 5,
   terrain: Array(25).fill("floor"),
   entities,
+  corpses,
 });
+/** The corpse at (`x`, `y`) of what died, naming `entity` or no entity (`null`). */
+const corpse = (x, y, died, entity) => ({ position: { x, y, z: 0 }, died, entity });
+/** The change the death of `entity` at time 0 is. */
+const deathOf = (entity) => ({ kind: "perceived", change: { kind: "death", time: 0, entity } });
 const hitPoints = (current, max) => ({ kind: "hit_points", current, max });
 const inCondition = (condition) => ({ kind: "condition", condition });
 const perceivedEntity = (entity, x, y, disposition, health = inCondition("unhurt")) => ({
@@ -208,8 +213,11 @@ test("hit points decode as the current ones, then the most", () => {
     ...u32(2),
     ...entity(4, [0, ...u32(7), ...u32(10)]),
     ...entity(5, [1, 2]),
+    // No corpse.
+    ...u32(0),
   );
   const message = decodeServerMessage(bytes);
+  assert.ok(message, "the snapshot does not decode");
   assert.deepEqual(
     message.entities.map(({ health }) => health),
     [hitPoints(7, 10), inCondition("badly_wounded")],
@@ -262,11 +270,120 @@ test("the map draws the character, a hostile creature and a neutral creature apa
   assert.equal(styles.length, 3, "one glyph for each entity");
   assert.equal(new Set(styles).size, 3, `${styles}`);
 
-  // A8: the map drawn after a death holds no glyph for the dead entity.
-  world.apply({ kind: "perceived", change: { kind: "death", time: 0, entity: 1 } });
+  // A8, D2: the map drawn after a death holds no glyph for the dead entity,
+  // and one for its corpse.
+  world.apply(deathOf(1));
   styles.length = 0;
   drawMap({ getContext: () => context }, world);
-  assert.equal(styles.length, 2, "one glyph for each living entity");
+  assert.equal(styles.length, 3, "one glyph for the corpse and for each living entity");
+});
+
+test("the map draws each corpse on its tile, under the entities", () => {
+  // The character stands on the first corpse (D3). The second corpse lies
+  // halfway between the two entities.
+  const world = new PerceivedWorld();
+  world.apply(
+    snapshot(
+      [perceivedEntity(0, 2, 1, null, hitPoints(10, 10)), perceivedEntity(3, 4, 3, "neutral")],
+      [corpse(2, 1, "creature", 1), corpse(3, 2, "character", null)],
+    ),
+  );
+  // The model learns it controls the character, which it then draws apart.
+  world.apply({ kind: "awaited", time: 0, entity: 0, actions: [] });
+  // A canvas that keeps the fill style of each tile, and the text, the point
+  // and the fill style of each glyph drawn on it.
+  const tiles = [];
+  const glyphs = [];
+  const context = {
+    fillRect() {
+      tiles.push(this.fillStyle);
+    },
+    fillText(text, x, y) {
+      glyphs.push({ text, point: [x, y], style: this.fillStyle });
+    },
+  };
+  drawMap({ getContext: () => context }, world);
+
+  // The two corpses first, then the two entities over them.
+  assert.equal(glyphs.length, 4);
+  const [under, between, character, creature] = glyphs.map(({ point }) => point);
+  assert.deepEqual(under, character);
+  assert.deepEqual(between, [0, 1].map((axis) => (character[axis] + creature[axis]) / 2));
+  // A corpse is no entity, nor terrain: it is drawn apart from all of them.
+  const [first, second, ...entities] = glyphs.map(({ style }) => style);
+  assert.equal(first, second);
+  assert.ok(!entities.includes(first), `${first} is the style of an entity`);
+  assert.ok(!tiles.includes(first), `${first} is the style of a tile`);
+  const [firstText, secondText, ...entityTexts] = glyphs.map(({ text }) => text);
+  assert.equal(firstText, secondText);
+  assert.equal(new Set(entityTexts).size, 2, "the character and the creature share a glyph");
+  assert.ok(!entityTexts.includes(firstText), `${firstText} is the glyph of an entity`);
+});
+
+test("a perceived death leaves a corpse on the tile where the model perceived the entity", () => {
+  // The recorded death: the hostile creature, entity 1, died at (4, 3).
+  const died = indexOf(death, isDeath);
+  assert.deepEqual(replay(death.slice(0, died)).corpses, []);
+  assert.deepEqual(replay(death).corpses, [corpse(4, 3, "creature", 1)]);
+
+  // A character has no disposition: its corpse is a character's.
+  const world = new PerceivedWorld();
+  world.apply(
+    snapshot(
+      [
+        perceivedEntity(0, 1, 1, null, hitPoints(10, 10)),
+        perceivedEntity(5, 3, 2, "hostile"),
+        perceivedEntity(7, 4, 4, null),
+      ],
+      [corpse(1, 1, "creature", 2)],
+    ),
+  );
+  world.apply(deathOf(7));
+  world.apply(deathOf(5));
+  // An entity the model does not hold leaves no corpse it could place.
+  world.apply(deathOf(9));
+
+  // D2: in the order of the deaths, after the corpses of the snapshot.
+  assert.deepEqual(world.corpses, [
+    corpse(1, 1, "creature", 2),
+    corpse(4, 4, "character", 7),
+    corpse(3, 2, "creature", 5),
+  ]);
+});
+
+test("a snapshot replaces the corpses", () => {
+  const cast = [perceivedEntity(0, 1, 1, null), perceivedEntity(1, 2, 1, "hostile")];
+  const world = new PerceivedWorld();
+  world.apply(snapshot(cast, [corpse(3, 3, "creature", 4)]));
+  world.apply(deathOf(1));
+  const later = [corpse(2, 1, "creature", 1), corpse(4, 1, "character", null)];
+  world.apply(snapshot(cast.slice(0, 1), later));
+
+  assert.deepEqual(world.corpses, later);
+});
+
+test("a corpse decodes to its tile, what died and the entity it names", () => {
+  // A snapshot is tag 0, the time, a width of 1 and one floor tile, no
+  // entity, then two corpses: a tile, what died (tag 0 a character, 1 a
+  // creature), then tag 0 for no entity, or tag 1 and the entity. The first
+  // corpse lies on level 3.
+  const u32 = (value) => [value, 0, 0, 0];
+  const bytes = Uint8Array.of(
+    ...[0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ...u32(1),
+    ...u32(1),
+    0,
+    ...u32(0),
+    ...u32(2),
+    ...[...u32(3), ...u32(2), ...u32(3), 1, 1, ...u32(6)],
+    ...[...u32(1), ...u32(4), ...u32(0), 0, 0],
+  );
+  const message = decodeServerMessage(bytes);
+  assert.ok(message, "the snapshot does not decode");
+  assert.deepEqual(message.corpses, [
+    { ...corpse(3, 2, "creature", 6), position: { x: 3, y: 2, z: 3 } },
+    corpse(1, 4, "character", null),
+  ]);
 });
 
 test("a perceived step moves the mover toward its direction", () => {

@@ -1,6 +1,7 @@
 //! Acceptance of spec 0002, slice S3, over WebSocket: the character kills
 //! the hostile creature. The client perceives the lethal hit, then the death
-//! (A11), and no later message names the dead creature (A8).
+//! (A11), and no later message shows the dead creature as an entity or as
+//! acting (A8).
 //!
 //! The client strikes the hostile creature when an attack toward it is
 //! offered and chases it otherwise. Once it died, the client chases the
@@ -151,8 +152,9 @@ fn change_names(change: &PerceivedChange, entity: EntityId) -> bool {
         }
 }
 
-/// True when `message` names `entity` anywhere. The patterns name every
-/// field, so a new one fails to compile here.
+/// True when `message` shows `entity` as an entity or as acting. Its corpse
+/// names it, as the dead entity (D2). The patterns name every field, so a
+/// new one fails to compile here.
 fn names(message: &ServerMessage, entity: EntityId) -> bool {
     match message {
         ServerMessage::Snapshot(Snapshot {
@@ -160,6 +162,7 @@ fn names(message: &ServerMessage, entity: EntityId) -> bool {
             width: _,
             terrain: _,
             entities,
+            corpses: _,
         }) => entities.iter().any(|perceived| {
             let PerceivedEntity {
                 entity: perceived,
@@ -302,7 +305,8 @@ fn the_client_perceives_the_death_and_never_the_dead_creature_again() {
         }
     );
 
-    // A8: no later message names the dead creature: no turn, no change.
+    // A8: no later message shows the dead creature as an entity or as
+    // acting: no turn, no change.
     // The client chases the neutral creature meanwhile.
     for _ in 0..COMMANDS_AFTER {
         let turn = next.as_ref().expect("the character's turn");

@@ -14,8 +14,9 @@ use std::time::Duration;
 use ash_core::entity::EntityId;
 use ash_core::tile::TilePosition;
 use ash_protocol::message::{
-    Action, ChangeKind, ClientMessage, Condition, Disposition, Offer, Outcome, PerceivedChange,
-    PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage, Snapshot,
+    Action, ChangeKind, ClientMessage, Condition, Died, Disposition, Offer, Outcome,
+    PerceivedChange, PerceivedCorpse, PerceivedEntity, PerceivedHealth, ResumeToken, ServerMessage,
+    Snapshot,
 };
 use ash_sim::world::World;
 use tungstenite::{Message, WebSocket};
@@ -168,26 +169,38 @@ fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
             width: _,
             terrain: _,
             entities,
-        }) => entities
-            .iter()
-            .filter_map(|perceived| {
-                let PerceivedEntity {
-                    entity,
+            corpses,
+        }) => {
+            // D4: a corpse holds a tile, what died and its entity, never a
+            // hit point.
+            for corpse in corpses {
+                let PerceivedCorpse {
                     position: TilePosition { x: _, y: _, z: _ },
-                    disposition: None | Some(Disposition::Hostile | Disposition::Neutral),
-                    health,
-                } = *perceived;
-                match health {
-                    PerceivedHealth::HitPoints { current: _, max: _ } => Some(entity),
-                    PerceivedHealth::Condition(
-                        Condition::Unhurt
-                        | Condition::Wounded
-                        | Condition::BadlyWounded
-                        | Condition::Dying,
-                    ) => None,
-                }
-            })
-            .collect(),
+                    died: Died::Character | Died::Creature,
+                    entity: _,
+                } = *corpse;
+            }
+            entities
+                .iter()
+                .filter_map(|perceived| {
+                    let PerceivedEntity {
+                        entity,
+                        position: TilePosition { x: _, y: _, z: _ },
+                        disposition: None | Some(Disposition::Hostile | Disposition::Neutral),
+                        health,
+                    } = *perceived;
+                    match health {
+                        PerceivedHealth::HitPoints { current: _, max: _ } => Some(entity),
+                        PerceivedHealth::Condition(
+                            Condition::Unhurt
+                            | Condition::Wounded
+                            | Condition::BadlyWounded
+                            | Condition::Dying,
+                        ) => None,
+                    }
+                })
+                .collect()
+        }
         ServerMessage::Awaited {
             time: _,
             entity: _,

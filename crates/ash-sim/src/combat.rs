@@ -1,5 +1,5 @@
-//! Attacks between entities, their hit points, their condition and their
-//! death (A1 to A10).
+//! Attacks between entities, their hit points and their condition (A1 to
+//! A10). The module `death` holds what a lethal hit changes.
 
 use alloc::vec::Vec;
 
@@ -8,6 +8,7 @@ use ash_core::rng::Rng;
 use ash_core::tile::Direction;
 
 use crate::controller::{Controller, Disposition};
+use crate::death;
 use crate::effect::Effect;
 use crate::perception::{ChangeKind, Outcome, PerceivedChange, Perception};
 use crate::world::World;
@@ -115,15 +116,13 @@ pub(crate) fn attack(
 }
 
 /// A6, A8, A10: what a hit on `target` changes, in order. The target loses
-/// 3 hit points. At zero it dies: it leaves the world, and every character
-/// perceives its death at the time of the hit (A11). The death of a
-/// character is out of scope: its zero hit points crash through
+/// 3 hit points. At zero it dies, with the effects of a death (D1). The
+/// death of a character is out of scope: its zero hit points crash through
 /// `invariant!`. A target that lives on in another condition is perceived
-/// in it, at the time of the hit too.
+/// in it, at the time of the hit (A11).
 pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
     let before = world.health(target);
     let health = before.damaged(DAMAGE);
-    let time = world.clock();
     let mut effects = alloc::vec![Effect::Damage {
         entity: target,
         health,
@@ -132,15 +131,10 @@ pub(crate) fn hit(world: &World, target: EntityId) -> Vec<Effect> {
         if world.controller(target) == Controller::Player {
             ash_core::invariant!("the character {target:?} reaches zero hit points");
         }
-        effects.push(Effect::Remove { entity: target });
-        effects.push(Effect::Perceive(PerceivedChange {
-            time,
-            entity: target,
-            kind: ChangeKind::Death,
-        }));
+        effects.extend(death::effects(world, target));
     } else if health.condition() != before.condition() {
         effects.push(Effect::Perceive(PerceivedChange {
-            time,
+            time: world.clock(),
             entity: target,
             kind: ChangeKind::Condition(health.condition()),
         }));

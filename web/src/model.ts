@@ -6,6 +6,7 @@ import type {
   Direction,
   Offer,
   PerceivedChange,
+  PerceivedCorpse,
   PerceivedEntity,
   ServerMessage,
   Terrain,
@@ -40,6 +41,8 @@ export class PerceivedWorld {
   terrain: Terrain[] = [];
   /** What is perceived of each entity, by entity (R16, A4). */
   readonly entities = new Map<number, PerceivedEntity>();
+  /** Every corpse perceived, in the order of the deaths (D2, D4). */
+  corpses: PerceivedCorpse[] = [];
   /** The entity this client controls, once the server awaits it. */
   controlled: number | undefined;
   /** The offers of the controlled entity; empty when not awaited. */
@@ -61,6 +64,8 @@ export class PerceivedWorld {
         for (const perceived of message.entities) {
           this.entities.set(perceived.entity, perceived);
         }
+        // A copy: a later death adds to it, never to the message.
+        this.corpses = [...message.corpses];
         break;
       case "awaited":
         this.time = message.time;
@@ -106,7 +111,13 @@ export class PerceivedWorld {
 
   private perceive(change: PerceivedChange): void {
     if (change.kind === "death") {
-      // A8: the dead entity left the world.
+      // A8, D2: the dead entity left the world, and its corpse lies where it
+      // was perceived. A character has no disposition.
+      const dead = this.entities.get(change.entity);
+      if (dead !== undefined) {
+        const died = dead.disposition === null ? "character" : "creature";
+        this.corpses.push({ position: dead.position, died, entity: dead.entity });
+      }
       this.entities.delete(change.entity);
       return;
     }

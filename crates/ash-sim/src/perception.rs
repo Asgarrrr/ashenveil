@@ -9,6 +9,7 @@ use ash_core::time::Time;
 use crate::action::Offer;
 use crate::combat::{Condition, Health};
 use crate::controller::{Controller, Disposition};
+use crate::death::Died;
 use crate::map::Map;
 use crate::world::World;
 
@@ -118,6 +119,16 @@ pub struct PerceivedEntity {
     pub health: PerceivedHealth,
 }
 
+/// A corpse a character perceives (D4): where it lies, what died, and the
+/// entity that died when the character recognizes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PerceivedCorpse {
+    pub position: TilePosition,
+    pub died: Died,
+    /// `None` when the character does not recognize the corpse.
+    pub entity: Option<EntityId>,
+}
+
 /// Everything one character perceives at `time` (R16).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Snapshot {
@@ -128,12 +139,14 @@ pub struct Snapshot {
     pub terrain: Vec<Terrain>,
     /// Every entity, in creation order.
     pub entities: Vec<PerceivedEntity>,
+    /// Every corpse, in the order of the deaths (D2, D4).
+    pub corpses: Vec<PerceivedCorpse>,
 }
 
-/// R16: the whole map and every entity as `character` perceives them,
-/// stamped with the clock. Hit points for `character` alone (A9); a
-/// position, a disposition and a condition for the others: no speed, cost,
-/// next turn or hit points (R18).
+/// R16: the whole map, every entity and every corpse as `character`
+/// perceives them, stamped with the clock. Hit points for `character` alone
+/// (A9); a position, a disposition and a condition for the others: no
+/// speed, cost, next turn or hit points (R18).
 pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
     // Read first: a `character` that is not embodied crashes here (F3),
     // instead of leaving a snapshot with no hit points.
@@ -154,6 +167,17 @@ pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
                 } else {
                     PerceivedHealth::Condition(perception.condition(entity))
                 },
+            })
+            .collect(),
+        // D4: until a character can arrive after a death (spec 0003, S4),
+        // every character perceived every dead entity alive.
+        corpses: world
+            .corpses()
+            .into_iter()
+            .map(|corpse| PerceivedCorpse {
+                position: corpse.position,
+                died: corpse.died,
+                entity: Some(corpse.entity),
             })
             .collect(),
     }
