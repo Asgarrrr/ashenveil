@@ -66,7 +66,10 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
         .filter(|change| change.entity == entity)
         .filter_map(|change| match change.kind {
             ChangeKind::Act(outcome) => Some(outcome),
-            ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => None,
+            ChangeKind::Death
+            | ChangeKind::Condition(_)
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => None,
         })
         .collect()
 }

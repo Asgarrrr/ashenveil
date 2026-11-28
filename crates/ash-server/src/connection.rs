@@ -8,7 +8,7 @@ use ash_sim::world::World;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
-use crate::registry::{HostedWorld, PlayerConnection, Registry};
+use crate::registry::{self, HostedWorld, PlayerConnection, Registry};
 use crate::{action, perception};
 
 type Socket = WebSocket<TcpStream>;
@@ -56,7 +56,7 @@ fn control(
 ) -> End {
     let greeting = hosted.run(|controlled| {
         controlled.take(controller);
-        greeting(&controlled.world, hosted.character, received)
+        report(&controlled.world, hosted.character, received, None)
     });
     let Ok(greeting) = greeting else {
         return End::Quarantined;
@@ -89,40 +89,52 @@ fn control(
     }
 }
 
-/// What the controller of `character` gets on connection: the changes after
-/// the first `received`, then the snapshot of `character` and its pending
-/// turn (R17, R16, R9).
-fn greeting(world: &World, character: EntityId, received: usize) -> Vec<ServerMessage> {
-    let mut greeting: Vec<_> = perception::changes_since(world, received).collect();
-    greeting.push(perception::snapshot(world, character));
-    greeting.extend(perception::awaited(world, character));
-    greeting
+/// The one rule of a greeting and of a reply, for the controller of
+/// `first`: its changes after the first `seen` (R17, D11), then the
+/// snapshot of the character it drives now, unless it already drove it
+/// (`drove`) (R16), then that character's pending turn (R9).
+fn report(
+    world: &World,
+    first: EntityId,
+    seen: usize,
+    drove: Option<EntityId>,
+) -> Vec<ServerMessage> {
+    let driven = perception::driven(world, first);
+    let mut report: Vec<_> = perception::changes_since(world, first, seen).collect();
+    if drove != Some(driven) {
+        report.push(perception::snapshot(world, driven));
+    }
+    report.extend(perception::awaited(world, driven));
+    report
 }
 
-/// `entity` takes `action` for the controller of `hosted`'s character.
-/// Returns the replies in order: the perceived changes, then the next turn
-/// of the character (R17, R9), or a refusal that advanced nothing (R10).
+/// `entity` takes `action` for the controller of `hosted`. Returns the
+/// replies in order: the perceived changes, the snapshot of a stranger
+/// that arrived meanwhile, then the next turn of the character it drives
+/// (R17, R9), or a refusal that advanced nothing (R10).
 fn step(
     world: &mut World,
     hosted: &HostedWorld,
     entity: EntityId,
     action: Action,
 ) -> Vec<ServerMessage> {
-    let character = hosted.character;
-    // A controller drives only its own character, and only on its turn.
-    if entity != character || world.awaited() != character {
+    let driven = perception::driven(world, hosted.character);
+    // A controller drives only the character it drives now, and only on its
+    // turn (D6, R20).
+    if entity != driven || world.awaited() != driven {
         return vec![ServerMessage::Refused];
     }
-    let seen = world.perceived_changes().len();
+    let seen = perception::changes_since(world, hosted.character, 0).count();
     if world.submit(action::to_sim(action)).is_err() {
         return vec![ServerMessage::Refused];
     }
     if hosted.faulty {
         ash_core::invariant!("the test fault of this world fired");
     }
-    let mut replies: Vec<_> = perception::changes_since(world, seen).collect();
-    replies.extend(perception::awaited(world, character));
-    replies
+    if let Some(striker) = hosted.striker {
+        registry::strike(world, striker);
+    }
+    report(world, hosted.character, seen, Some(driven))
 }
 
 /// Sends `message`, then closes the WebSocket. It writes through a new
@@ -187,7 +199,7 @@ mod tests {
         let (world, character, _) = world_awaiting_another_player();
         let received = world.perceived_changes().len();
 
-        let greeting = greeting(&world, character, received);
+        let greeting = report(&world, character, received, None);
 
         let [ServerMessage::Snapshot(snapshot)] = &greeting[..] else {
             panic!("expected a snapshot alone, got {greeting:?}");

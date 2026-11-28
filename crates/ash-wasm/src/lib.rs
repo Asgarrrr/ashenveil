@@ -199,6 +199,13 @@ fn change_json(change: PerceivedChange) -> String {
             "disposition",
             format!(r#","disposition":"{}""#, disposition_name(disposition)),
         ),
+        ChangeKind::Arrival(position) => (
+            "arrival",
+            format!(
+                r#","position":{{"x":{},"y":{},"z":{}}}"#,
+                position.x, position.y, position.z
+            ),
+        ),
     };
     format!(
         r#"{{"kind":"{kind}","time":{},"entity":{}{field}}}"#,
@@ -421,8 +428,9 @@ mod tests {
             2_u32.to_le_bytes(),
             5_u32.to_le_bytes(),
         );
+        let tile = [3_u32, 4, 1].map(u32::to_le_bytes).concat();
         // Tag 2 is a perceived change; its next tag is the kind of change.
-        let changes: [(&[&[u8]], &str); 8] = [
+        let changes: [(&[&[u8]], &str); 9] = [
             (
                 &[&[2, 0], &time, &entity, &[0, 4]],
                 r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"stepped","direction":"south"}}"#,
@@ -454,6 +462,10 @@ mod tests {
             (
                 &[&[2, 3], &time, &entity, &[1]],
                 r#"{"kind":"disposition","time":25,"entity":2,"disposition":"hostile"}"#,
+            ),
+            (
+                &[&[2, 4], &time, &entity, &tile],
+                r#"{"kind":"arrival","time":25,"entity":2,"position":{"x":3,"y":4,"z":1}}"#,
             ),
         ];
         for (fields, change) in changes {

@@ -49,14 +49,16 @@ export type PerceivedHealth =
 /**
  * A change every character perceives, stamped with the time it happened
  * (R17): an entity acts, an entity dies and leaves the world (A8), a hit
- * leaves an entity in another condition (A10), or an attack leaves a
- * creature in another disposition (A4).
+ * leaves an entity in another condition (A10), an attack leaves a
+ * creature in another disposition (A4), or a stranger arrives on a tile
+ * after the death it follows (D10).
  */
 export type PerceivedChange = { time: number; entity: number } & (
   | { kind: "act"; outcome: Outcome }
   | { kind: "death" }
   | { kind: "condition"; condition: Condition }
   | { kind: "disposition"; disposition: Disposition }
+  | { kind: "arrival"; position: Position }
 );
 
 export type Terrain = "floor" | "wall";
@@ -132,7 +134,10 @@ export function decodeServerMessage(bytes: Uint8Array): ServerMessage | undefine
 // `WebSocket.send` requires.
 type Bytes = Uint8Array<ArrayBuffer>;
 
-/** `received`: the perceived changes of the world the client already has. */
+/**
+ * `received`: the perceived changes the client already has, those of each
+ * character its controller drove.
+ */
 export function encodeHello(token: bigint, received: number): Bytes {
   return encode_hello(token, BigInt(received)) as Bytes;
 }

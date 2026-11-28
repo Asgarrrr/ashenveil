@@ -6,8 +6,11 @@ use std::io;
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ash_core::entity::EntityId;
+use ash_core::entity::{EntityId, Speed};
+use ash_core::tile::Direction;
 use ash_protocol::message::ResumeToken;
+use ash_sim::action::Action;
+use ash_sim::controller::Controller;
 use ash_sim::world::World;
 
 use crate::quarantine::{self, Quarantined};
@@ -60,14 +63,20 @@ impl Controlled {
     }
 }
 
-/// One world and the character its controller drives.
+/// One world and the first character its controller drove.
 pub struct HostedWorld {
     /// Its own lock: stepping one world never waits on another.
     controlled: Mutex<Controlled>,
+    /// Never changes: the world records the stranger of each dead
+    /// character, so it tells the character the controller drives now (D6).
     pub character: EntityId,
     /// The world violates an invariant once it accepts a command. Only
     /// `Registry::with_fault` sets it; no message can.
     pub faulty: bool,
+    /// The second character of the test entry, which the server drives
+    /// (`strike`). Only `Registry::with_struck_character` sets it; no
+    /// message can.
+    pub striker: Option<EntityId>,
 }
 
 impl HostedWorld {
@@ -82,14 +91,24 @@ impl HostedWorld {
 pub struct Registry {
     worlds: Mutex<HashMap<ResumeToken, Arc<HostedWorld>>>,
     fault: Option<ResumeToken>,
+    struck: Option<ResumeToken>,
 }
 
 impl Registry {
     /// A registry where the world of `token` is faulty.
     pub fn with_fault(token: ResumeToken) -> Self {
         Self {
-            worlds: Mutex::default(),
             fault: Some(token),
+            ..Self::default()
+        }
+    }
+
+    /// A registry where the world of `token` is the struck world of the
+    /// test entry (`struck_world`).
+    pub fn with_struck_character(token: ResumeToken) -> Self {
+        Self {
+            struck: Some(token),
+            ..Self::default()
         }
     }
 
@@ -98,7 +117,13 @@ impl Registry {
     pub fn world(&self, token: ResumeToken) -> Arc<HostedWorld> {
         // Built before the lock, so no simulation code runs while it is
         // held; dropped unused when the token already has a world.
-        let world = World::skeleton(world_seed(token));
+        let seed = world_seed(token);
+        let (world, striker) = if self.struck == Some(token) {
+            let (world, striker) = struck_world(seed);
+            (world, Some(striker))
+        } else {
+            (World::skeleton(seed), None)
+        };
         // R8: the character is created first, so it is the first awaited.
         let candidate = HostedWorld {
             character: world.awaited(),
@@ -107,6 +132,7 @@ impl Registry {
                 controller: None,
             }),
             faulty: self.fault == Some(token),
+            striker,
         };
         // Nothing panics between the reads and writes of the map, so a
         // poisoned lock still guards a consistent map.
@@ -115,11 +141,33 @@ impl Registry {
     }
 }
 
+/// The world of the test entry: the character on the start tile, then a
+/// second character east of it, both at speed 1, and no creature. Returns
+/// the second, which no connection controls.
+fn struck_world(seed: u64) -> (World, EntityId) {
+    let mut world = World::new(seed, Speed::new(1));
+    let east = world.position(world.awaited()).step(Direction::East);
+    let second = world.create_entity(Speed::new(1), east, Controller::Player);
+    (world, second)
+}
+
+/// The test entry: while `world` awaits `striker`, it attacks west, toward
+/// the start tile of the first character, or waits when that attack is not
+/// offered (R14).
+pub fn strike(world: &mut World, striker: EntityId) {
+    let attack = Action::Attack(Direction::West);
+    while world.awaited() == striker {
+        let offered = world.offers().iter().any(|offer| offer.action == attack);
+        let action = if offered { attack } else { Action::Wait };
+        if world.submit(action).is_err() {
+            ash_core::invariant!("the world refused the offered {action:?} of {striker:?}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::TcpListener;
-
-    use ash_sim::action::Action;
 
     use super::*;
 

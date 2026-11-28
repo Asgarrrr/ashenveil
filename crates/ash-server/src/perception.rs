@@ -64,11 +64,26 @@ pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
     })
 }
 
-/// R17: the changes after the first `seen`, in the order they happened.
-pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerMessage> + '_ {
-    world
-        .perceived_changes()
-        .iter()
+/// D6: the character the controller of `first` drives now: `first`, or the
+/// last stranger that followed it.
+pub fn driven(world: &World, first: EntityId) -> EntityId {
+    let mut character = first;
+    while let Some(stranger) = world.stranger_of(character) {
+        character = stranger;
+    }
+    character
+}
+
+/// R17, D11: the changes the controller of `first` perceived after the
+/// first `seen`: those of each character it drove, in turn, in the order
+/// they happened.
+pub fn changes_since(
+    world: &World,
+    first: EntityId,
+    seen: usize,
+) -> impl Iterator<Item = ServerMessage> + '_ {
+    std::iter::successors(Some(first), |&character| world.stranger_of(character))
+        .flat_map(|character| world.perceived_changes_of(character))
         .skip(seen)
         .map(|&change| ServerMessage::Perceived(change_to_wire(change)))
 }
@@ -84,6 +99,7 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
             SimKind::Disposition(disposition) => {
                 ChangeKind::Disposition(disposition_to_wire(disposition))
             }
+            SimKind::Arrival(position) => ChangeKind::Arrival(position),
         },
     }
 }
@@ -204,7 +220,7 @@ pub mod tests {
                 let (time, seen) = (world.clock(), world.perceived_changes().len());
                 assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
                 if let [_, ServerMessage::Perceived(change)] =
-                    changes_since(&world, seen).collect::<Vec<_>>()[..]
+                    changes_since(&world, attacker, seen).collect::<Vec<_>>()[..]
                 {
                     break (time, change);
                 }
@@ -229,6 +245,42 @@ pub mod tests {
                 Some(PerceivedHealth::Condition(condition))
             );
         }
+    }
+
+    /// D10: the arrival reaches the wire on the tile of the stranger, x then
+    /// y. On the test entry the stranger always arrives on (1, 1), where no
+    /// swap shows. Here the first character, on the start tile, strikes the
+    /// victim east of it until it dies, and the stranger takes (2, 1).
+    #[test]
+    fn the_wire_arrival_names_the_tile_of_the_stranger() {
+        let mut world = World::new(0, Speed::new(1));
+        let striker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        let victim = world.create_entity(Speed::new(1), east, Controller::Player);
+
+        let mut turns = 0;
+        while world.stranger_of(victim).is_none() {
+            assert!(turns < STRIKE_TURNS, "no death in {STRIKE_TURNS} turns");
+            turns += 1;
+            let action = if world.awaited() == striker {
+                Action::Attack(Direction::East)
+            } else {
+                Action::Wait
+            };
+            assert_eq!(world.submit(action), Ok(()), "{action:?}");
+        }
+
+        let stranger = world.stranger_of(victim).expect("the loop ended on it");
+        assert_eq!(world.position(stranger), east);
+        let time = world.clock();
+        assert_eq!(
+            changes_since(&world, striker, 0).last(),
+            Some(ServerMessage::Perceived(PerceivedChange {
+                time,
+                entity: stranger,
+                kind: ChangeKind::Arrival(east),
+            }))
+        );
     }
 
     /// D2: the corpses reach the wire in the order of the deaths. Walls, R11

@@ -132,6 +132,16 @@ fn server_messages() -> Vec<ServerMessage> {
         condition_change(301, 0, Condition::Dying),
         disposition_change(400, 2, Disposition::Hostile),
         disposition_change(u64::MAX, u32::MAX, Disposition::Neutral),
+        arrival(150, 4, TilePosition { x: 1, y: 2, z: 3 }),
+        arrival(
+            u64::MAX,
+            u32::MAX,
+            TilePosition {
+                x: u32::MAX,
+                y: 0,
+                z: u32::MAX,
+            },
+        ),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
@@ -159,6 +169,14 @@ fn disposition_change(time: u64, entity: u32, disposition: Disposition) -> Serve
         time: Time::new(time),
         entity: EntityId::new(entity),
         kind: ChangeKind::Disposition(disposition),
+    })
+}
+
+fn arrival(time: u64, entity: u32, position: TilePosition) -> ServerMessage {
+    ServerMessage::Perceived(PerceivedChange {
+        time: Time::new(time),
+        entity: EntityId::new(entity),
+        kind: ChangeKind::Arrival(position),
     })
 }
 
@@ -342,10 +360,10 @@ fn a_malformed_change_of_condition_is_refused() {
             "a change of condition with {rest:?} decodes"
         );
     }
-    // No kind follows the change of disposition, with the bytes of a death
-    // or of a wounded entity.
-    for tag in 4..=u8::MAX {
-        for rest in [&[][..], &[1]] {
+    // No kind follows the arrival, with the bytes of a death, of a wounded
+    // entity or of a tile.
+    for tag in 5..=u8::MAX {
+        for rest in [&[][..], &[1], &[2; 12]] {
             assert!(
                 ServerMessage::decode(&change_bytes(tag, rest)).is_err(),
                 "a change of kind {tag} decodes"
@@ -386,6 +404,48 @@ fn a_malformed_change_of_disposition_is_refused() {
         assert!(
             ServerMessage::decode(&change_bytes(3, rest)).is_err(),
             "a change of disposition with {rest:?} decodes"
+        );
+    }
+}
+
+/// The bytes of a tile: x, then y, then z, each a little-endian `u32`.
+fn tile_bytes(x: u32, y: u32, z: u32) -> Vec<u8> {
+    [x, y, z]
+        .iter()
+        .flat_map(|axis| axis.to_le_bytes())
+        .collect()
+}
+
+#[test]
+fn a_malformed_arrival_is_refused() {
+    // The controls: a change of kind 4 is the arrival of the stranger it
+    // names, at its time, on the tile that follows, x first, then y and z.
+    for (x, y, z) in [(2, 5, 1), (u32::MAX, 0, 7)] {
+        assert_eq!(
+            ServerMessage::decode(&change_bytes(4, &tile_bytes(x, y, z))),
+            Ok(ServerMessage::Perceived(PerceivedChange {
+                time: Time::new(100),
+                entity: EntityId::new(2),
+                kind: ChangeKind::Arrival(TilePosition { x, y, z }),
+            })),
+            "({x}, {y}, {z})"
+        );
+    }
+
+    // An arrival carries one tile: not none, not part of one, and nothing
+    // after it.
+    let tile = tile_bytes(2, 5, 1);
+    for length in 0..tile.len() {
+        assert!(
+            ServerMessage::decode(&change_bytes(4, &tile[..length])).is_err(),
+            "an arrival with {length} bytes of tile decodes"
+        );
+    }
+    for rest in [&[0][..], &[1, 0, 0, 0], &tile] {
+        let bytes = change_bytes(4, &[&tile[..], rest].concat());
+        assert!(
+            ServerMessage::decode(&bytes).is_err(),
+            "an arrival with {rest:?} after its tile decodes"
         );
     }
 }

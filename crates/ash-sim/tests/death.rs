@@ -66,7 +66,8 @@ fn names(change: PerceivedChange, entity: EntityId) -> bool {
             ChangeKind::Act(Outcome::Stepped(_) | Outcome::Waited)
             | ChangeKind::Death
             | ChangeKind::Condition(_)
-            | ChangeKind::Disposition(_) => false,
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => false,
             ChangeKind::Act(
                 Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target),
             ) => target == entity,
@@ -353,7 +354,10 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
             .filter(|change| change.entity == neutral)
             .filter_map(|change| match change.kind {
                 ChangeKind::Act(outcome) => Some((change.time, outcome)),
-                ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => None,
+                ChangeKind::Death
+                | ChangeKind::Condition(_)
+                | ChangeKind::Disposition(_)
+                | ChangeKind::Arrival(_) => None,
             })
             .collect();
         assert!(turns.len() > 30, "seed {seed}: {} turns", turns.len());

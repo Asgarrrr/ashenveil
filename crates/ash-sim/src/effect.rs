@@ -61,10 +61,12 @@ pub(crate) enum Effect {
     },
     /// The stranger of the dead character `dead`: a new character at
     /// `position`, due now, after every entity already due (D6, D9). The
-    /// world issues its id as it writes this, and records it as the
-    /// stranger of `dead` (F2).
+    /// world issues its id as it writes this, records it as the stranger of
+    /// `dead` (F2), and every character perceives its arrival at `time`
+    /// (D10).
     CreateStranger {
         dead: EntityId,
+        time: Time,
         speed: Speed,
         position: TilePosition,
         health: Health,

@@ -38,6 +38,19 @@ pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
     serve_registry(listener, Registry::with_fault(token));
 }
 
+/// `serve`, except that the world of `token` holds two characters side by
+/// side and no creature. The client drives the first. Whenever the world
+/// awaits the second, the server makes it attack toward the start tile of
+/// the first, or wait when that attack is not offered. Tests use it to
+/// strike the character of a client.
+///
+/// It cannot reach production, like `serve_with_fault`: `serve` never sets
+/// it, and no message can.
+#[doc(hidden)]
+pub fn serve_with_struck_character(listener: TcpListener, token: ResumeToken) {
+    serve_registry(listener, Registry::with_struck_character(token));
+}
+
 fn serve_registry(listener: TcpListener, registry: Registry) {
     let registry = Arc::new(registry);
     for stream in listener.incoming() {

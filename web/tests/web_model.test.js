@@ -1,5 +1,5 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S4, and of spec 0003, slices S1 and S2: the perceived-world
+// slices S1 to S4, and of spec 0003, slices S1, S2 and S4: the perceived-world
 // model of the web client, fed through the real WASM codec. `cargo xtask accept
 // web_model` builds the client, then runs this file with Node's test runner.
 //
@@ -25,6 +25,11 @@
 // southeast, then attacked the hostile creature to the southeast twice.
 // The first hit left it wounded (A10), the second killed it (A8). Entity 0
 // then moved southeast, onto the tile the creature left.
+//
+// `fixtures/stranger.json`: the test entry of the server, another world
+// with no creature. Entity 1, a character east of entity 0, strikes it on
+// each of its turns. Entity 0 waited until it died, and its stranger,
+// entity 2, arrived on (1, 1). The stranger then moved south.
 //
 //   012345678
 // 0 #########
@@ -56,6 +61,7 @@ const walk = fixture("walk.json");
 const bump = fixture("bump.json");
 const attack = fixture("attack.json");
 const death = fixture("death.json");
+const stranger = fixture("stranger.json");
 const controllerTaken = walk.length - 1;
 
 /** The index of the first message of `stream` that `found` accepts. */
@@ -769,6 +775,167 @@ test("the page logs a change of disposition as the creature turning hostile", ()
     "200  entity 2 looks wounded",
     "200  @ hits entity 2",
   ]);
+});
+
+/** The text and the center of each glyph `drawMap` draws for `world`, with its fill style. */
+function glyphs(world) {
+  const drawnGlyphs = [];
+  const context = {
+    fillRect() {},
+    fillText(text, x, y) {
+      drawnGlyphs.push({ text, point: [x, y], style: this.fillStyle });
+    },
+  };
+  drawMap({ getContext: () => context }, world);
+  return drawnGlyphs;
+}
+
+test("after the death of its character, the model shows the stranger, controls it and keeps the log", () => {
+  // The client controls entity 0, on the start tile (1, 1), with 1 hit
+  // point left. Entity 1, a character east of it, strikes it.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 1, 1, null, hitPoints(1, 10)), perceivedEntity(1, 2, 1, null)]));
+  world.apply({ kind: "awaited", time: 0, entity: 0, actions: [{ action: wait, cost: 50 }] });
+  // D10: the reply to its wait holds the lethal hit, the death, then the
+  // arrival of the stranger, entity 2, on the start tile.
+  const changes = [
+    act(0, 0, { kind: "waited" }),
+    act(50, 1, { kind: "hit", target: 0 }),
+    { kind: "death", time: 50, entity: 0 },
+    { kind: "arrival", time: 50, entity: 2, position: { x: 1, y: 1, z: 0 } },
+  ];
+  for (const change of changes) {
+    world.apply({ kind: "perceived", change });
+  }
+
+  // D6: the model adds the stranger at its arrival, an unhurt character,
+  // over the corpse of the dead one.
+  assert.deepEqual([...world.entities.values()], [perceivedEntity(1, 2, 1, null), perceivedEntity(2, 1, 1, null)]);
+  assert.deepEqual(world.corpses, [corpse(1, 1, "character", 0)]);
+
+  // D11: the snapshot of the stranger, then its turn. The stranger does not
+  // recognize the corpse.
+  const seenByStranger = [perceivedEntity(1, 2, 1, null), perceivedEntity(2, 1, 1, null, hitPoints(10, 10))];
+  const unrecognized = [corpse(1, 1, "character", null)];
+  world.apply({ ...snapshot(seenByStranger, unrecognized), time: 50 });
+  world.apply({
+    kind: "awaited",
+    time: 50,
+    entity: 2,
+    actions: [
+      { action: wait, cost: 50 },
+      { action: move("south"), cost: 100 },
+    ],
+  });
+
+  assert.deepEqual([...world.entities.values()], seenByStranger);
+  assert.deepEqual(world.corpses, unrecognized);
+  assert.equal(world.controlled, 2);
+  assert.equal(world.costOf(move("south")), 100);
+  assert.equal(world.time, 50);
+  // The log keeps every line, the newest first.
+  assert.deepEqual(world.log, changes);
+  const page = drawn(world);
+  assert.deepEqual(page.log.lines, [
+    "50  @ arrives",
+    "50  entity 0 dies",
+    "50  entity 1 hits entity 0",
+    "0  entity 0 waits",
+  ]);
+  assert.deepEqual(page.entities.lines, ["entity 1: unhurt", "@: 10/10 hit points"]);
+  // The map draws the corpse, then the other character, then the stranger
+  // as the controlled entity, over the corpse.
+  const [under, other, stranger] = glyphs(world);
+  assert.deepEqual(
+    [under.text, other.text, stranger.text],
+    ["%", "e", "@"],
+  );
+  assert.deepEqual(stranger.point, under.point);
+  assert.notEqual(stranger.style, other.style);
+});
+
+test("the recorded death of the character hands the client its stranger", () => {
+  // D10: one reply holds the lethal hit, the death, the arrival of the
+  // stranger, its snapshot and its turn.
+  const died = indexOf(stranger, isDeath);
+  const [hit, dies, arrives, seen, turn] = stranger.slice(died - 1, died + 4).map(decodeServerMessage);
+  const { time } = dies.change;
+  assert.deepEqual(
+    [hit, dies, arrives].map(({ change }) => change),
+    [
+      act(time, 1, { kind: "hit", target: 0 }),
+      { kind: "death", time, entity: 0 },
+      { kind: "arrival", time, entity: 2, position: { x: 1, y: 1, z: 0 } },
+    ],
+  );
+  assert.equal(seen.kind, "snapshot");
+  assert.deepEqual([turn.kind, turn.entity, turn.time], ["awaited", 2, time]);
+
+  // D6: at the arrival, before the snapshot, the model holds the stranger
+  // over the corpse of the character it still controls.
+  const arrived = replay(stranger.slice(0, died + 2));
+  assert.equal(arrived.controlled, 0);
+  assert.deepEqual(positions(arrived), [
+    [1, { x: 2, y: 1, z: 0 }],
+    [2, { x: 1, y: 1, z: 0 }],
+  ]);
+  assert.deepEqual(arrived.corpses, [corpse(1, 1, "character", 0)]);
+
+  // D11: then the snapshot of the stranger, whole, and its turn. The
+  // stranger stepped south, and the striker found no one to strike.
+  const world = replay(stranger);
+  assert.equal(world.controlled, 2);
+  assert.deepEqual(positions(world), [
+    [1, { x: 2, y: 1, z: 0 }],
+    [2, { x: 1, y: 2, z: 0 }],
+  ]);
+  assert.deepEqual(healths(world), [
+    [1, inCondition("unhurt")],
+    [2, hitPoints(10, 10)],
+  ]);
+  assert.deepEqual(world.corpses, [corpse(1, 1, "character", null)]);
+  assert.equal(world.costOf(wait), 50);
+  // R17: the log keeps every perceived change received, the death and the
+  // arrival among them.
+  assert.equal(world.log.length, stranger.filter((bytes) => decodeServerMessage(bytes).kind === "perceived").length);
+  assert.deepEqual(
+    drawn(world).log.lines.filter((line) => /dies|arrives/.test(line)),
+    [`${time}  @ arrives`, `${time}  entity 0 dies`],
+  );
+  const [under, ...standing] = glyphs(world);
+  assert.equal(under.text, "%");
+  assert.deepEqual(
+    standing.map(({ text }) => text),
+    ["e", "@"],
+  );
+});
+
+test("an arrival puts the stranger on the tile it names", () => {
+  // D8, D10: entity 0 dies far from the tile its stranger, entity 2, takes.
+  // The tile is not symmetric, so its x and y cannot trade places unseen.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 4, 4, null)]));
+  world.apply(deathOf(0));
+  world.apply({
+    kind: "perceived",
+    change: { kind: "arrival", time: 0, entity: 2, position: { x: 2, y: 1, z: 0 } },
+  });
+
+  assert.deepEqual(positions(world), [[2, { x: 2, y: 1, z: 0 }]]);
+  // D2: the corpse lies where the character died, not where its stranger
+  // arrives.
+  assert.deepEqual(world.corpses, [corpse(4, 4, "character", 0)]);
+});
+
+test("an arrival decodes to the stranger and its tile", () => {
+  // A change is tag 2, then kind 4 for an arrival, the time and the
+  // entity, little-endian, then the tile: x, y and z.
+  const u32 = (value) => [value, 0, 0, 0];
+  const bytes = Uint8Array.of(2, 4, 44, 1, 0, 0, 0, 0, 0, 0, ...u32(7), ...u32(3), ...u32(2), ...u32(1));
+  assert.deepEqual(decodeServerMessage(bytes), {
+    kind: "perceived",
+    change: { kind: "arrival", time: 300, entity: 7, position: { x: 3, y: 2, z: 1 } },
+  });
 });
 
 test("a refused command advances nothing and keeps the offers", () => {

@@ -13,7 +13,7 @@ use crate::controller::{Controller, Disposition};
 use crate::death::Corpse;
 use crate::effect::{Effect, Effects};
 use crate::map::Map;
-use crate::perception::{PerceivedChange, Perception};
+use crate::perception::{ChangeKind, PerceivedChange, Perception};
 use crate::scheduler::Scheduler;
 use crate::wander;
 
@@ -226,10 +226,45 @@ impl World {
         Ok(())
     }
 
-    /// Every change, in the order it happened (R17). Under whole-map
-    /// perception (R16), every character perceives every change.
+    /// Every change of the world, in the order it happened (R17): test and
+    /// replay evidence. A controller receives only the changes of the
+    /// characters it drove (`perceived_changes_of`).
     pub fn perceived_changes(&self) -> &[PerceivedChange] {
         &self.perceived_changes
+    }
+
+    /// D5, D11: the changes `character` perceives, in order, from its
+    /// creation or its arrival to its own death. Under whole-map perception
+    /// (R16), it perceives every change in between.
+    /// A character that no death created perceives from the first change of
+    /// its world. An id this world never issued crashes through
+    /// `invariant!`.
+    pub fn perceived_changes_of(&self, character: EntityId) -> &[PerceivedChange] {
+        if !self.ids.has_issued(character) {
+            ash_core::invariant!("this world never issued {character:?}");
+        }
+        let arrived = |change: &PerceivedChange| {
+            change.entity == character && matches!(change.kind, ChangeKind::Arrival(_))
+        };
+        let died = |change: &PerceivedChange| {
+            change.entity == character && change.kind == ChangeKind::Death
+        };
+        // Only a stranger has an arrival (D10).
+        let since = self.perceived_changes.iter().position(arrived).unwrap_or(0);
+        let from_arrival = &self.perceived_changes[since..];
+        match from_arrival.iter().position(died) {
+            Some(death) => &from_arrival[..=death],
+            None => from_arrival,
+        }
+    }
+
+    /// D6: the dead character `stranger` follows. `None` for a character
+    /// that no death created.
+    pub(crate) fn followed(&self, stranger: EntityId) -> Option<EntityId> {
+        self.strangers
+            .iter()
+            .find(|&&(_, follower)| follower == stranger)
+            .map(|&(dead, _)| dead)
     }
 
     /// The accepted commands of player connections, in order: replaying them
@@ -325,6 +360,7 @@ impl World {
                 }
                 Effect::CreateStranger {
                     dead,
+                    time,
                     speed,
                     position,
                     health,
@@ -338,6 +374,12 @@ impl World {
                         health,
                     });
                     self.strangers.push((dead, id));
+                    // The arrival names the id issued here: no rule can.
+                    self.perceived_changes.push(PerceivedChange {
+                        time,
+                        entity: id,
+                        kind: ChangeKind::Arrival(position),
+                    });
                 }
             }
         }
@@ -422,7 +464,7 @@ mod tests {
 
     use super::*;
     use crate::combat::Condition;
-    use crate::perception::{ChangeKind, Outcome};
+    use crate::perception::Outcome;
 
     #[test]
     #[should_panic(expected = "invariant violated")]
@@ -697,6 +739,15 @@ mod tests {
     fn the_stranger_of_an_id_the_world_never_issued_crashes_as_never_issued() {
         let world = World::new(0, Speed::new(1));
         let _ = world.stranger_of(EntityId::new(1));
+    }
+
+    /// F3: the changes of an id the world never issued crash, never come
+    /// back as those of a character created with its world.
+    #[test]
+    #[should_panic(expected = "this world never issued")]
+    fn the_changes_of_an_id_the_world_never_issued_crash_as_never_issued() {
+        let world = World::new(0, Speed::new(1));
+        let _ = world.perceived_changes_of(EntityId::new(1));
     }
 
     /// F3: a write names which of the two failures it met.
