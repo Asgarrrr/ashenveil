@@ -59,4 +59,14 @@ pub(crate) enum Effect {
         controller: Controller,
         health: Health,
     },
+    /// The stranger of the dead character `dead`: a new character at
+    /// `position`, due now, after every entity already due (D6, D9). The
+    /// world issues its id as it writes this, and records it as the
+    /// stranger of `dead` (F2).
+    CreateStranger {
+        dead: EntityId,
+        speed: Speed,
+        position: TilePosition,
+        health: Health,
+    },
 }
