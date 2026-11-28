@@ -261,7 +261,7 @@ verify` runs it.
     malformed change of disposition.
   - `cargo xtask accept web_model` — the model holds the new disposition.
 
-### - [ ] S3 — A character dies and a stranger arrives, in the simulation
+### - [x] S3 — A character dies and a stranger arrives, in the simulation
 
 - Files: `crates/ash-sim/src/{world,combat,death,effect,map}.rs`,
   `crates/ash-sim/tests/character_death.rs` (new),
@@ -604,3 +604,27 @@ Choices behind the rows:
   of disposition to neutral, which the simulation never makes. S2 asks to
   reject a malformed change, not an impossible one. The decoder rejects a
   change with no disposition.
+- 2026-11-28, recorded (found in S3): the signatures commit removes the
+  `invariant!` crash of `combat::hit`. With the crash, the acceptance test
+  fails by a panic, not by an assertion. `World::stranger_of` answers none
+  on that commit.
+- 2026-11-28, recorded (found in S3): a stranger has speed 1, held by one
+  constant of the module `death` (R6). The speed that `World::new` takes
+  for the first character serves the tests alone. The start tile of D8 is
+  the constant where `World::new` puts the first character: it is no saved
+  state, and the F6 table gains no row for it.
+- 2026-11-28, recorded (found in S3): no test reaches the crash of "no
+  free floor tile within reach". On the skeleton map every floor tile is
+  reachable, and the tile of the dead character is always free.
+- 2026-11-28, recorded (found in S3, review and bug injection): nine bugs
+  passed the S3 tests. A fix batch adds one test for each: the stranger
+  scheduled after the turn of the striker, a stranger on the tile of a
+  creature, a search from where the first character stands now, the
+  corpse of a character on the tile of the stranger, a dead character that
+  frees the start tile alone, the speed of the dead or of the striker,
+  tiles ranked in a straight line, and a dead creature that gets a
+  stranger.
+- 2026-11-28, recorded (found in S3): one comment of
+  `crates/ash-sim/src/perception.rs` says no character can arrive after a
+  death. A stranger now can, and it still recognizes every corpse. S4
+  rewrites that code and the comment with it.
