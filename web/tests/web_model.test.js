@@ -902,6 +902,13 @@ test("the recorded death of the character hands the client its stranger", () => 
     drawn(world).log.lines.filter((line) => /dies|arrives/.test(line)),
     [`${time}  @ arrives`, `${time}  entity 0 dies`],
   );
+  // A9: the hit points were the dead character's, not the stranger's that
+  // `@` now names. The drawn log holds only the newest lines: each line of
+  // the log is drawn here.
+  assert.deepEqual(
+    world.log.map((change) => logLine(world, change)).filter((line) => /hit points/.test(line)),
+    ["0  entity 0 has 7/10 hit points", "100  entity 0 has 4/10 hit points", "500  entity 0 has 1/10 hit points"],
+  );
   const [under, ...standing] = glyphs(world);
   assert.equal(under.text, "%");
   assert.deepEqual(
@@ -939,9 +946,14 @@ test("a change of hit points replaces the numbers of the character, which shows 
   const page = drawn(world);
   assert.deepEqual(page.entities.lines, ["@: 7/10 hit points", "entity 1: unhurt"]);
   assert.deepEqual(page.log.lines, ["0  @ has 7/10 hit points", "0  entity 1 hits @", "0  @ waits"]);
-  // A change that names an entity the client does not hold adds none.
-  world.apply({ kind: "perceived", change: { ...changes[2], entity: 9 } });
+  // A change that names an entity the client does not hold adds none, and
+  // its numbers, unlike the character's, land on no one.
+  world.apply({ kind: "perceived", change: { ...changes[2], entity: 9, current: 4 } });
   assert.deepEqual([...world.entities.keys()], [0, 1]);
+  assert.deepEqual(healths(world), [
+    [0, hitPoints(7, 10)],
+    [1, inCondition("unhurt")],
+  ]);
 });
 
 test("a change of hit points decodes to the current ones, then the most", () => {

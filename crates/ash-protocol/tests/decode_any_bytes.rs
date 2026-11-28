@@ -371,9 +371,9 @@ fn a_malformed_change_of_condition_is_refused() {
         );
     }
     // No kind follows the hit points, with the bytes of a death, of a
-    // wounded entity or of a tile.
+    // wounded entity, of hit points or of a tile.
     for tag in 6..=u8::MAX {
-        for rest in [&[][..], &[1], &[2; 12]] {
+        for rest in [&[][..], &[1], &[2; 8], &[2; 12]] {
             assert!(
                 ServerMessage::decode(&change_bytes(tag, rest)).is_err(),
                 "a change of kind {tag} decodes"

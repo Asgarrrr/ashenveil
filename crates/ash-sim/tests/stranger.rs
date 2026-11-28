@@ -18,6 +18,7 @@ use ash_core::entity::{EntityId, Speed};
 use ash_core::tile::{Direction, TilePosition};
 use ash_core::time::Time;
 use ash_sim::action::Action;
+use ash_sim::combat::Condition;
 use ash_sim::controller::{Controller, Disposition};
 use ash_sim::death::Died;
 use ash_sim::perception::{self, ChangeKind, Outcome, PerceivedChange, PerceivedCorpse};
@@ -40,20 +41,18 @@ fn deaths(world: &World) -> Vec<EntityId> {
         .collect()
 }
 
-/// A9, R18: of `changes`, those that `character` perceives while it lives:
-/// all but the hit points of another and its own condition. The test
-/// `own_hit_points` pins this rule on whole lists; here it only keeps the
-/// bounds of each list in view.
-fn seen_by(character: EntityId, changes: &[PerceivedChange]) -> Vec<PerceivedChange> {
+/// `changes` without the changes of health. Which of those a character
+/// perceives (A9, R18) is pinned on whole lists in `own_hit_points` and in
+/// `a_stranger_perceives_its_own_hit_points_and_never_its_own_condition`:
+/// both sides of a comparison drop them, so only its bounds count here.
+fn without_health(changes: &[PerceivedChange]) -> Vec<PerceivedChange> {
     changes
         .iter()
-        .filter(|change| match change.kind {
-            ChangeKind::HitPoints { .. } => change.entity == character,
-            ChangeKind::Condition(_) => change.entity != character,
-            ChangeKind::Act(_)
-            | ChangeKind::Death
-            | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => true,
+        .filter(|change| {
+            !matches!(
+                change.kind,
+                ChangeKind::HitPoints { .. } | ChangeKind::Condition(_)
+            )
         })
         .copied()
         .collect()
@@ -145,10 +144,13 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
     let arrival = all[death + 1];
     assert_eq!(world.perceived_changes_of(stranger), [arrival]);
     assert_eq!(
-        world.perceived_changes_of(victim),
-        seen_by(victim, &all[..=death])
+        without_health(&world.perceived_changes_of(victim)),
+        without_health(&all[..=death])
     );
-    assert_eq!(world.perceived_changes_of(striker), seen_by(striker, &all));
+    assert_eq!(
+        without_health(&world.perceived_changes_of(striker)),
+        without_health(&all)
+    );
 
     // Time goes on: the stranger and the striker perceive what follows, the
     // dead character nothing more. R6, R8: the stranger waits for 50 at the
@@ -176,12 +178,12 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
         [&[arrival][..], &later].concat()
     );
     assert_eq!(
-        world.perceived_changes_of(victim),
-        seen_by(victim, &all[..=death])
+        without_health(&world.perceived_changes_of(victim)),
+        without_health(&all[..=death])
     );
     assert_eq!(
-        world.perceived_changes_of(striker),
-        seen_by(striker, world.perceived_changes())
+        without_health(&world.perceived_changes_of(striker)),
+        without_health(world.perceived_changes())
     );
 }
 
@@ -262,18 +264,103 @@ fn each_stranger_of_a_chain_perceives_from_its_own_arrival_to_its_own_death() {
     );
 
     assert_eq!(
-        world.perceived_changes_of(victim),
-        seen_by(victim, &all[..=victim_died])
+        without_health(&world.perceived_changes_of(victim)),
+        without_health(&all[..=victim_died])
     );
     assert_eq!(
-        world.perceived_changes_of(first),
-        seen_by(first, &all[first_arrived..=first_died])
+        without_health(&world.perceived_changes_of(first)),
+        without_health(&all[first_arrived..=first_died])
     );
     assert_eq!(
-        world.perceived_changes_of(second),
-        seen_by(second, &all[second_arrived..])
+        without_health(&world.perceived_changes_of(second)),
+        without_health(&all[second_arrived..])
     );
-    assert_eq!(world.perceived_changes_of(striker), seen_by(striker, &all));
+    assert_eq!(
+        without_health(&world.perceived_changes_of(striker)),
+        without_health(&all)
+    );
+}
+
+/// A9, A10, A11: a stranger is a character like any other. It perceives a
+/// hit it survives, then its own hit points, and never its own condition;
+/// its striker perceives the condition, and no hit points.
+#[test]
+fn a_stranger_perceives_its_own_hit_points_and_never_its_own_condition() {
+    let mut world = World::new(0, Speed::new(1));
+    let striker = world.awaited();
+    let victim = world.create_entity(Speed::new(1), at(2, 1), Controller::Player);
+    strike_to_death(&mut world, striker, Direction::East, victim);
+    let stranger = stranger_after(&world, victim);
+
+    let hit_on_stranger = |world: &World| {
+        world
+            .perceived_changes()
+            .iter()
+            .any(|change| change.kind == ChangeKind::Act(Outcome::Hit(stranger)))
+    };
+    play(
+        &mut world,
+        |world| {
+            if world.awaited() == striker {
+                Action::Attack(Direction::East)
+            } else {
+                Action::Wait
+            }
+        },
+        hit_on_stranger,
+    );
+
+    // The victim died at 400; the striker, which struck for 100, missed at
+    // 500, then hit at 600 (R6). The stranger waited between.
+    let change = |time, entity, kind| PerceivedChange {
+        time: Time::new(time),
+        entity,
+        kind,
+    };
+    let arrival = change(400, stranger, ChangeKind::Arrival(at(2, 1)));
+    let waited = |time| change(time, stranger, ChangeKind::Act(Outcome::Waited));
+    let missed = change(500, striker, ChangeKind::Act(Outcome::Missed(stranger)));
+    let hit = change(600, striker, ChangeKind::Act(Outcome::Hit(stranger)));
+    assert_eq!(
+        world.perceived_changes_of(stranger),
+        [
+            arrival,
+            waited(400),
+            waited(450),
+            missed,
+            waited(500),
+            waited(550),
+            hit,
+            change(
+                600,
+                stranger,
+                ChangeKind::HitPoints {
+                    current: 7,
+                    max: 10
+                }
+            ),
+        ]
+    );
+    // The striker perceived the victim's whole fight before: only what
+    // follows the arrival is the stranger's.
+    let seen = world.perceived_changes_of(striker);
+    let arrived = seen
+        .iter()
+        .position(|seen| *seen == arrival)
+        .expect("the striker perceived the arrival");
+    assert_eq!(
+        seen[arrived..],
+        [
+            arrival,
+            waited(400),
+            waited(450),
+            missed,
+            waited(500),
+            waited(550),
+            hit,
+            change(600, stranger, ChangeKind::Condition(Condition::Wounded)),
+        ]
+    );
 }
 
 /// The cast of a world where two creatures die around the death of a
