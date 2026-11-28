@@ -649,6 +649,10 @@ mod tests {
                 },
             ]
         );
+        // D6: a dead creature has no stranger.
+        let embodied: Vec<EntityId> = world.entities().collect();
+        assert_eq!(embodied, [attacker]);
+        assert_eq!(world.awaited(), attacker);
     }
 
     /// F4: `apply` writes the health a damage carries, as carried, and

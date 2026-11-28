@@ -87,3 +87,33 @@ fn arrival(world: &World, dead: EntityId) -> TilePosition {
         None => ash_core::invariant!("no free floor tile is left for the stranger of {dead:?}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::controller::Disposition;
+
+    /// D8: a creature holds its tile as a character does.
+    #[test]
+    fn the_stranger_arrives_on_no_tile_a_creature_holds() {
+        let tile = |x, y| TilePosition { x, y, z: 0 };
+        // The first character holds the start tile. Of the tiles one move
+        // from it, the creature holds the first in row order.
+        let mut world = World::new(0, Speed::new(1));
+        world.create_entity(
+            Speed::new(2),
+            tile(2, 1),
+            Controller::Wander(Disposition::Neutral),
+        );
+        let victim = world.create_entity(Speed::new(1), tile(4, 4), Controller::Player);
+
+        let arrivals: Vec<TilePosition> = effects(&world, victim)
+            .into_iter()
+            .filter_map(|effect| match effect {
+                Effect::CreateStranger { position, .. } => Some(position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(arrivals, [tile(1, 2)]);
+    }
+}

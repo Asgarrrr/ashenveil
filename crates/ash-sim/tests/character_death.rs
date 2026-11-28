@@ -300,6 +300,62 @@ fn an_entity_due_at_the_time_of_the_death_acts_before_the_stranger() {
     assert_eq!((world.awaited(), world.clock()), (stranger, Time::new(150)));
 }
 
+#[test]
+fn with_no_other_entity_due_at_the_time_of_the_death_the_world_awaits_the_stranger_at_once() {
+    // The striker strikes at speed 2, for 50. The victim, east of it, bumps
+    // into it for 100. After the fourth hit, at 150, the striker and the
+    // entry of the victim are both due at 200.
+    let seed = seed_of_hits(4);
+    let mut world = World::new(seed, Speed::new(2));
+    let striker = world.awaited();
+    let victim = world.create_entity(Speed::new(1), at(2, 1), Controller::Player);
+
+    play(
+        &mut world,
+        |world| {
+            if world.awaited() == striker {
+                Action::Attack(Direction::East)
+            } else {
+                Action::Move(Direction::West)
+            }
+        },
+        |world| deaths(world).contains(&victim),
+    );
+    assert_eq!(
+        world.perceived_changes().last(),
+        Some(&change(150, victim, ChangeKind::Death))
+    );
+
+    // D9, R2: the stranger is due at the time of the death, before both.
+    let stranger = stranger_after(&world, victim);
+    assert_eq!((world.awaited(), world.clock()), (stranger, Time::new(150)));
+}
+
+#[test]
+fn a_stranger_has_the_speed_of_a_character_whatever_the_speed_of_the_dead_or_the_striker() {
+    // The victim and the striker both have speed 2.
+    let seed = seed_of_hits(4);
+    let mut world = World::new(seed, Speed::new(2));
+    let victim = world.awaited();
+    let striker = world.create_entity(Speed::new(2), at(2, 1), Controller::Player);
+
+    strike_to_death(&mut world, striker, Direction::West, victim);
+    let stranger = stranger_after(&world, victim);
+    play(
+        &mut world,
+        |_| Action::Wait,
+        |world| world.awaited() == stranger,
+    );
+
+    // D6, R6: at speed 1, the wait of the stranger costs 50.
+    let wait = world
+        .offers()
+        .into_iter()
+        .find(|offer| offer.action == Action::Wait)
+        .map(|offer| offer.cost);
+    assert_eq!(wait, Some(ActionCost::new(50)));
+}
+
 /// Six characters and three creatures, each creature walled in by
 /// characters, walls and R11: a creature can only wait. The victim, on
 /// the start tile, stands west of the striker. A third character stands
@@ -535,7 +591,104 @@ fn the_stranger_takes_the_nearest_free_floor_tile_in_row_order() {
         let stranger = stranger_after(&world, victim);
         let expected = [at(2, 1), at(1, 2), at(2, 2), at(3, 1)][held];
         assert_eq!(world.position(stranger), expected, "{held} held");
+        // D2: the corpse lies where the victim died, not where its stranger
+        // arrives.
+        assert_eq!(
+            perception::snapshot(&world, striker).corpses,
+            [corpse(Died::Character, victim, at(4, 4))],
+            "{held} held"
+        );
     }
+}
+
+/// D8: the dead character holds no tile, so its own tile may be the
+/// nearest free one.
+#[test]
+fn the_stranger_takes_the_tile_of_the_death_when_it_is_the_nearest_free_one() {
+    // The first character holds the start tile. The victim stands east of
+    // it, the first tile one move away in row order, and is struck from
+    // the east.
+    let mut world = World::new(seed_of_hits(4), Speed::new(1));
+    let victim = world.create_entity(Speed::new(1), at(2, 1), Controller::Player);
+    let striker = world.create_entity(Speed::new(1), at(3, 1), Controller::Player);
+
+    strike_to_death(&mut world, striker, Direction::West, victim);
+
+    let stranger = stranger_after(&world, victim);
+    assert_eq!(world.position(stranger), at(2, 1));
+}
+
+/// D8: the search starts from the tile where the first character started,
+/// not from where it stands.
+#[test]
+fn the_stranger_arrives_on_the_start_tile_after_the_first_character_walked_away() {
+    // From (3, 1), the first free tile one move away in row order would be
+    // (2, 1).
+    let away = at(3, 1);
+    let mut world = World::new(seed_of_hits(4), Speed::new(1));
+    let first = world.awaited();
+    let victim = world.create_entity(Speed::new(1), at(4, 4), Controller::Player);
+    let striker = world.create_entity(Speed::new(1), at(4, 3), Controller::Player);
+
+    play(
+        &mut world,
+        |world| match world.awaited() {
+            awaited if awaited == first && world.position(first) != away => {
+                Action::Move(Direction::East)
+            }
+            awaited if awaited == striker => Action::Attack(Direction::South),
+            _ => Action::Wait,
+        },
+        |world| deaths(world).contains(&victim),
+    );
+
+    assert_eq!(world.position(first), away);
+    let stranger = stranger_after(&world, victim);
+    assert_eq!(world.position(stranger), START);
+}
+
+/// R4, R11, D8: the tiles rank by the count of moves, not by the distance
+/// in a straight line.
+#[test]
+fn the_stranger_takes_the_tile_fewest_moves_away_not_the_nearest_in_a_straight_line() {
+    // With the first character, characters hold every floor tile within 5
+    // moves of the start tile.
+    let within_five_moves = [
+        at(2, 1),
+        at(3, 1),
+        at(4, 1),
+        at(5, 1),
+        at(6, 1),
+        at(1, 2),
+        at(2, 2),
+        at(3, 2),
+        at(4, 2),
+        at(1, 3),
+        at(2, 3),
+        at(3, 3),
+        at(4, 3),
+        at(5, 3),
+        at(1, 4),
+        at(2, 4),
+        at(3, 4),
+        at(4, 4),
+        at(5, 4),
+        at(6, 4),
+    ];
+    let mut world = World::new(seed_of_hits(4), Speed::new(1));
+    for tile in within_five_moves {
+        world.create_entity(Speed::new(1), tile, Controller::Player);
+    }
+    let striker = world.create_entity(Speed::new(1), at(7, 2), Controller::Player);
+    let victim = world.create_entity(Speed::new(1), at(7, 3), Controller::Player);
+
+    strike_to_death(&mut world, striker, Direction::South, victim);
+
+    // (6, 2) is the nearest free tile in a straight line. R11 forbids the
+    // diagonal past the wall at (5, 2), so it is 6 moves away, as (7, 1)
+    // is, and (7, 1) comes first in row order.
+    let stranger = stranger_after(&world, victim);
+    assert_eq!(world.position(stranger), at(7, 1));
 }
 
 #[test]
