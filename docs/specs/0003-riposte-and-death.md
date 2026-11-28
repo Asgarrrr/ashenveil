@@ -410,7 +410,7 @@ verify` runs it.
   - `cargo xtask accept web_model` — after the death of its character,
     the model shows the stranger, controls it and keeps the log.
 
-### - [ ] S5 — A struck character perceives its own hit points
+### - [x] S5 — A struck character perceives its own hit points
 
 - Files: `crates/ash-sim/src/{combat,perception,world}.rs`,
   `crates/ash-sim/tests/own_hit_points.rs` (new),
@@ -662,3 +662,57 @@ Choices behind the rows:
   batch adds a test for each, and one for the changes of each stranger in
   a chain of two deaths. The test of the fifth fails by the read timeout
   of its helper, not by a comparison: with the bug, no turn ever comes.
+- 2026-11-28, recorded (found in S5): the file list of S5 misses fifteen
+  files. Eight match every kind of perceived change and gain the hit
+  points: `crates/ash-sim/tests/{attack,creature,hostility}.rs`,
+  `crates/ash-server/tests/{attack,creature,death,hostility}_over_websocket.rs`
+  and `crates/ash-server/tests/websocket/change.rs`.
+  `crates/ash-sim/tests/{death,condition,character_death}.rs` compare
+  whole lists, which gain the hit points after each hit a character
+  survives. `crates/ash-server/tests/condition_over_websocket.rs` counts a
+  change of hit points as giving hit points to its entity.
+  `crates/ash-server/tests/character_death_over_websocket.rs` compares
+  with the changes of its controller, as "Simplest alternative" asks.
+  `crates/ash-sim/tests/stranger.rs` compares its bounds without the hit
+  points and the conditions. `web/tests/fixtures/stranger.json` is
+  recorded again: the conditions of the first character became its hit
+  points.
+- 2026-11-28, recorded (found in S5): `World::perceived_changes_of`
+  filters, so it returns an owned list and no longer a slice of the list
+  of the world. The server reads it twice per command, for each character
+  of the chain of its controller. The cost grows with the list of the
+  world. S5 has no perf budget and three entities act.
+- 2026-11-28, recorded (found in S5, review): the S4 line on
+  `World::perceived_changes_of` and the id of a creature is out of date.
+  For a creature it now answers the changes of the world up to its death,
+  without its own conditions and without any hit points. No caller passes
+  one, and the answer still has no source.
+- 2026-11-28, recorded (found in S5): "malformed hit points" has no
+  definition. S5 reads it as the S2 line does: malformed, not impossible.
+  The decoder rejects hit points cut short at each length and bytes after
+  them. It accepts a current number above the maximum, and a zero of
+  either, as the decoder of the snapshot already does.
+- 2026-11-28, recorded (found in S5): the glossary proposals have no row
+  for the new kind of perceived change. Its code name is
+  `ChangeKind::HitPoints`, after the term "hit points".
+- 2026-11-28, recorded (found in S5, review): the order "hit points
+  before the change of condition" (A11) is pinned on the list of the
+  world alone. No character perceives both kinds for one entity, so no
+  message can show the order.
+- 2026-11-28, recorded (found in S5, bug injection): no test world has a
+  third character, and no creature strikes before S6. "Every other
+  character perceives its change of condition" (A10) is pinned for the
+  striker alone, never for a witness.
+- 2026-11-28, recorded (found in S5): one comment of the unit tests of
+  `crates/ash-server/src/perception.rs` says no hosted world strikes its
+  character. The test entry of S4 does, and S6 makes it false for every
+  hosted world. S6 rewrites it.
+- 2026-11-28, recorded (found in S5, review and bug injection): three
+  bugs passed the S5 tests, of 65 injected. A decoder read the unknown
+  tag 6 as hit points: no test tried a rest of 8 bytes. The log line of
+  the hit points named the controlled character, so a stranger showed the
+  hit points of the dead character. The web model wrote the hit points to
+  the controlled character, whatever entity the change named. The review
+  found a fourth gap: a helper of `stranger.rs` restated the rule of
+  perception, so no explicit list held a struck stranger. A fix batch
+  adds a test for each, each red on its bug.
