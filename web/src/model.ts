@@ -140,6 +140,12 @@ export class PerceivedWorld {
       return;
     }
     if (change.kind === "hit_points") {
+      // A9: the hit left the character with these hit points. Only its own
+      // controller receives them, so the character never shows a condition.
+      if (perceived !== undefined) {
+        const { current, max } = change;
+        this.entities.set(entity, { ...perceived, health: { kind: "hit_points", current, max } });
+      }
       return;
     }
     if (change.kind === "disposition") {
