@@ -255,3 +255,88 @@ fn two_deaths_on_one_tile_leave_two_corpses_in_the_order_of_the_deaths() {
 
     assert_replays(&world, || passage(SEED).world, watcher);
 }
+
+/// The first creature stands in the corner at (7, 4), the second at (5, 3),
+/// north and west of it: the order of the deaths is not the order of the
+/// tiles. Walls, R11 and waiting characters leave each creature no move. A
+/// striking character stands north of the first, another west of the second.
+struct Corners {
+    world: World,
+    watcher: EntityId,
+    first_striker: EntityId,
+    second_striker: EntityId,
+    first: EntityId,
+    second: EntityId,
+}
+
+fn corners(seed: u64) -> Corners {
+    let mut world = World::new(seed, Speed::new(1));
+    let watcher = world.awaited();
+    // Created first, the second creature to die has the lower id.
+    let second = world.create_entity(
+        Speed::new(2),
+        at(5, 3),
+        Controller::Wander(Disposition::Neutral),
+    );
+    let second_striker = world.create_entity(Speed::new(1), at(4, 3), Controller::Player);
+    world.create_entity(Speed::new(1), at(4, 4), Controller::Player);
+    world.create_entity(Speed::new(1), at(5, 4), Controller::Player);
+    world.create_entity(Speed::new(1), at(6, 4), Controller::Player);
+    let first_striker = world.create_entity(Speed::new(1), at(7, 3), Controller::Player);
+    let first = world.create_entity(
+        Speed::new(2),
+        at(7, 4),
+        Controller::Wander(Disposition::Hostile),
+    );
+    Corners {
+        world,
+        watcher,
+        first_striker,
+        second_striker,
+        first,
+        second,
+    }
+}
+
+#[test]
+fn two_deaths_on_two_tiles_leave_their_corpses_in_the_order_of_the_deaths() {
+    let Corners {
+        mut world,
+        watcher,
+        first_striker,
+        second_striker,
+        first,
+        second,
+    } = corners(SEED);
+
+    // One striker strikes south until the first creature dies, then the
+    // other strikes east until the second dies. Every other character waits.
+    for _ in 0..MOST_TURNS {
+        let died = deaths(&world).len();
+        if died == 2 {
+            break;
+        }
+        let awaited = world.awaited();
+        let action = if died == 0 && awaited == first_striker {
+            Action::Attack(Direction::South)
+        } else if died == 1 && awaited == second_striker {
+            Action::Attack(Direction::East)
+        } else {
+            Action::Wait
+        };
+        assert_eq!(world.submit(action), Ok(()), "{action:?}");
+    }
+    assert_eq!(deaths(&world), [first, second]);
+
+    // D2, D4: each corpse on the tile of its death, in the order of the
+    // deaths.
+    assert_eq!(
+        corpses(&world, watcher),
+        [
+            creature_corpse(first, at(7, 4)),
+            creature_corpse(second, at(5, 3)),
+        ]
+    );
+
+    assert_replays(&world, || corners(SEED).world, watcher);
+}

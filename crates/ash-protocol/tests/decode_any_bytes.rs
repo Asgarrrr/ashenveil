@@ -415,6 +415,14 @@ fn a_malformed_corpse_is_refused() {
                 "a corpse of {rest:?} decodes"
             );
         }
+        // Only tag 1 is followed by the dead entity.
+        for died in [0, 1] {
+            let rest = [died, tag, 7, 0, 0, 0];
+            assert!(
+                ServerMessage::decode(&corpse_snapshot_bytes(&rest)).is_err(),
+                "a corpse of {rest:?} decodes"
+            );
+        }
     }
     let refused = [
         ("a corpse with nothing after its tile", &[][..]),
