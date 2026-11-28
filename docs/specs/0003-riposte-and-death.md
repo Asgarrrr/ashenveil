@@ -319,7 +319,7 @@ verify` runs it.
   - A unit test pins a distance that R11 lengthens: (6, 2) is six moves
     from (1, 1), not five.
 
-### - [ ] S4 — The controller follows the stranger, which knows nothing of the past
+### - [x] S4 — The controller follows the stranger, which knows nothing of the past
 
 - Files: `crates/ash-sim/src/{world,death,effect,perception}.rs`,
   `crates/ash-sim/tests/stranger.rs` (new),
@@ -628,3 +628,37 @@ Choices behind the rows:
   `crates/ash-sim/src/perception.rs` says no character can arrive after a
   death. A stranger now can, and it still recognizes every corpse. S4
   rewrites that code and the comment with it.
+- 2026-11-28, recorded (found in S4): the file list of S4 misses eleven
+  test files. Nine match every kind of perceived change and gain the
+  arrival: those of the S2 line above.
+  `crates/ash-sim/tests/character_death.rs` compares whole lists: each
+  list of S3 that ends at the death of a character now ends at the
+  arrival. `crates/ash-server/tests/web_fixtures.rs` records the new
+  fixture `stranger.json`.
+- 2026-11-28, recorded (found in S4, review and bug injection): no test
+  of S4 can tell the changes of a controller from the list of the world.
+  The first character perceives from the first change, and each arrival
+  follows its death at once. A server that reads the list of the world,
+  or counts `received` on it, passes every test. The code reads the
+  per-character changes alone. The last line of
+  `own_hit_points_over_websocket` in S5 is the first test that tells them
+  apart.
+- 2026-11-28, recorded (found in S4, review): the test entry has no rule
+  for the death of its second character. Its stranger has no connection,
+  the server does not drive it, and the world awaits it without end. No
+  acceptance line of S4 or S5 kills the second character.
+- 2026-11-28, recorded (found in S4, review): the "later changes" of the
+  lethal reply have no test. On the test entry the world awaits the
+  stranger at once (D9), so no change comes between the arrival and the
+  snapshot.
+- 2026-11-28, recorded (found in S4, review): `World::perceived_changes_of`
+  has no stated answer for the id of a creature. It answers the changes of
+  the world up to the death of that creature. No caller passes one.
+- 2026-11-28, recorded (found in S4, bug injection): five bugs passed the
+  S4 tests. In every test the stranger arrived on the tile of the death
+  or on (1, 1), so four bugs put the arrival on a wrong tile unseen: in
+  `apply`, in the server mapping, and twice in the web model. The fifth
+  made the second character of the test entry act once per command. A fix
+  batch adds a test for each, and one for the changes of each stranger in
+  a chain of two deaths. The test of the fifth fails by the read timeout
+  of its helper, not by a comparison: with the bug, no turn ever comes.
