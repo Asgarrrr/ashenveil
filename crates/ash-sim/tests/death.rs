@@ -629,11 +629,19 @@ fn a_character_survives_three_hits() {
 }
 
 #[test]
-#[should_panic(expected = "reaches zero hit points")]
-fn the_fourth_hit_on_a_character_is_a_violated_invariant() {
-    // Spec 0002, Multiplayer impact: the death of a character is out of
-    // scope, so the hit that would kill one crashes its world.
-    let _ = strike_a_character(SEED, 4);
+fn the_fourth_hit_on_a_character_kills_it_and_a_stranger_follows_it() {
+    // A6, A7: 10 hit points, less 3 at each hit. Spec 0003, S3: a character
+    // dies under the rule of a creature (D1), and a stranger follows it (D6).
+    for seed in 0..8 {
+        let (world, target) = strike_a_character(seed, 4);
+        assert_eq!(deaths(&world), [target], "seed {seed}");
+        assert_eq!(standing(&world, target), None, "seed {seed}");
+        let stranger = world.stranger_of(target);
+        assert!(
+            stranger.is_some_and(|stranger| stranger != target),
+            "seed {seed}: {stranger:?}"
+        );
+    }
 }
 
 #[test]

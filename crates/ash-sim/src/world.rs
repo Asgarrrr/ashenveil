@@ -18,8 +18,8 @@ use crate::scheduler::Scheduler;
 use crate::wander;
 
 /// Where the character stands when the world begins: a floor tile of the
-/// fixed map.
-const CHARACTER_START: TilePosition = TilePosition { x: 1, y: 1, z: 0 };
+/// fixed map. The first character of every world starts there (D8).
+pub(crate) const CHARACTER_START: TilePosition = TilePosition { x: 1, y: 1, z: 0 };
 
 /// Where the hostile creature stands when the world begins: a floor tile of
 /// the fixed map, across the room from the character.
@@ -64,6 +64,8 @@ pub struct World {
     /// 5). It is the count of the earlier corpses: an effect that removes a
     /// corpse needs a saved counter of deaths first.
     corpses: Vec<(u64, Corpse)>,
+    /// F6, D6: the stranger of each dead character, as (dead, stranger).
+    strangers: Vec<(EntityId, EntityId)>,
     perceived_changes: Vec<PerceivedChange>,
     command_log: Vec<Action>,
 }
@@ -79,6 +81,7 @@ impl World {
             scheduler: Scheduler::default(),
             rng: Rng::new(seed),
             corpses: Vec::new(),
+            strangers: Vec::new(),
             perceived_changes: Vec::new(),
             command_log: Vec::new(),
         };
@@ -197,6 +200,19 @@ impl World {
         self.entity(entity).position
     }
 
+    /// D6, F3: the stranger that follows `entity`, a dead character. `None`
+    /// for an entity that lives, and for a dead creature. An id this world
+    /// never issued crashes through `invariant!`.
+    pub fn stranger_of(&self, entity: EntityId) -> Option<EntityId> {
+        if !self.ids.has_issued(entity) {
+            ash_core::invariant!("this world never issued {entity:?}");
+        }
+        self.strangers
+            .iter()
+            .find(|&&(dead, _)| dead == entity)
+            .map(|&(_, stranger)| stranger)
+    }
+
     /// The awaited character takes `action`, then time runs to the next
     /// character that awaits a player connection. A refused move or attack
     /// changes nothing (R10, R11, A3).
@@ -299,21 +315,42 @@ impl World {
                     health,
                 } => {
                     let id = self.ids.issue();
-                    self.entities.push(Entity {
+                    self.embody(Entity {
                         id,
                         speed,
                         position,
                         controller,
                         health,
                     });
-                    // The first entity has no turn to join: the world
-                    // begins at time zero.
-                    let now = self.scheduler.head().map_or(Time::ZERO, |(due, _)| due);
-                    self.scheduler.schedule(id, now);
+                }
+                Effect::CreateStranger {
+                    dead,
+                    speed,
+                    position,
+                    health,
+                } => {
+                    let id = self.ids.issue();
+                    self.embody(Entity {
+                        id,
+                        speed,
+                        position,
+                        controller: Controller::Player,
+                        health,
+                    });
+                    self.strangers.push((dead, id));
                 }
             }
         }
         self.rng = effects.rng_after;
+    }
+
+    /// Embodies `entity`, due now, after every entity already due then (R8).
+    fn embody(&mut self, entity: Entity) {
+        // The first entity has no turn to join: the world begins at time
+        // zero.
+        let now = self.scheduler.head().map_or(Time::ZERO, |(due, _)| due);
+        self.scheduler.schedule(entity.id, now);
+        self.entities.push(entity);
     }
 
     /// The scheduler's next entry: the time of the turn being played, and
@@ -612,6 +649,10 @@ mod tests {
                 },
             ]
         );
+        // D6: a dead creature has no stranger.
+        let embodied: Vec<EntityId> = world.entities().collect();
+        assert_eq!(embodied, [attacker]);
+        assert_eq!(world.awaited(), attacker);
     }
 
     /// F4: `apply` writes the health a damage carries, as carried, and
@@ -647,6 +688,15 @@ mod tests {
         // nearest id it never issued.
         let world = World::new(0, Speed::new(1));
         let _ = world.lookup(EntityId::new(1));
+    }
+
+    /// F3: `stranger_of` answers for an id the world issued, never with a
+    /// bare absence for another.
+    #[test]
+    #[should_panic(expected = "this world never issued")]
+    fn the_stranger_of_an_id_the_world_never_issued_crashes_as_never_issued() {
+        let world = World::new(0, Speed::new(1));
+        let _ = world.stranger_of(EntityId::new(1));
     }
 
     /// F3: a write names which of the two failures it met.

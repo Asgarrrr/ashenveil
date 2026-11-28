@@ -134,6 +134,7 @@ Today's fields (`crates/ash-sim/src/world.rs`):
 | Id counter | saved |
 | RNG state | saved |
 | Corpses, each with its rank among the deaths | saved |
+| Stranger of each dead character | saved |
 | Clock | derivable |
 | Map | saved, or derivable from seed and content once world generation exists |
 | Indexes | derivable |
@@ -146,6 +147,9 @@ derivable, not saved. The world derives both from the scheduler head.
 2026-11-28, spec 0003 S1: the corpses are saved (D12). The rank of a
 corpse is the explicit key of the order of the deaths (ADR 0001, point
 5).
+
+2026-11-28, spec 0003 S3: the stranger of each dead character is saved
+(D6). The seed and the command log replay it: it is no replay input.
 
 - A test restores a world while it awaits a controller. The next offers
   and the order of perceived changes must match the original run (R19).
