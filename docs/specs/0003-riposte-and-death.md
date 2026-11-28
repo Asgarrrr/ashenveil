@@ -678,10 +678,12 @@ Choices behind the rows:
   recorded again: the conditions of the first character became its hit
   points.
 - 2026-11-28, recorded (found in S5): `World::perceived_changes_of`
-  filters, so it returns an owned list and no longer a slice of the list
-  of the world. The server reads it twice per command, for each character
-  of the chain of its controller. The cost grows with the list of the
-  world. S5 has no perf budget and three entities act.
+  filters, so it returns an iterator over the list of the world and no
+  longer a slice of it. It copies nothing. The server still walks every
+  change of its controller twice per command, once only to count them: a
+  pattern of S4. The cost of a command grows with the list of the world.
+  S5 has no perf budget and three entities act. Issue #61 holds the
+  question.
 - 2026-11-28, recorded (found in S5, review): the S4 line on
   `World::perceived_changes_of` and the id of a creature is out of date.
   For a creature it now answers the changes of the world up to its death,
