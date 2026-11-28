@@ -411,8 +411,8 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         );
 
         // Nothing drew either: the strike of the third character, on the
-        // second, takes the third draw of the seed. A hit wounds the second
-        // character (A10).
+        // second, takes the third draw of the seed. A hit leaves the second
+        // character 7 of its 10 hit points (A9), and wounded (A10).
         assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
         let mut draws = strikes(seed).skip(2);
         let (third_draw, fourth_draw) = (draws.next(), draws.next());
@@ -422,7 +422,18 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
             kind: ChangeKind::Act(outcome),
         };
         let strike = if third_draw == Some(true) {
-            vec![struck(Outcome::Hit(cast.second)), wounded(cast.second)]
+            vec![
+                struck(Outcome::Hit(cast.second)),
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: cast.second,
+                    kind: ChangeKind::HitPoints {
+                        current: 7,
+                        max: 10,
+                    },
+                },
+                wounded(cast.second),
+            ]
         } else {
             vec![struck(Outcome::Missed(cast.second))]
         };

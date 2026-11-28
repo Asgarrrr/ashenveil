@@ -40,6 +40,25 @@ fn deaths(world: &World) -> Vec<EntityId> {
         .collect()
 }
 
+/// A9, R18: of `changes`, those that `character` perceives while it lives:
+/// all but the hit points of another and its own condition. The test
+/// `own_hit_points` pins this rule on whole lists; here it only keeps the
+/// bounds of each list in view.
+fn seen_by(character: EntityId, changes: &[PerceivedChange]) -> Vec<PerceivedChange> {
+    changes
+        .iter()
+        .filter(|change| match change.kind {
+            ChangeKind::HitPoints { .. } => change.entity == character,
+            ChangeKind::Condition(_) => change.entity != character,
+            ChangeKind::Act(_)
+            | ChangeKind::Death
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => true,
+        })
+        .copied()
+        .collect()
+}
+
 /// D6: the stranger that follows the dead character `dead`.
 fn stranger_after(world: &World, dead: EntityId) -> EntityId {
     let stranger = world.stranger_of(dead);
@@ -125,8 +144,11 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
     // The striker perceives all three.
     let arrival = all[death + 1];
     assert_eq!(world.perceived_changes_of(stranger), [arrival]);
-    assert_eq!(world.perceived_changes_of(victim), &all[..=death]);
-    assert_eq!(world.perceived_changes_of(striker), &all[..]);
+    assert_eq!(
+        world.perceived_changes_of(victim),
+        seen_by(victim, &all[..=death])
+    );
+    assert_eq!(world.perceived_changes_of(striker), seen_by(striker, &all));
 
     // Time goes on: the stranger and the striker perceive what follows, the
     // dead character nothing more. R6, R8: the stranger waits for 50 at the
@@ -153,10 +175,13 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
         world.perceived_changes_of(stranger),
         [&[arrival][..], &later].concat()
     );
-    assert_eq!(world.perceived_changes_of(victim), &all[..=death]);
+    assert_eq!(
+        world.perceived_changes_of(victim),
+        seen_by(victim, &all[..=death])
+    );
     assert_eq!(
         world.perceived_changes_of(striker),
-        world.perceived_changes()
+        seen_by(striker, world.perceived_changes())
     );
 }
 
@@ -236,13 +261,19 @@ fn each_stranger_of_a_chain_perceives_from_its_own_arrival_to_its_own_death() {
         [victim_died + 1, first_died + 1]
     );
 
-    assert_eq!(world.perceived_changes_of(victim), &all[..=victim_died]);
+    assert_eq!(
+        world.perceived_changes_of(victim),
+        seen_by(victim, &all[..=victim_died])
+    );
     assert_eq!(
         world.perceived_changes_of(first),
-        &all[first_arrived..=first_died]
+        seen_by(first, &all[first_arrived..=first_died])
     );
-    assert_eq!(world.perceived_changes_of(second), &all[second_arrived..]);
-    assert_eq!(world.perceived_changes_of(striker), &all[..]);
+    assert_eq!(
+        world.perceived_changes_of(second),
+        seen_by(second, &all[second_arrived..])
+    );
+    assert_eq!(world.perceived_changes_of(striker), seen_by(striker, &all));
 }
 
 /// The cast of a world where two creatures die around the death of a

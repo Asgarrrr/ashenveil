@@ -235,7 +235,8 @@ impl World {
 
     /// D5, D11: the changes `character` perceives, in order, from its
     /// creation or its arrival to its own death. Under whole-map perception
-    /// (R16), it perceives every change in between.
+    /// (R16), it perceives every change in between but two kinds: the hit
+    /// points of another entity (R18) and its own condition (A9).
     /// A character that no death created perceives from the first change of
     /// its world. An id this world never issued crashes through
     /// `invariant!`.
@@ -252,10 +253,19 @@ impl World {
         // Only a stranger has an arrival (D10).
         let since = self.perceived_changes.iter().position(arrived).unwrap_or(0);
         let from_arrival = &self.perceived_changes[since..];
-        match from_arrival.iter().position(died) {
-            Some(death) => from_arrival[..=death].to_vec(),
-            None => from_arrival.to_vec(),
-        }
+        let lived = match from_arrival.iter().position(died) {
+            Some(death) => &from_arrival[..=death],
+            None => from_arrival,
+        };
+        let perceives = |change: &&PerceivedChange| match change.kind {
+            ChangeKind::HitPoints { .. } => change.entity == character,
+            ChangeKind::Condition(_) => change.entity != character,
+            ChangeKind::Act(_)
+            | ChangeKind::Death
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => true,
+        };
+        lived.iter().filter(perceives).copied().collect()
     }
 
     /// D6: the dead character `stranger` follows. `None` for a character
@@ -563,7 +573,8 @@ mod tests {
 
     /// A11: a hit is followed by a change of condition only when it crosses
     /// a threshold of A10. Of 20 hit points, half is 10 and a quarter is 5;
-    /// a hit removes 3 (A6).
+    /// a hit removes 3 (A6). The struck character perceives its hit points
+    /// first (A9).
     #[test]
     fn a_hit_changes_the_condition_only_when_it_crosses_a_threshold() {
         let hits = [
@@ -597,11 +608,21 @@ mod tests {
 
             assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
 
-            let mut expected = alloc::vec![PerceivedChange {
-                time: Time::ZERO,
-                entity: attacker,
-                kind: ChangeKind::Act(Outcome::Hit(target)),
-            }];
+            let mut expected = alloc::vec![
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: attacker,
+                    kind: ChangeKind::Act(Outcome::Hit(target)),
+                },
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: target,
+                    kind: ChangeKind::HitPoints {
+                        current: current - 3,
+                        max: 20,
+                    },
+                },
+            ];
             expected.extend(crossed.map(|condition| PerceivedChange {
                 time: Time::ZERO,
                 entity: target,
@@ -686,6 +707,11 @@ mod tests {
                     time: Time::ZERO,
                     entity: attacker,
                     kind: ChangeKind::Act(Outcome::Hit(target)),
+                },
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: target,
+                    kind: ChangeKind::HitPoints { current: 1, max: 4 },
                 },
                 PerceivedChange {
                     time: Time::ZERO,

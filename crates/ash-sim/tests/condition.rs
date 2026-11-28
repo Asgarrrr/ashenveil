@@ -265,15 +265,25 @@ fn each_hit_on_a_character_shows_its_next_condition_to_the_other_and_its_hit_poi
                 assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
                 let changes = &world.perceived_changes()[seen..];
                 if is_hit(changes[0], attacker, target) {
-                    // A11: the hit, then the change of condition, at the
-                    // same time.
+                    // A11: the hit, then the hit points of the target, then
+                    // the change of condition, at the same time.
                     assert_eq!(
                         changes[1..],
-                        [PerceivedChange {
-                            time,
-                            entity: target,
-                            kind: ChangeKind::Condition(condition),
-                        }],
+                        [
+                            PerceivedChange {
+                                time,
+                                entity: target,
+                                kind: ChangeKind::HitPoints {
+                                    current: left,
+                                    max: 10,
+                                },
+                            },
+                            PerceivedChange {
+                                time,
+                                entity: target,
+                                kind: ChangeKind::Condition(condition),
+                            },
+                        ],
                         "seed {seed}, {left} hit points left"
                     );
                     break time;

@@ -218,7 +218,7 @@ pub mod tests {
                     assert_eq!(world.submit(Action::Wait), Ok(()));
                     continue;
                 }
-                let (time, seen) = (world.clock(), world.perceived_changes().len());
+                let (time, seen) = (world.clock(), changes_since(&world, attacker, 0).count());
                 assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
                 if let [_, ServerMessage::Perceived(change)] =
                     changes_since(&world, attacker, seen).collect::<Vec<_>>()[..]
