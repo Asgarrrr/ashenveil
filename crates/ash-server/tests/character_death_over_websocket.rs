@@ -325,6 +325,33 @@ fn the_reply_to_the_lethal_command_holds_the_death_the_arrival_and_the_stranger(
     assert_eq!(moved, expected);
 }
 
+/// The test entry: the server makes the second character act on every turn
+/// the world awaits it, however many come in a row, before it answers.
+#[test]
+fn the_striker_acts_on_every_turn_the_world_awaits_it() {
+    let address = start_server();
+    let (mut session, first) = open(address);
+    session.wait_until_dead(first);
+    let stranger = session.world.stranger_of(first).expect("a stranger");
+
+    // R6, R8: each move costs the stranger 100, each wait 50 to the second
+    // character. After the move west, the world awaits the second character
+    // twice in a row. The stranger walks a loop back to the start tile, and
+    // the second character strikes it there.
+    for direction in [
+        Direction::South,
+        Direction::East,
+        Direction::West,
+        Direction::North,
+    ] {
+        let seen = session.world.perceived_changes().len();
+        let moved = session.command(stranger, Action::Move(direction));
+        let mut expected = session.changes_since(seen);
+        expected.push(session.awaited(stranger));
+        assert_eq!(moved, expected, "{direction:?}");
+    }
+}
+
 #[test]
 fn a_command_for_the_dead_character_is_refused_and_every_count_resumes_through_two_deaths() {
     let address = start_server();

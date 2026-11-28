@@ -160,6 +160,91 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
     );
 }
 
+/// D10: the arrival names the tile the stranger takes (D8), not the tile
+/// where the dead character left its corpse.
+#[test]
+fn the_arrival_names_the_tile_of_the_stranger_not_of_the_death() {
+    // The first character holds the start tile. The victim dies far from
+    // it, south of the striker: the stranger takes (2, 1), the first free
+    // tile one move from the start tile.
+    let mut world = World::new(0, Speed::new(1));
+    let victim = world.create_entity(Speed::new(1), at(4, 4), Controller::Player);
+    let striker = world.create_entity(Speed::new(1), at(4, 3), Controller::Player);
+
+    strike_to_death(&mut world, striker, Direction::South, victim);
+
+    let stranger = stranger_after(&world, victim);
+    assert_eq!(world.position(stranger), at(2, 1));
+    let changes = world.perceived_changes();
+    let death = changes[changes.len() - 2];
+    assert_eq!(
+        changes[changes.len() - 2..],
+        [
+            PerceivedChange {
+                time: death.time,
+                entity: victim,
+                kind: ChangeKind::Death,
+            },
+            PerceivedChange {
+                time: death.time,
+                entity: stranger,
+                kind: ChangeKind::Arrival(at(2, 1)),
+            },
+        ]
+    );
+}
+
+/// D5, D11: in a chain of deaths, each stranger perceives from its own
+/// arrival, and a stranger that died perceives through its own death.
+#[test]
+fn each_stranger_of_a_chain_perceives_from_its_own_arrival_to_its_own_death() {
+    // The first character holds the start tile and strikes east: the
+    // victim, then each stranger, arrives on (2, 1) and dies there.
+    let mut world = World::new(0, Speed::new(1));
+    let striker = world.awaited();
+    let victim = world.create_entity(Speed::new(1), at(2, 1), Controller::Player);
+    strike_to_death(&mut world, striker, Direction::East, victim);
+    let first = stranger_after(&world, victim);
+    strike_to_death(&mut world, striker, Direction::East, first);
+    let second = stranger_after(&world, first);
+    assert_eq!(deaths(&world), [victim, first]);
+
+    // Time goes on until the changes since the second arrival outnumber
+    // those before it: a list that ran past the death of the first stranger
+    // then holds later changes, where a short world would end it.
+    let reached = world.perceived_changes().len();
+    play(
+        &mut world,
+        |_| Action::Wait,
+        |world| world.perceived_changes().len() >= 2 * reached,
+    );
+
+    let all = world.perceived_changes().to_vec();
+    let index_of = |entity, kind: fn(&ChangeKind) -> bool| {
+        all.iter()
+            .position(|change| change.entity == entity && kind(&change.kind))
+            .expect("the change happened")
+    };
+    let arrival = |kind: &ChangeKind| matches!(kind, ChangeKind::Arrival(_));
+    let death = |kind: &ChangeKind| *kind == ChangeKind::Death;
+    let victim_died = index_of(victim, death);
+    let first_arrived = index_of(first, arrival);
+    let first_died = index_of(first, death);
+    let second_arrived = index_of(second, arrival);
+    assert_eq!(
+        [first_arrived, second_arrived],
+        [victim_died + 1, first_died + 1]
+    );
+
+    assert_eq!(world.perceived_changes_of(victim), &all[..=victim_died]);
+    assert_eq!(
+        world.perceived_changes_of(first),
+        &all[first_arrived..=first_died]
+    );
+    assert_eq!(world.perceived_changes_of(second), &all[second_arrived..]);
+    assert_eq!(world.perceived_changes_of(striker), &all[..]);
+}
+
 /// The cast of a world where two creatures die around the death of a
 /// character. Each creature is walled in by characters, walls and R11, so
 /// it can only wait. The victim, on the start tile, stands west of its

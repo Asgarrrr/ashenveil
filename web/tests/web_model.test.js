@@ -910,6 +910,23 @@ test("the recorded death of the character hands the client its stranger", () => 
   );
 });
 
+test("an arrival puts the stranger on the tile it names", () => {
+  // D8, D10: entity 0 dies far from the tile its stranger, entity 2, takes.
+  // The tile is not symmetric, so its x and y cannot trade places unseen.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 4, 4, null)]));
+  world.apply(deathOf(0));
+  world.apply({
+    kind: "perceived",
+    change: { kind: "arrival", time: 0, entity: 2, position: { x: 2, y: 1, z: 0 } },
+  });
+
+  assert.deepEqual(positions(world), [[2, { x: 2, y: 1, z: 0 }]]);
+  // D2: the corpse lies where the character died, not where its stranger
+  // arrives.
+  assert.deepEqual(world.corpses, [corpse(4, 4, "character", 0)]);
+});
+
 test("an arrival decodes to the stranger and its tile", () => {
   // A change is tag 2, then kind 4 for an arrival, the time and the
   // entity, little-endian, then the tile: x, y and z.

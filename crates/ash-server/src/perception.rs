@@ -247,6 +247,42 @@ pub mod tests {
         }
     }
 
+    /// D10: the arrival reaches the wire on the tile of the stranger, x then
+    /// y. On the test entry the stranger always arrives on (1, 1), where no
+    /// swap shows. Here the first character, on the start tile, strikes the
+    /// victim east of it until it dies, and the stranger takes (2, 1).
+    #[test]
+    fn the_wire_arrival_names_the_tile_of_the_stranger() {
+        let mut world = World::new(0, Speed::new(1));
+        let striker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        let victim = world.create_entity(Speed::new(1), east, Controller::Player);
+
+        let mut turns = 0;
+        while world.stranger_of(victim).is_none() {
+            assert!(turns < STRIKE_TURNS, "no death in {STRIKE_TURNS} turns");
+            turns += 1;
+            let action = if world.awaited() == striker {
+                Action::Attack(Direction::East)
+            } else {
+                Action::Wait
+            };
+            assert_eq!(world.submit(action), Ok(()), "{action:?}");
+        }
+
+        let stranger = world.stranger_of(victim).expect("the loop ended on it");
+        assert_eq!(world.position(stranger), east);
+        let time = world.clock();
+        assert_eq!(
+            changes_since(&world, striker, 0).last(),
+            Some(ServerMessage::Perceived(PerceivedChange {
+                time,
+                entity: stranger,
+                kind: ChangeKind::Arrival(east),
+            }))
+        );
+    }
+
     /// D2: the corpses reach the wire in the order of the deaths. Walls, R11
     /// and waiting characters leave the creatures at (7, 4) and (5, 3) no
     /// move; a striker north of the first, then one west of the second,
