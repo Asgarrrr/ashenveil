@@ -64,11 +64,26 @@ pub fn awaited(world: &World, character: EntityId) -> Option<ServerMessage> {
     })
 }
 
-/// R17: the changes after the first `seen`, in the order they happened.
-pub fn changes_since(world: &World, seen: usize) -> impl Iterator<Item = ServerMessage> + '_ {
-    world
-        .perceived_changes()
-        .iter()
+/// D6: the character the controller of `first` drives now: `first`, or the
+/// last stranger that followed it.
+pub fn driven(world: &World, first: EntityId) -> EntityId {
+    let mut character = first;
+    while let Some(stranger) = world.stranger_of(character) {
+        character = stranger;
+    }
+    character
+}
+
+/// R17, D11: the changes the controller of `first` perceived after the
+/// first `seen`: those of each character it drove, in turn, in the order
+/// they happened.
+pub fn changes_since(
+    world: &World,
+    first: EntityId,
+    seen: usize,
+) -> impl Iterator<Item = ServerMessage> + '_ {
+    std::iter::successors(Some(first), |&character| world.stranger_of(character))
+        .flat_map(|character| world.perceived_changes_of(character))
         .skip(seen)
         .map(|&change| ServerMessage::Perceived(change_to_wire(change)))
 }
@@ -205,7 +220,7 @@ pub mod tests {
                 let (time, seen) = (world.clock(), world.perceived_changes().len());
                 assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
                 if let [_, ServerMessage::Perceived(change)] =
-                    changes_since(&world, seen).collect::<Vec<_>>()[..]
+                    changes_since(&world, attacker, seen).collect::<Vec<_>>()[..]
                 {
                     break (time, change);
                 }

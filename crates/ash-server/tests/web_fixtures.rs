@@ -12,7 +12,7 @@ use std::time::Duration;
 use ash_protocol::message::{Action, ClientMessage, Direction, ResumeToken, ServerMessage};
 use tungstenite::{Message, WebSocket};
 
-use Direction::{East, North, NorthWest, SouthEast, West};
+use Direction::{East, North, NorthWest, South, SouthEast, West};
 
 type Socket = WebSocket<TcpStream>;
 
@@ -20,6 +20,15 @@ fn start_server() -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
     let address = listener.local_addr().expect("a bound address");
     thread::spawn(move || ash_server::serve(listener));
+    address
+}
+
+/// A server whose world of `token` is that of the test entry: a second
+/// character, east of the client's, strikes it.
+fn start_struck_server(token: ResumeToken) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("a free local port");
+    let address = listener.local_addr().expect("a bound address");
+    thread::spawn(move || ash_server::serve_with_struck_character(listener, token));
     address
 }
 
@@ -52,12 +61,13 @@ fn receive(socket: &mut Socket) -> Vec<u8> {
     }
 }
 
-/// The greeting, then each of `commands` for the awaited entity with every
-/// message up to the turn or the refusal it causes.
+/// The greeting, then each of `commands` for the entity of the last turn
+/// with every message up to the turn or the refusal it causes. After a
+/// death, that turn is the stranger's (D6).
 fn record(socket: &mut Socket, commands: &[Action]) -> Vec<Vec<u8>> {
     let mut messages = vec![receive(socket)];
     let awaited = receive(socket);
-    let entity = match ServerMessage::decode(&awaited) {
+    let mut entity = match ServerMessage::decode(&awaited) {
         Ok(ServerMessage::Awaited { entity, .. }) => entity,
         other => panic!("expected the first turn, got {other:?}"),
     };
@@ -66,13 +76,15 @@ fn record(socket: &mut Socket, commands: &[Action]) -> Vec<Vec<u8>> {
         send(socket, ClientMessage::Command { entity, action });
         loop {
             let message = receive(socket);
-            let perceived = matches!(
-                ServerMessage::decode(&message),
-                Ok(ServerMessage::Perceived(_))
-            );
+            let decoded = ServerMessage::decode(&message);
             messages.push(message);
-            if !perceived {
-                break;
+            match decoded {
+                Ok(ServerMessage::Perceived(_) | ServerMessage::Snapshot(_)) => {}
+                Ok(ServerMessage::Awaited { entity: next, .. }) => {
+                    entity = next;
+                    break;
+                }
+                _ => break,
             }
         }
     }
@@ -173,4 +185,17 @@ fn the_death_fixture_is_what_the_server_sends() {
         ],
     );
     assert_eq!(hex(&messages), fixture("death.json"));
+}
+
+#[test]
+fn the_stranger_fixture_is_what_the_server_sends() {
+    const TOKEN: ResumeToken = ResumeToken(0x0003_0004);
+    // On this world, the fourth hit lands after the fourteenth wait.
+    const WAITS: usize = 14;
+    let address = start_struck_server(TOKEN);
+    let mut socket = connect(address, TOKEN);
+    let mut commands = vec![Action::Wait; WAITS];
+    commands.push(Action::Move(South));
+    let messages = record(&mut socket, &commands);
+    assert_eq!(hex(&messages), fixture("stranger.json"));
 }

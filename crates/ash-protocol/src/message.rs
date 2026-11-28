@@ -448,6 +448,7 @@ impl Wire for PerceivedChange {
                 Some(disposition) => ChangeKind::Disposition(disposition),
                 None => return Err(DecodeError),
             },
+            4 => ChangeKind::Arrival(TilePosition::read(input)?),
             _ => return Err(DecodeError),
         };
         Ok(Self { time, entity, kind })

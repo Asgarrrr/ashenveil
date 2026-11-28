@@ -111,6 +111,11 @@ export class PerceivedWorld {
 
   private perceive(change: PerceivedChange): void {
     if (change.kind === "arrival") {
+      // D6, D10: a stranger is a character, with all of its hit points. The
+      // snapshot of its controller's own stranger follows its arrival.
+      const { entity, position } = change;
+      const health = { kind: "condition", condition: "unhurt" } as const;
+      this.entities.set(entity, { entity, position, disposition: null, health });
       return;
     }
     if (change.kind === "death") {

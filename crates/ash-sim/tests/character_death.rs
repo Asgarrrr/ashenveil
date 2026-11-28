@@ -275,7 +275,7 @@ fn an_entity_due_at_the_time_of_the_death_acts_before_the_stranger() {
         [
             change(150, striker, ChangeKind::Act(Outcome::Hit(victim))),
             change(150, victim, ChangeKind::Death),
-            change(150, stranger, ChangeKind::Arrival(START)),
+            change(150, stranger, ChangeKind::Arrival(at(2, 1))),
         ]
     );
     assert!(
@@ -330,7 +330,7 @@ fn with_no_other_entity_due_at_the_time_of_the_death_the_world_awaits_the_strang
         changes[changes.len() - 2..],
         [
             change(150, victim, ChangeKind::Death),
-            change(150, stranger, ChangeKind::Arrival(START)),
+            change(150, stranger, ChangeKind::Arrival(at(2, 1))),
         ]
     );
 

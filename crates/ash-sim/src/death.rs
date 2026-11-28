@@ -58,9 +58,11 @@ pub(crate) fn effects(world: &World, entity: EntityId) -> Vec<Effect> {
         }),
     ];
     if died == Died::Character {
-        // D6, A7: a new character, with all of its hit points.
+        // D6, A7: a new character, with all of its hit points. D7: it
+        // arrives at the time of the death.
         effects.push(Effect::CreateStranger {
             dead: entity,
+            time: world.clock(),
             speed: Speed::new(CHARACTER_SPEED),
             position: arrival(world, entity),
             health: Health::full(Controller::Player),

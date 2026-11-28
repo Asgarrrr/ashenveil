@@ -48,8 +48,7 @@ pub fn serve_with_fault(listener: TcpListener, token: ResumeToken) {
 /// it, and no message can.
 #[doc(hidden)]
 pub fn serve_with_struck_character(listener: TcpListener, token: ResumeToken) {
-    let _ = token;
-    serve_registry(listener, Registry::default());
+    serve_registry(listener, Registry::with_struck_character(token));
 }
 
 fn serve_registry(listener: TcpListener, registry: Registry) {

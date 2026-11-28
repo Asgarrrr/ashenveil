@@ -176,18 +176,35 @@ pub fn snapshot(world: &World, character: EntityId) -> Snapshot {
                 },
             })
             .collect(),
-        // D4: until a character can arrive after a death (spec 0003, S4),
-        // every character perceived every dead entity alive.
-        corpses: world
-            .corpses()
-            .into_iter()
-            .map(|corpse| PerceivedCorpse {
-                position: corpse.position,
-                died: corpse.died,
-                entity: Some(corpse.entity),
-            })
-            .collect(),
+        corpses: perceived_corpses(world, character),
     }
+}
+
+/// D4, R16: every corpse, in the order of the deaths, as `character`
+/// perceives it. It recognizes the corpse of an entity it perceived alive:
+/// one that died after its creation or its arrival. A stranger arrived at
+/// the death it follows, so it recognizes the corpses of the later deaths
+/// alone (D11). A character that no death created recognizes every corpse.
+/// Read from saved state, never from the perceived changes (F6).
+fn perceived_corpses(world: &World, character: EntityId) -> Vec<PerceivedCorpse> {
+    let corpses = world.corpses();
+    let arrival = world.followed(character).map(|dead| {
+        match corpses.iter().position(|corpse| corpse.entity == dead) {
+            Some(rank) => rank,
+            None => ash_core::invariant!("the dead character {dead:?} left no corpse"),
+        }
+    });
+    corpses
+        .into_iter()
+        .enumerate()
+        .map(|(rank, corpse)| PerceivedCorpse {
+            position: corpse.position,
+            died: corpse.died,
+            entity: arrival
+                .is_none_or(|arrival| rank > arrival)
+                .then_some(corpse.entity),
+        })
+        .collect()
 }
 
 /// R9: the offers of `character`. `None` when the world awaits another

@@ -1,5 +1,5 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S4, and of spec 0003, slices S1 and S2: the perceived-world
+// slices S1 to S4, and of spec 0003, slices S1, S2 and S4: the perceived-world
 // model of the web client, fed through the real WASM codec. `cargo xtask accept
 // web_model` builds the client, then runs this file with Node's test runner.
 //
@@ -25,6 +25,11 @@
 // southeast, then attacked the hostile creature to the southeast twice.
 // The first hit left it wounded (A10), the second killed it (A8). Entity 0
 // then moved southeast, onto the tile the creature left.
+//
+// `fixtures/stranger.json`: the test entry of the server, another world
+// with no creature. Entity 1, a character east of entity 0, strikes it on
+// each of its turns. Entity 0 waited until it died, and its stranger,
+// entity 2, arrived on (1, 1). The stranger then moved south.
 //
 //   012345678
 // 0 #########
@@ -56,6 +61,7 @@ const walk = fixture("walk.json");
 const bump = fixture("bump.json");
 const attack = fixture("attack.json");
 const death = fixture("death.json");
+const stranger = fixture("stranger.json");
 const controllerTaken = walk.length - 1;
 
 /** The index of the first message of `stream` that `found` accepts. */
@@ -846,6 +852,62 @@ test("after the death of its character, the model shows the stranger, controls i
   );
   assert.deepEqual(stranger.point, under.point);
   assert.notEqual(stranger.style, other.style);
+});
+
+test("the recorded death of the character hands the client its stranger", () => {
+  // D10: one reply holds the lethal hit, the death, the arrival of the
+  // stranger, its snapshot and its turn.
+  const died = indexOf(stranger, isDeath);
+  const [hit, dies, arrives, seen, turn] = stranger.slice(died - 1, died + 4).map(decodeServerMessage);
+  const { time } = dies.change;
+  assert.deepEqual(
+    [hit, dies, arrives].map(({ change }) => change),
+    [
+      act(time, 1, { kind: "hit", target: 0 }),
+      { kind: "death", time, entity: 0 },
+      { kind: "arrival", time, entity: 2, position: { x: 1, y: 1, z: 0 } },
+    ],
+  );
+  assert.equal(seen.kind, "snapshot");
+  assert.deepEqual([turn.kind, turn.entity, turn.time], ["awaited", 2, time]);
+
+  // D6: at the arrival, before the snapshot, the model holds the stranger
+  // over the corpse of the character it still controls.
+  const arrived = replay(stranger.slice(0, died + 2));
+  assert.equal(arrived.controlled, 0);
+  assert.deepEqual(positions(arrived), [
+    [1, { x: 2, y: 1, z: 0 }],
+    [2, { x: 1, y: 1, z: 0 }],
+  ]);
+  assert.deepEqual(arrived.corpses, [corpse(1, 1, "character", 0)]);
+
+  // D11: then the snapshot of the stranger, whole, and its turn. The
+  // stranger stepped south, and the striker found no one to strike.
+  const world = replay(stranger);
+  assert.equal(world.controlled, 2);
+  assert.deepEqual(positions(world), [
+    [1, { x: 2, y: 1, z: 0 }],
+    [2, { x: 1, y: 2, z: 0 }],
+  ]);
+  assert.deepEqual(healths(world), [
+    [1, inCondition("unhurt")],
+    [2, hitPoints(10, 10)],
+  ]);
+  assert.deepEqual(world.corpses, [corpse(1, 1, "character", null)]);
+  assert.equal(world.costOf(wait), 50);
+  // R17: the log keeps every perceived change received, the death and the
+  // arrival among them.
+  assert.equal(world.log.length, stranger.filter((bytes) => decodeServerMessage(bytes).kind === "perceived").length);
+  assert.deepEqual(
+    drawn(world).log.lines.filter((line) => /dies|arrives/.test(line)),
+    [`${time}  @ arrives`, `${time}  entity 0 dies`],
+  );
+  const [under, ...standing] = glyphs(world);
+  assert.equal(under.text, "%");
+  assert.deepEqual(
+    standing.map(({ text }) => text),
+    ["e", "@"],
+  );
 });
 
 test("an arrival decodes to the stranger and its tile", () => {
