@@ -25,6 +25,7 @@ pub fn to_wire(change: SimChange) -> WireChange {
                 SimDisposition::Neutral => WireDisposition::Neutral,
             }),
             SimKind::Arrival(position) => WireKind::Arrival(position),
+            SimKind::HitPoints { current, max } => WireKind::HitPoints { current, max },
         },
     }
 }

@@ -212,7 +212,8 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
             ChangeKind::Death
             | ChangeKind::Condition(_)
             | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => None,
+            | ChangeKind::Arrival(_)
+            | ChangeKind::HitPoints { .. } => None,
         });
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,

@@ -138,6 +138,8 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
         // A disposition is a kind, never a number (A4).
         ChangeKind::Disposition(_) => None,
         ChangeKind::Arrival(_) => None,
+        // A9: hit points reach their own character alone.
+        ChangeKind::HitPoints { .. } => None,
     };
     (entity, outcome)
 }

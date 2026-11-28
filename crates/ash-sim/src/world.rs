@@ -239,7 +239,7 @@ impl World {
     /// A character that no death created perceives from the first change of
     /// its world. An id this world never issued crashes through
     /// `invariant!`.
-    pub fn perceived_changes_of(&self, character: EntityId) -> &[PerceivedChange] {
+    pub fn perceived_changes_of(&self, character: EntityId) -> Vec<PerceivedChange> {
         if !self.ids.has_issued(character) {
             ash_core::invariant!("this world never issued {character:?}");
         }
@@ -253,8 +253,8 @@ impl World {
         let since = self.perceived_changes.iter().position(arrived).unwrap_or(0);
         let from_arrival = &self.perceived_changes[since..];
         match from_arrival.iter().position(died) {
-            Some(death) => &from_arrival[..=death],
-            None => from_arrival,
+            Some(death) => from_arrival[..=death].to_vec(),
+            None => from_arrival.to_vec(),
         }
     }
 
@@ -609,6 +609,50 @@ mod tests {
             }));
             assert_eq!(world.perceived_changes, expected, "{current} of 20");
         }
+    }
+
+    /// A9, A11: a hit that leaves a character in the same condition adds its
+    /// hit points, which it alone perceives, and no change of condition. Of
+    /// 20 hit points, 17 and 14 are both below full and not below half.
+    #[test]
+    fn a_hit_that_keeps_the_condition_of_a_character_adds_its_hit_points_alone() {
+        // The first draw of seed 182 hits (A6). The target is a character,
+        // so the world stops at its turn.
+        let mut world = World::new(182, Speed::new(1));
+        let attacker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Create {
+                speed: Speed::new(1),
+                position: east,
+                controller: Controller::Player,
+                health: Health {
+                    current: 17,
+                    max: 20,
+                },
+            }],
+            rng_after: world.rng.clone(),
+        });
+        let target = world.occupant(east).expect("the target stands east");
+
+        assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
+
+        let hit = PerceivedChange {
+            time: Time::ZERO,
+            entity: attacker,
+            kind: ChangeKind::Act(Outcome::Hit(target)),
+        };
+        let hit_points = PerceivedChange {
+            time: Time::ZERO,
+            entity: target,
+            kind: ChangeKind::HitPoints {
+                current: 14,
+                max: 20,
+            },
+        };
+        assert_eq!(world.perceived_changes, [hit, hit_points]);
+        assert_eq!(world.perceived_changes_of(target), [hit, hit_points]);
+        assert_eq!(world.perceived_changes_of(attacker), [hit]);
     }
 
     /// A10, A11: a hit that crosses two thresholds at once changes the

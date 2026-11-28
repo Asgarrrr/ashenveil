@@ -142,6 +142,8 @@ fn server_messages() -> Vec<ServerMessage> {
                 z: u32::MAX,
             },
         ),
+        hit_points_change(200, 0, 7, 10),
+        hit_points_change(u64::MAX, u32::MAX, 1, u32::MAX),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
@@ -177,6 +179,14 @@ fn arrival(time: u64, entity: u32, position: TilePosition) -> ServerMessage {
         time: Time::new(time),
         entity: EntityId::new(entity),
         kind: ChangeKind::Arrival(position),
+    })
+}
+
+fn hit_points_change(time: u64, entity: u32, current: u32, max: u32) -> ServerMessage {
+    ServerMessage::Perceived(PerceivedChange {
+        time: Time::new(time),
+        entity: EntityId::new(entity),
+        kind: ChangeKind::HitPoints { current, max },
     })
 }
 
@@ -360,9 +370,9 @@ fn a_malformed_change_of_condition_is_refused() {
             "a change of condition with {rest:?} decodes"
         );
     }
-    // No kind follows the arrival, with the bytes of a death, of a wounded
-    // entity or of a tile.
-    for tag in 5..=u8::MAX {
+    // No kind follows the hit points, with the bytes of a death, of a
+    // wounded entity or of a tile.
+    for tag in 6..=u8::MAX {
         for rest in [&[][..], &[1], &[2; 12]] {
             assert!(
                 ServerMessage::decode(&change_bytes(tag, rest)).is_err(),
@@ -446,6 +456,42 @@ fn a_malformed_arrival_is_refused() {
         assert!(
             ServerMessage::decode(&bytes).is_err(),
             "an arrival with {rest:?} after its tile decodes"
+        );
+    }
+}
+
+#[test]
+fn malformed_hit_points_are_refused() {
+    // The controls: a change of kind 5 is the hit points of the character
+    // it names, at its time: the current ones, then the most, each a
+    // little-endian `u32`.
+    let numbers = |current: u32, max: u32| [current.to_le_bytes(), max.to_le_bytes()].concat();
+    for (current, max) in [(7, 10), (1, u32::MAX)] {
+        assert_eq!(
+            ServerMessage::decode(&change_bytes(5, &numbers(current, max))),
+            Ok(ServerMessage::Perceived(PerceivedChange {
+                time: Time::new(100),
+                entity: EntityId::new(2),
+                kind: ChangeKind::HitPoints { current, max },
+            })),
+            "{current} of {max}"
+        );
+    }
+
+    // Hit points carry two numbers: not none, not part of them, and nothing
+    // after them.
+    let whole = numbers(7, 10);
+    for length in 0..whole.len() {
+        assert!(
+            ServerMessage::decode(&change_bytes(5, &whole[..length])).is_err(),
+            "hit points with {length} bytes of numbers decode"
+        );
+    }
+    for rest in [&[0][..], &[1, 0, 0, 0], &whole] {
+        let bytes = change_bytes(5, &[&whole[..], rest].concat());
+        assert!(
+            ServerMessage::decode(&bytes).is_err(),
+            "hit points with {rest:?} after them decode"
         );
     }
 }

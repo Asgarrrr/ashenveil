@@ -139,6 +139,9 @@ export class PerceivedWorld {
       }
       return;
     }
+    if (change.kind === "hit_points") {
+      return;
+    }
     if (change.kind === "disposition") {
       // A4: an attack left the creature in this disposition.
       if (perceived !== undefined) {

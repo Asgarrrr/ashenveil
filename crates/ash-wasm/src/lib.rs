@@ -206,6 +206,9 @@ fn change_json(change: PerceivedChange) -> String {
                 position.x, position.y, position.z
             ),
         ),
+        ChangeKind::HitPoints { current, max } => {
+            ("hit_points", format!(r#","current":{current},"max":{max}"#))
+        }
     };
     format!(
         r#"{{"kind":"{kind}","time":{},"entity":{}{field}}}"#,

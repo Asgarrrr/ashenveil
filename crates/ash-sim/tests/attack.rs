@@ -69,7 +69,8 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
             ChangeKind::Death
             | ChangeKind::Condition(_)
             | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => None,
+            | ChangeKind::Arrival(_)
+            | ChangeKind::HitPoints { .. } => None,
         })
         .collect()
 }
