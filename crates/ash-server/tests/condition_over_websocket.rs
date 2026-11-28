@@ -215,6 +215,11 @@ fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
         }
         ServerMessage::Perceived(PerceivedChange {
             time: _,
+            entity,
+            kind: ChangeKind::HitPoints { current: _, max: _ },
+        }) => vec![*entity],
+        ServerMessage::Perceived(PerceivedChange {
+            time: _,
             entity: _,
             kind:
                 ChangeKind::Act(

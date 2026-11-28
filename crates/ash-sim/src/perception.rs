@@ -14,7 +14,8 @@ use crate::map::Map;
 use crate::world::World;
 
 /// One change to `entity`, stamped with the time it happened (R17, A11).
-/// Never an entity's speed, cost, next turn or hit points (R18).
+/// Never an entity's speed, cost or next turn, and hit points only for the
+/// character they belong to (R18, A9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PerceivedChange {
     pub time: Time,
@@ -33,6 +34,10 @@ pub enum ChangeKind {
     /// A hit left the entity in another condition (A10). That hit is the
     /// change before, at the same time.
     Condition(Condition),
+    /// A hit left the character with these hit points (A9): the change
+    /// after that hit, at the same time, before any change of condition
+    /// (A11). Only that character perceives it (R18).
+    HitPoints { current: u32, max: u32 },
     /// A character's attack left the creature in this disposition (A4): the
     /// last change of that attack, at the same time (A11).
     Disposition(Disposition),

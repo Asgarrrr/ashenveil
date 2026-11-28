@@ -85,7 +85,7 @@ pub fn changes_since(
     std::iter::successors(Some(first), |&character| world.stranger_of(character))
         .flat_map(|character| world.perceived_changes_of(character))
         .skip(seen)
-        .map(|&change| ServerMessage::Perceived(change_to_wire(change)))
+        .map(|change| ServerMessage::Perceived(change_to_wire(change)))
 }
 
 fn change_to_wire(change: SimChange) -> PerceivedChange {
@@ -100,6 +100,7 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
                 ChangeKind::Disposition(disposition_to_wire(disposition))
             }
             SimKind::Arrival(position) => ChangeKind::Arrival(position),
+            SimKind::HitPoints { current, max } => ChangeKind::HitPoints { current, max },
         },
     }
 }
@@ -217,7 +218,7 @@ pub mod tests {
                     assert_eq!(world.submit(Action::Wait), Ok(()));
                     continue;
                 }
-                let (time, seen) = (world.clock(), world.perceived_changes().len());
+                let (time, seen) = (world.clock(), changes_since(&world, attacker, 0).count());
                 assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
                 if let [_, ServerMessage::Perceived(change)] =
                     changes_since(&world, attacker, seen).collect::<Vec<_>>()[..]

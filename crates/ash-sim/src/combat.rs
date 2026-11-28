@@ -156,10 +156,11 @@ fn provoked(world: &World, target: EntityId) -> Vec<Effect> {
     ]
 }
 
-/// A6, A8, A10: what a hit on `target` changes, in order. The target loses
-/// 3 hit points. At zero it dies, a character or a creature alike, with the
-/// effects of a death (D1). A target that lives on in another condition is
-/// perceived in it, at the time of the hit (A11).
+/// A6, A8 to A11: what a hit on `target` changes, in order. The target
+/// loses 3 hit points. At zero it dies, a character or a creature alike,
+/// with the effects of a death (D1). A character that lives on perceives
+/// its hit points, then a target that lives on in another condition is
+/// perceived in it, both at the time of the hit.
 fn hit(world: &World, target: EntityId) -> Vec<Effect> {
     let before = world.health(target);
     let health = before.damaged(DAMAGE);
@@ -169,12 +170,21 @@ fn hit(world: &World, target: EntityId) -> Vec<Effect> {
     }];
     if health.current == 0 {
         effects.extend(death::effects(world, target));
-    } else if health.condition() != before.condition() {
-        effects.push(Effect::Perceive(PerceivedChange {
+        return effects;
+    }
+    let perceived = |kind| {
+        Effect::Perceive(PerceivedChange {
             time: world.clock(),
             entity: target,
-            kind: ChangeKind::Condition(health.condition()),
-        }));
+            kind,
+        })
+    };
+    if world.controller(target) == Controller::Player {
+        let Health { current, max } = health;
+        effects.push(perceived(ChangeKind::HitPoints { current, max }));
+    }
+    if health.condition() != before.condition() {
+        effects.push(perceived(ChangeKind::Condition(health.condition())));
     }
     effects
 }

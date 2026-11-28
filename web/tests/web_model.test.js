@@ -1,5 +1,5 @@
 // Acceptance of spec 0001, slice S6, and of the web part of spec 0002,
-// slices S1 to S4, and of spec 0003, slices S1, S2 and S4: the perceived-world
+// slices S1 to S4, and of spec 0003, slices S1, S2, S4 and S5: the perceived-world
 // model of the web client, fed through the real WASM codec. `cargo xtask accept
 // web_model` builds the client, then runs this file with Node's test runner.
 //
@@ -902,11 +902,107 @@ test("the recorded death of the character hands the client its stranger", () => 
     drawn(world).log.lines.filter((line) => /dies|arrives/.test(line)),
     [`${time}  @ arrives`, `${time}  entity 0 dies`],
   );
+  // A9: the hit points were the dead character's, not the stranger's that
+  // `@` now names. The drawn log holds only the newest lines: each line of
+  // the log is drawn here.
+  assert.deepEqual(
+    world.log.map((change) => logLine(world, change)).filter((line) => /hit points/.test(line)),
+    ["0  entity 0 has 7/10 hit points", "100  entity 0 has 4/10 hit points", "500  entity 0 has 1/10 hit points"],
+  );
   const [under, ...standing] = glyphs(world);
   assert.equal(under.text, "%");
   assert.deepEqual(
     standing.map(({ text }) => text),
     ["e", "@"],
+  );
+});
+
+test("a change of hit points replaces the numbers of the character, which shows no condition", () => {
+  // The client controls entity 0 on the start tile. Entity 1, a character
+  // east of it, hits it.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 1, 1, null, hitPoints(10, 10)), perceivedEntity(1, 2, 1, null)]));
+  world.apply({ kind: "awaited", time: 0, entity: 0, actions: [{ action: wait, cost: 50 }] });
+  const changes = [
+    act(0, 0, { kind: "waited" }),
+    act(0, 1, { kind: "hit", target: 0 }),
+    { kind: "hit_points", time: 0, entity: 0, current: 7, max: 10 },
+  ];
+  for (const change of changes) {
+    world.apply({ kind: "perceived", change });
+  }
+
+  // A9: the character shows its new hit points as numbers; the other
+  // character keeps its condition and every position stays.
+  assert.deepEqual(healths(world), [
+    [0, hitPoints(7, 10)],
+    [1, inCondition("unhurt")],
+  ]);
+  assert.deepEqual(positions(world), [
+    [0, { x: 1, y: 1, z: 0 }],
+    [1, { x: 2, y: 1, z: 0 }],
+  ]);
+  assert.deepEqual(world.log, changes);
+  const page = drawn(world);
+  assert.deepEqual(page.entities.lines, ["@: 7/10 hit points", "entity 1: unhurt"]);
+  assert.deepEqual(page.log.lines, ["0  @ has 7/10 hit points", "0  entity 1 hits @", "0  @ waits"]);
+  // A change that names an entity the client does not hold adds none, and
+  // its numbers, unlike the character's, land on no one.
+  world.apply({ kind: "perceived", change: { ...changes[2], entity: 9, current: 4 } });
+  assert.deepEqual([...world.entities.keys()], [0, 1]);
+  assert.deepEqual(healths(world), [
+    [0, hitPoints(7, 10)],
+    [1, inCondition("unhurt")],
+  ]);
+});
+
+test("a change of hit points decodes to the current ones, then the most", () => {
+  // A change is tag 2, then kind 5 for hit points, the time and the
+  // entity, little-endian, then the current hit points and the most.
+  const u32 = (value) => [value, 0, 0, 0];
+  const bytes = Uint8Array.of(2, 5, 44, 1, 0, 0, 0, 0, 0, 0, ...u32(3), ...u32(7), ...u32(10));
+  assert.deepEqual(decodeServerMessage(bytes), {
+    kind: "perceived",
+    change: { kind: "hit_points", time: 300, entity: 3, current: 7, max: 10 },
+  });
+});
+
+test("the recorded hits give the character 7, 4 and 1 of 10 hit points, and never its condition", () => {
+  const isHitPoints = (message) => message.kind === "perceived" && message.change.kind === "hit_points";
+  const first = indexOf(stranger, isHitPoints);
+  const before = replay(stranger.slice(0, first));
+  const after = replay(stranger.slice(0, first + 1));
+
+  // A9, A11: entity 1 hit entity 0, then entity 0 perceived its hit points.
+  const { time } = after.log.at(-1);
+  assert.deepEqual(after.log.slice(-2), [
+    act(time, 1, { kind: "hit", target: 0 }),
+    { kind: "hit_points", time, entity: 0, current: 7, max: 10 },
+  ]);
+  assert.deepEqual(healths(before), [
+    [0, hitPoints(10, 10)],
+    [1, inCondition("unhurt")],
+  ]);
+  assert.deepEqual(healths(after), [
+    [0, hitPoints(7, 10)],
+    [1, inCondition("unhurt")],
+  ]);
+  assert.deepEqual(drawn(after).entities.lines, ["@: 7/10 hit points", "entity 1: unhurt"]);
+
+  // A9: each hit entity 0 survived gave it its hit points, and no change
+  // named a condition: nothing struck entity 1.
+  const { log } = replay(stranger);
+  assert.deepEqual(
+    log.filter(({ kind }) => kind === "hit_points").map(({ entity, current, max }) => [entity, current, max]),
+    [
+      [0, 7, 10],
+      [0, 4, 10],
+      [0, 1, 10],
+    ],
+  );
+  assert.deepEqual(
+    log.filter(({ kind }) => kind === "condition"),
+    [],
   );
 });
 

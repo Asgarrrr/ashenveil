@@ -65,7 +65,8 @@ fn acts(world: &World) -> Vec<Act> {
             ChangeKind::Death
             | ChangeKind::Condition(_)
             | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => {
+            | ChangeKind::Arrival(_)
+            | ChangeKind::HitPoints { .. } => {
                 panic!("unexpected {change:?}")
             }
         })

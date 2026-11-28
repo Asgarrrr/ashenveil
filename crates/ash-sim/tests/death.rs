@@ -67,7 +67,8 @@ fn names(change: PerceivedChange, entity: EntityId) -> bool {
             | ChangeKind::Death
             | ChangeKind::Condition(_)
             | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => false,
+            | ChangeKind::Arrival(_)
+            | ChangeKind::HitPoints { .. } => false,
             ChangeKind::Act(
                 Outcome::Bumped(target) | Outcome::Hit(target) | Outcome::Missed(target),
             ) => target == entity,
@@ -357,7 +358,8 @@ fn the_world_runs_on_past_the_scheduler_entry_of_the_dead_creature() {
                 ChangeKind::Death
                 | ChangeKind::Condition(_)
                 | ChangeKind::Disposition(_)
-                | ChangeKind::Arrival(_) => None,
+                | ChangeKind::Arrival(_)
+                | ChangeKind::HitPoints { .. } => None,
             })
             .collect();
         assert!(turns.len() > 30, "seed {seed}: {} turns", turns.len());
@@ -409,8 +411,8 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
         );
 
         // Nothing drew either: the strike of the third character, on the
-        // second, takes the third draw of the seed. A hit wounds the second
-        // character (A10).
+        // second, takes the third draw of the seed. A hit leaves the second
+        // character 7 of its 10 hit points (A9), and wounded (A10).
         assert_eq!(world.submit(Action::Attack(Direction::West)), Ok(()));
         let mut draws = strikes(seed).skip(2);
         let (third_draw, fourth_draw) = (draws.next(), draws.next());
@@ -420,7 +422,18 @@ fn at_a_tie_the_entry_of_the_dead_creature_acts_nothing_and_draws_nothing() {
             kind: ChangeKind::Act(outcome),
         };
         let strike = if third_draw == Some(true) {
-            vec![struck(Outcome::Hit(cast.second)), wounded(cast.second)]
+            vec![
+                struck(Outcome::Hit(cast.second)),
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: cast.second,
+                    kind: ChangeKind::HitPoints {
+                        current: 7,
+                        max: 10,
+                    },
+                },
+                wounded(cast.second),
+            ]
         } else {
             vec![struck(Outcome::Missed(cast.second))]
         };

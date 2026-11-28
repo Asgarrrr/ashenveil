@@ -3,8 +3,8 @@
 //! Nothing here can carry another entity's speed, cost or next turn (R18):
 //! only the awaited entity's own costs, sent to its controller (R9). A
 //! disposition and a condition are kinds, never numbers. The server sends
-//! hit points to their own character alone, in its snapshot (A9); these
-//! types do not enforce it.
+//! hit points to their own character alone, in its snapshot and in a
+//! perceived change (A9); these types do not enforce it.
 
 use alloc::vec::Vec;
 
@@ -106,6 +106,10 @@ pub enum ChangeKind {
     /// follows: the change after that death (D10). It is the first change
     /// the stranger perceives (D11).
     Arrival(TilePosition),
+    /// A hit left the character with these hit points (A9): the change
+    /// after that hit, at the same time, before any change of condition
+    /// (A11).
+    HitPoints { current: u32, max: u32 },
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -412,6 +416,7 @@ impl Wire for PerceivedChange {
             ChangeKind::Condition(_) => 2,
             ChangeKind::Disposition(_) => 3,
             ChangeKind::Arrival(_) => 4,
+            ChangeKind::HitPoints { .. } => 5,
         };
         tag.write(out);
         self.time.write(out);
@@ -423,6 +428,10 @@ impl Wire for PerceivedChange {
             // The tags of a creature's disposition in a snapshot.
             ChangeKind::Disposition(disposition) => Some(disposition).write(out),
             ChangeKind::Arrival(position) => position.write(out),
+            ChangeKind::HitPoints { current, max } => {
+                current.write(out);
+                max.write(out);
+            }
         }
     }
 
@@ -449,6 +458,10 @@ impl Wire for PerceivedChange {
                 None => return Err(DecodeError),
             },
             4 => ChangeKind::Arrival(TilePosition::read(input)?),
+            5 => ChangeKind::HitPoints {
+                current: u32::read(input)?,
+                max: u32::read(input)?,
+            },
             _ => return Err(DecodeError),
         };
         Ok(Self { time, entity, kind })

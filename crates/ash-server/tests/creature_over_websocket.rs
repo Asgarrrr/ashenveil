@@ -146,6 +146,8 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
         // A disposition is a kind, never a number (A4).
         ChangeKind::Disposition(_) => None,
         ChangeKind::Arrival(_) => None,
+        // A9: hit points reach their own character alone.
+        ChangeKind::HitPoints { .. } => None,
     };
     (entity, outcome)
 }
@@ -266,7 +268,8 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
             ChangeKind::Death
             | ChangeKind::Condition(_)
             | ChangeKind::Disposition(_)
-            | ChangeKind::Arrival(_) => None,
+            | ChangeKind::Arrival(_)
+            | ChangeKind::HitPoints { .. } => None,
         })
         .collect();
     assert!(creature_acts.len() > 2, "{creature_acts:?}");

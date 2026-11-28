@@ -5,7 +5,8 @@
 //! the start tile (1, 1), and a second character east of it that the server
 //! drives: whenever the world awaits it, it attacks west, toward the start
 //! tile, or waits when no entity stands there. The test plays the same rule
-//! on a replay of the world, which gives the changes the server must send.
+//! on a replay of the world, which gives the changes the server must send:
+//! those of the characters the client's controller drove (spec 0003, S5).
 
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
@@ -125,6 +126,8 @@ fn drive_second(world: &mut World, second: EntityId) {
 struct Session {
     socket: Socket,
     world: World,
+    /// The first character the client's controller drove.
+    first: EntityId,
     second: EntityId,
 }
 
@@ -145,7 +148,7 @@ impl Session {
     /// the command during which it died, and the reply to that command.
     fn wait_until_dead(&mut self, character: EntityId) -> (usize, Vec<ServerMessage>) {
         for _ in 0..MOST_WAITS {
-            let seen = self.world.perceived_changes().len();
+            let seen = self.controller().len();
             let reply = self.command(character, Action::Wait);
             if self.world.stranger_of(character).is_some() {
                 return (seen, reply);
@@ -158,10 +161,20 @@ impl Session {
         panic!("{character:?} still lives after {MOST_WAITS} waits");
     }
 
-    /// The changes of the replay after the first `seen`, as the server must
-    /// send them.
+    /// R17, D11: the changes of each character the client's controller
+    /// drove, in turn, on the replay.
+    fn controller(&self) -> Vec<PerceivedChange> {
+        std::iter::successors(Some(self.first), |&character| {
+            self.world.stranger_of(character)
+        })
+        .flat_map(|character| self.world.perceived_changes_of(character))
+        .collect()
+    }
+
+    /// The changes of the controller after the first `seen`, as the server
+    /// must send them.
     fn changes_since(&self, seen: usize) -> Vec<ServerMessage> {
-        self.world.perceived_changes()[seen..]
+        self.controller()[seen..]
             .iter()
             .map(|&change| ServerMessage::Perceived(change::to_wire(change)))
             .collect()
@@ -195,6 +208,7 @@ fn open(address: SocketAddr) -> (Session, EntityId) {
     let session = Session {
         socket,
         world,
+        first,
         second,
     };
     assert!(
@@ -292,7 +306,7 @@ fn the_reply_to_the_lethal_command_holds_the_death_the_arrival_and_the_stranger(
     // stranger and its turn, in that order, and nothing else.
     let stranger = session.world.stranger_of(first).expect("a stranger");
     assert_died_waiting(
-        &session.world.perceived_changes()[seen..],
+        &session.controller()[seen..],
         first,
         session.second,
         stranger,
@@ -308,14 +322,14 @@ fn the_reply_to_the_lethal_command_holds_the_death_the_arrival_and_the_stranger(
 
     // The next command moves the stranger. No entity stands on the start
     // tile then, so the second character waits.
-    let seen = session.world.perceived_changes().len();
+    let seen = session.controller().len();
     let moved = session.command(stranger, Action::Move(Direction::South));
     let mut expected = session.changes_since(seen);
     assert_eq!(
         expected.first(),
         Some(&ServerMessage::Perceived(change::to_wire(
             PerceivedChange {
-                time: session.world.perceived_changes()[seen].time,
+                time: session.controller()[seen].time,
                 entity: stranger,
                 kind: ChangeKind::Act(Outcome::Stepped(Direction::South)),
             }
@@ -344,7 +358,7 @@ fn the_striker_acts_on_every_turn_the_world_awaits_it() {
         Direction::West,
         Direction::North,
     ] {
-        let seen = session.world.perceived_changes().len();
+        let seen = session.controller().len();
         let moved = session.command(stranger, Action::Move(direction));
         let mut expected = session.changes_since(seen);
         expected.push(session.awaited(stranger));
@@ -366,7 +380,7 @@ fn a_command_for_the_dead_character_is_refused_and_every_count_resumes_through_t
         session.command(first, Action::Wait),
         [ServerMessage::Refused]
     );
-    let held = session.world.perceived_changes().len();
+    let held = session.controller().len();
     session.socket = connect(address, held);
     assert_eq!(reply(&mut session.socket), lethal[lethal.len() - 2..]);
 
@@ -382,7 +396,7 @@ fn a_command_for_the_dead_character_is_refused_and_every_count_resumes_through_t
     let (seen, lethal) = session.wait_until_dead(stranger);
     let second_stranger = session.world.stranger_of(stranger).expect("a stranger");
     assert_died_waiting(
-        &session.world.perceived_changes()[seen..],
+        &session.controller()[seen..],
         stranger,
         session.second,
         second_stranger,
@@ -409,7 +423,7 @@ fn a_command_for_the_dead_character_is_refused_and_every_count_resumes_through_t
             "{dead:?}"
         );
     }
-    let seen = session.world.perceived_changes().len();
+    let seen = session.controller().len();
     let waited = session.command(second_stranger, Action::Wait);
     let mut expected = session.changes_since(seen);
     expected.push(session.awaited(second_stranger));
@@ -419,7 +433,7 @@ fn a_command_for_the_dead_character_is_refused_and_every_count_resumes_through_t
     // changes, then the snapshot of the second stranger and its turn. The
     // counts stand before each lethal hit, after each death and after each
     // arrival, and at both ends.
-    let all = session.world.perceived_changes().to_vec();
+    let all = session.controller().to_vec();
     let after = |found: &dyn Fn(&PerceivedChange) -> bool| {
         all.iter()
             .enumerate()

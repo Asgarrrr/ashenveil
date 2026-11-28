@@ -160,24 +160,29 @@ fn a_character_struck_to_death_leaves_a_character_corpse_and_a_stranger_on_the_s
     strike_to_death(&mut world, striker, Direction::West, victim);
     let stranger = stranger_after(&world, victim);
 
-    // A6, A10, A11, R8: the victim waits for 50 and the striker strikes for
-    // 100. At a tie, the entity due first acts first. The lethal hit is
+    // A6, A9 to A11, R8: the victim waits for 50 and the striker strikes for
+    // 100. At a tie, the entity due first acts first. Each hit the victim
+    // survives is followed by its hit points, then its condition. The lethal hit is
     // followed by the death, then by the arrival of the stranger (D10), at
     // the same time, and nothing comes after.
     let hit = ChangeKind::Act(Outcome::Hit(victim));
     let waited = ChangeKind::Act(Outcome::Waited);
+    let hit_points = |current| ChangeKind::HitPoints { current, max: 10 };
     assert_eq!(
         world.perceived_changes(),
         [
             change(0, victim, waited),
             change(0, striker, hit),
+            change(0, victim, hit_points(7)),
             change(0, victim, ChangeKind::Condition(Condition::Wounded)),
             change(50, victim, waited),
             change(100, striker, hit),
+            change(100, victim, hit_points(4)),
             change(100, victim, ChangeKind::Condition(Condition::BadlyWounded)),
             change(100, victim, waited),
             change(150, victim, waited),
             change(200, striker, hit),
+            change(200, victim, hit_points(1)),
             change(200, victim, ChangeKind::Condition(Condition::Dying)),
             change(200, victim, waited),
             change(250, victim, waited),
