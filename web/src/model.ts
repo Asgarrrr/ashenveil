@@ -110,6 +110,9 @@ export class PerceivedWorld {
   }
 
   private perceive(change: PerceivedChange): void {
+    if (change.kind === "arrival") {
+      return;
+    }
     if (change.kind === "death") {
       // A8, D2: the dead entity left the world, and its corpse lies where it
       // was perceived. A character has no disposition.

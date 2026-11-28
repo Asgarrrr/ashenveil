@@ -36,6 +36,10 @@ pub enum ChangeKind {
     /// A character's attack left the creature in this disposition (A4): the
     /// last change of that attack, at the same time (A11).
     Disposition(Disposition),
+    /// The stranger arrived on this tile, at the time of the death it
+    /// follows: the change after that death (D7, D10). It is the first
+    /// change the stranger perceives (D11).
+    Arrival(TilePosition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the

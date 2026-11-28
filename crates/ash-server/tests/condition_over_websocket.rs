@@ -231,7 +231,8 @@ fn given_hit_points(message: &ServerMessage) -> Vec<EntityId> {
                     | Condition::BadlyWounded
                     | Condition::Dying,
                 )
-                | ChangeKind::Disposition(Disposition::Hostile | Disposition::Neutral),
+                | ChangeKind::Disposition(Disposition::Hostile | Disposition::Neutral)
+                | ChangeKind::Arrival(TilePosition { x: _, y: _, z: _ }),
         })
         | ServerMessage::Refused
         | ServerMessage::Quarantined

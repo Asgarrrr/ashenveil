@@ -84,6 +84,7 @@ fn change_to_wire(change: SimChange) -> PerceivedChange {
             SimKind::Disposition(disposition) => {
                 ChangeKind::Disposition(disposition_to_wire(disposition))
             }
+            SimKind::Arrival(position) => ChangeKind::Arrival(position),
         },
     }
 }

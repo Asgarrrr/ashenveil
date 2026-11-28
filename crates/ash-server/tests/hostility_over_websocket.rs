@@ -209,7 +209,10 @@ fn the_client_perceives_dispositions_and_strikes_the_hostile_creature_by_moving_
 
         let did = changes.first().and_then(|change| match change.kind {
             ChangeKind::Act(outcome) => Some((change.entity, outcome)),
-            ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => None,
+            ChangeKind::Death
+            | ChangeKind::Condition(_)
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => None,
         });
         if ahead == Some(hostile) {
             // A1, A5: the move is a hit or a miss of the hostile creature,

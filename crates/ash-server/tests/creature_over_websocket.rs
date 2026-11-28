@@ -145,6 +145,7 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
         ChangeKind::Condition(_) => None,
         // A disposition is a kind, never a number (A4).
         ChangeKind::Disposition(_) => None,
+        ChangeKind::Arrival(_) => None,
     };
     (entity, outcome)
 }
@@ -262,7 +263,10 @@ fn the_client_perceives_the_creature_only_through_what_a_character_may_perceive(
         .filter(|change| change.entity == creature)
         .filter_map(|change| match change.kind {
             ChangeKind::Act(outcome) => Some((change.time, outcome)),
-            ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => None,
+            ChangeKind::Death
+            | ChangeKind::Condition(_)
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => None,
         })
         .collect();
     assert!(creature_acts.len() > 2, "{creature_acts:?}");

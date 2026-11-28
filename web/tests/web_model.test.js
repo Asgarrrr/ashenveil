@@ -771,6 +771,94 @@ test("the page logs a change of disposition as the creature turning hostile", ()
   ]);
 });
 
+/** The text and the center of each glyph `drawMap` draws for `world`, with its fill style. */
+function glyphs(world) {
+  const drawnGlyphs = [];
+  const context = {
+    fillRect() {},
+    fillText(text, x, y) {
+      drawnGlyphs.push({ text, point: [x, y], style: this.fillStyle });
+    },
+  };
+  drawMap({ getContext: () => context }, world);
+  return drawnGlyphs;
+}
+
+test("after the death of its character, the model shows the stranger, controls it and keeps the log", () => {
+  // The client controls entity 0, on the start tile (1, 1), with 1 hit
+  // point left. Entity 1, a character east of it, strikes it.
+  const world = new PerceivedWorld();
+  world.apply(snapshot([perceivedEntity(0, 1, 1, null, hitPoints(1, 10)), perceivedEntity(1, 2, 1, null)]));
+  world.apply({ kind: "awaited", time: 0, entity: 0, actions: [{ action: wait, cost: 50 }] });
+  // D10: the reply to its wait holds the lethal hit, the death, then the
+  // arrival of the stranger, entity 2, on the start tile.
+  const changes = [
+    act(0, 0, { kind: "waited" }),
+    act(50, 1, { kind: "hit", target: 0 }),
+    { kind: "death", time: 50, entity: 0 },
+    { kind: "arrival", time: 50, entity: 2, position: { x: 1, y: 1, z: 0 } },
+  ];
+  for (const change of changes) {
+    world.apply({ kind: "perceived", change });
+  }
+
+  // D6: the model adds the stranger at its arrival, an unhurt character,
+  // over the corpse of the dead one.
+  assert.deepEqual([...world.entities.values()], [perceivedEntity(1, 2, 1, null), perceivedEntity(2, 1, 1, null)]);
+  assert.deepEqual(world.corpses, [corpse(1, 1, "character", 0)]);
+
+  // D11: the snapshot of the stranger, then its turn. The stranger does not
+  // recognize the corpse.
+  const seenByStranger = [perceivedEntity(1, 2, 1, null), perceivedEntity(2, 1, 1, null, hitPoints(10, 10))];
+  const unrecognized = [corpse(1, 1, "character", null)];
+  world.apply({ ...snapshot(seenByStranger, unrecognized), time: 50 });
+  world.apply({
+    kind: "awaited",
+    time: 50,
+    entity: 2,
+    actions: [
+      { action: wait, cost: 50 },
+      { action: move("south"), cost: 100 },
+    ],
+  });
+
+  assert.deepEqual([...world.entities.values()], seenByStranger);
+  assert.deepEqual(world.corpses, unrecognized);
+  assert.equal(world.controlled, 2);
+  assert.equal(world.costOf(move("south")), 100);
+  assert.equal(world.time, 50);
+  // The log keeps every line, the newest first.
+  assert.deepEqual(world.log, changes);
+  const page = drawn(world);
+  assert.deepEqual(page.log.lines, [
+    "50  @ arrives",
+    "50  entity 0 dies",
+    "50  entity 1 hits entity 0",
+    "0  entity 0 waits",
+  ]);
+  assert.deepEqual(page.entities.lines, ["entity 1: unhurt", "@: 10/10 hit points"]);
+  // The map draws the corpse, then the other character, then the stranger
+  // as the controlled entity, over the corpse.
+  const [under, other, stranger] = glyphs(world);
+  assert.deepEqual(
+    [under.text, other.text, stranger.text],
+    ["%", "e", "@"],
+  );
+  assert.deepEqual(stranger.point, under.point);
+  assert.notEqual(stranger.style, other.style);
+});
+
+test("an arrival decodes to the stranger and its tile", () => {
+  // A change is tag 2, then kind 4 for an arrival, the time and the
+  // entity, little-endian, then the tile: x, y and z.
+  const u32 = (value) => [value, 0, 0, 0];
+  const bytes = Uint8Array.of(2, 4, 44, 1, 0, 0, 0, 0, 0, 0, ...u32(7), ...u32(3), ...u32(2), ...u32(1));
+  assert.deepEqual(decodeServerMessage(bytes), {
+    kind: "perceived",
+    change: { kind: "arrival", time: 300, entity: 7, position: { x: 3, y: 2, z: 1 } },
+  });
+});
+
 test("a refused command advances nothing and keeps the offers", () => {
   const refusal = indexOf(walk, (message) => message.kind === "refused");
   const beforeRefusal = replay(walk.slice(0, refusal));

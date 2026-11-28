@@ -62,7 +62,10 @@ fn acts(world: &World) -> Vec<Act> {
         .iter()
         .map(|&change| match change.kind {
             ChangeKind::Act(outcome) => (change.time, change.entity, outcome),
-            ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => {
+            ChangeKind::Death
+            | ChangeKind::Condition(_)
+            | ChangeKind::Disposition(_)
+            | ChangeKind::Arrival(_) => {
                 panic!("unexpected {change:?}")
             }
         })

@@ -158,10 +158,12 @@ fn a_character_struck_to_death_leaves_a_character_corpse_and_a_stranger_on_the_s
     } = duel(seed);
 
     strike_to_death(&mut world, striker, Direction::West, victim);
+    let stranger = stranger_after(&world, victim);
 
     // A6, A10, A11, R8: the victim waits for 50 and the striker strikes for
     // 100. At a tie, the entity due first acts first. The lethal hit is
-    // followed by the death, at the same time, and nothing comes after.
+    // followed by the death, then by the arrival of the stranger (D10), at
+    // the same time, and nothing comes after.
     let hit = ChangeKind::Act(Outcome::Hit(victim));
     let waited = ChangeKind::Act(Outcome::Waited);
     assert_eq!(
@@ -181,14 +183,14 @@ fn a_character_struck_to_death_leaves_a_character_corpse_and_a_stranger_on_the_s
             change(250, victim, waited),
             change(300, striker, hit),
             change(300, victim, ChangeKind::Death),
+            change(300, stranger, ChangeKind::Arrival(START)),
         ],
         "seed {seed}"
     );
 
     // D6, F2: the world awaits a stranger, at the time of the death, with an
     // id it never issued before.
-    let stranger = world.awaited();
-    assert_eq!(world.stranger_of(victim), Some(stranger));
+    assert_eq!(world.awaited(), stranger);
     assert!(![victim, striker].contains(&stranger), "{stranger:?}");
     assert_eq!(world.clock(), Time::new(300));
 
@@ -267,11 +269,13 @@ fn an_entity_due_at_the_time_of_the_death_acts_before_the_stranger() {
     // The fourth hit lands at 150. The victim last bumped at 100, so its
     // own entry is due at 200: a stranger that took that entry would come
     // later. The third character is due at 150 since its wait at 100.
+    let stranger = stranger_after(&world, victim);
     assert_eq!(
         world.perceived_changes()[seen..],
         [
             change(150, striker, ChangeKind::Act(Outcome::Hit(victim))),
             change(150, victim, ChangeKind::Death),
+            change(150, stranger, ChangeKind::Arrival(START)),
         ]
     );
     assert!(
@@ -296,7 +300,6 @@ fn an_entity_due_at_the_time_of_the_death_acts_before_the_stranger() {
 
     // R2: the world then awaits the stranger, still at the time of the
     // death.
-    let stranger = stranger_after(&world, victim);
     assert_eq!((world.awaited(), world.clock()), (stranger, Time::new(150)));
 }
 
@@ -321,13 +324,17 @@ fn with_no_other_entity_due_at_the_time_of_the_death_the_world_awaits_the_strang
         },
         |world| deaths(world).contains(&victim),
     );
+    let stranger = stranger_after(&world, victim);
+    let changes = world.perceived_changes();
     assert_eq!(
-        world.perceived_changes().last(),
-        Some(&change(150, victim, ChangeKind::Death))
+        changes[changes.len() - 2..],
+        [
+            change(150, victim, ChangeKind::Death),
+            change(150, stranger, ChangeKind::Arrival(START)),
+        ]
     );
 
     // D9, R2: the stranger is due at the time of the death, before both.
-    let stranger = stranger_after(&world, victim);
     assert_eq!((world.awaited(), world.clock()), (stranger, Time::new(150)));
 }
 
@@ -486,19 +493,23 @@ fn the_death_of_a_character_changes_nothing_else() {
         |world| !living(world, victim),
     );
     let time = world.perceived_changes()[seen].time;
+    let stranger = stranger_after(&world, victim);
 
-    // The lethal hit and the death, then only the waits of the walled-in
-    // creatures due at that time.
+    // The lethal hit, the death and the arrival, then only the waits of the
+    // walled-in creatures due at that time.
     let after = &world.perceived_changes()[seen..];
     assert_eq!(
-        after[..2],
-        [
-            change(time.units(), striker, ChangeKind::Act(Outcome::Hit(victim))),
-            change(time.units(), victim, ChangeKind::Death),
-        ]
+        after.get(..3),
+        Some(
+            &[
+                change(time.units(), striker, ChangeKind::Act(Outcome::Hit(victim))),
+                change(time.units(), victim, ChangeKind::Death),
+                change(time.units(), stranger, ChangeKind::Arrival(START)),
+            ][..]
+        )
     );
     assert!(
-        after[2..].iter().all(|change| {
+        after[3..].iter().all(|change| {
             [second, third].contains(&change.entity)
                 && change.kind == ChangeKind::Act(Outcome::Waited)
         }),
@@ -509,7 +520,6 @@ fn the_death_of_a_character_changes_nothing_else() {
     // its disposition and the earlier corpse stay as each character
     // perceived them. The stranger arrives on the start tile, where the
     // victim died.
-    let stranger = stranger_after(&world, victim);
     assert_eq!(world.clock(), time);
     let viewers: Vec<EntityId> = before.iter().map(|&(viewer, _)| viewer).collect();
     assert_eq!(viewers.len(), 6, "{viewers:?}");
@@ -709,7 +719,7 @@ fn a_stranger_dies_in_turn_and_a_second_stranger_arrives() {
     let (world, victim, striker, first, seen) = run();
 
     // D13: the stranger dies like any character. Its lethal hit is followed
-    // by its death, at the same time.
+    // by its death and the arrival of its own stranger, at the same time.
     let second = stranger_after(&world, first);
     let lethal = world
         .perceived_changes()
@@ -722,6 +732,7 @@ fn a_stranger_dies_in_turn_and_a_second_stranger_arrives() {
         [
             change(time.units(), striker, ChangeKind::Act(Outcome::Hit(first))),
             change(time.units(), first, ChangeKind::Death),
+            change(time.units(), second, ChangeKind::Arrival(START)),
         ]
     );
     assert!(lethal >= seen);

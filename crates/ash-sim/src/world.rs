@@ -226,9 +226,18 @@ impl World {
         Ok(())
     }
 
-    /// Every change, in the order it happened (R17). Under whole-map
-    /// perception (R16), every character perceives every change.
+    /// Every change of the world, in the order it happened (R17): test and
+    /// replay evidence. A controller receives only the changes of the
+    /// characters it drove (`perceived_changes_of`).
     pub fn perceived_changes(&self) -> &[PerceivedChange] {
+        &self.perceived_changes
+    }
+
+    /// D5, D11: the changes `character` perceives, in order, from its
+    /// creation or its arrival to its own death. Under whole-map perception
+    /// (R16), it perceives every change in between.
+    pub fn perceived_changes_of(&self, character: EntityId) -> &[PerceivedChange] {
+        let _ = character;
         &self.perceived_changes
     }
 

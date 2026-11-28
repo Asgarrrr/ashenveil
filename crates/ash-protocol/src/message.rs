@@ -102,6 +102,10 @@ pub enum ChangeKind {
     /// A character's attack left the creature in this disposition (A4): the
     /// last change of that attack, at the same time (A11).
     Disposition(Disposition),
+    /// The stranger arrived on this tile, at the time of the death it
+    /// follows: the change after that death (D10). It is the first change
+    /// the stranger perceives (D11).
+    Arrival(TilePosition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -153,9 +157,9 @@ pub struct Snapshot {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClientMessage {
     /// The first message of a connection: take the controller of the world
-    /// this token names. `received` counts the perceived changes of that
-    /// world the client has received, so the server sends it the others
-    /// (R17).
+    /// this token names. `received` counts the perceived changes the client
+    /// has received, those of each character its controller drove, so the
+    /// server sends it the others (R17, D11).
     Hello { token: ResumeToken, received: u64 },
     /// `entity` takes `action`.
     Command { entity: EntityId, action: Action },
@@ -407,6 +411,7 @@ impl Wire for PerceivedChange {
             ChangeKind::Death => 1,
             ChangeKind::Condition(_) => 2,
             ChangeKind::Disposition(_) => 3,
+            ChangeKind::Arrival(_) => 4,
         };
         tag.write(out);
         self.time.write(out);
@@ -417,6 +422,7 @@ impl Wire for PerceivedChange {
             ChangeKind::Condition(condition) => condition.write(out),
             // The tags of a creature's disposition in a snapshot.
             ChangeKind::Disposition(disposition) => Some(disposition).write(out),
+            ChangeKind::Arrival(position) => position.write(out),
         }
     }
 
