@@ -197,6 +197,14 @@ impl World {
         self.entity(entity).position
     }
 
+    /// D6, F3: the stranger that follows `entity`, a dead character. `None`
+    /// for an entity that lives, and for a dead creature. An id this world
+    /// never issued crashes through `invariant!`.
+    pub fn stranger_of(&self, entity: EntityId) -> Option<EntityId> {
+        let _ = self.lookup(entity);
+        None
+    }
+
     /// The awaited character takes `action`, then time runs to the next
     /// character that awaits a player connection. A refused move or attack
     /// changes nothing (R10, R11, A3).

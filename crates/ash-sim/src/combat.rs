@@ -157,10 +157,9 @@ fn provoked(world: &World, target: EntityId) -> Vec<Effect> {
 }
 
 /// A6, A8, A10: what a hit on `target` changes, in order. The target loses
-/// 3 hit points. At zero it dies, with the effects of a death (D1). The
-/// death of a character is out of scope: its zero hit points crash through
-/// `invariant!`. A target that lives on in another condition is perceived
-/// in it, at the time of the hit (A11).
+/// 3 hit points. At zero it dies, a character or a creature alike, with the
+/// effects of a death (D1). A target that lives on in another condition is
+/// perceived in it, at the time of the hit (A11).
 fn hit(world: &World, target: EntityId) -> Vec<Effect> {
     let before = world.health(target);
     let health = before.damaged(DAMAGE);
@@ -169,9 +168,6 @@ fn hit(world: &World, target: EntityId) -> Vec<Effect> {
         health,
     }];
     if health.current == 0 {
-        if world.controller(target) == Controller::Player {
-            ash_core::invariant!("the character {target:?} reaches zero hit points");
-        }
         effects.extend(death::effects(world, target));
     } else if health.condition() != before.condition() {
         effects.push(Effect::Perceive(PerceivedChange {
