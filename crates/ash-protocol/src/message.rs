@@ -99,6 +99,9 @@ pub enum ChangeKind {
     /// A hit left the entity in another condition (A10). That hit is the
     /// change before, at the same time.
     Condition(Condition),
+    /// A character's attack left the creature in this disposition (A4): the
+    /// last change of that attack, at the same time (A11).
+    Disposition(Disposition),
 }
 
 /// What an action did (A11), naming its target where it has one. Never the
@@ -403,6 +406,7 @@ impl Wire for PerceivedChange {
             ChangeKind::Act(_) => 0,
             ChangeKind::Death => 1,
             ChangeKind::Condition(_) => 2,
+            ChangeKind::Disposition(_) => 3,
         };
         tag.write(out);
         self.time.write(out);
@@ -411,6 +415,8 @@ impl Wire for PerceivedChange {
             ChangeKind::Act(outcome) => outcome.write(out),
             ChangeKind::Death => {}
             ChangeKind::Condition(condition) => condition.write(out),
+            // The tags of a creature's disposition in a snapshot.
+            ChangeKind::Disposition(disposition) => Some(disposition).write(out),
         }
     }
 
@@ -430,6 +436,12 @@ impl Wire for PerceivedChange {
             },
             1 => ChangeKind::Death,
             2 => ChangeKind::Condition(Condition::read(input)?),
+            // No disposition is a character's: no change leaves a creature
+            // without one.
+            3 => match Option::<Disposition>::read(input)? {
+                Some(disposition) => ChangeKind::Disposition(disposition),
+                None => return Err(DecodeError),
+            },
             _ => return Err(DecodeError),
         };
         Ok(Self { time, entity, kind })

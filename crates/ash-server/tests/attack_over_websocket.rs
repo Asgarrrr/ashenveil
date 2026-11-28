@@ -135,6 +135,8 @@ fn change_parts(change: &PerceivedChange) -> (EntityId, Option<Outcome>) {
         ChangeKind::Death => None,
         // A condition is a kind, never a number (A10).
         ChangeKind::Condition(_) => None,
+        // A disposition is a kind, never a number (A4).
+        ChangeKind::Disposition(_) => None,
     };
     (entity, outcome)
 }

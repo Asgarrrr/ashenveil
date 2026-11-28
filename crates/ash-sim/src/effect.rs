@@ -9,7 +9,7 @@ use ash_core::tile::TilePosition;
 use ash_core::time::Time;
 
 use crate::combat::Health;
-use crate::controller::Controller;
+use crate::controller::{Controller, Disposition};
 use crate::death::Corpse;
 use crate::perception::PerceivedChange;
 
@@ -34,6 +34,11 @@ pub(crate) enum Effect {
     /// `entity` leaves the world: it is no longer embodied (A8). Its id
     /// stays issued, and the scheduler keeps its entry (F2, F3).
     Remove { entity: EntityId },
+    /// The creature `entity` now has this disposition (A4).
+    ChangeDisposition {
+        entity: EntityId,
+        disposition: Disposition,
+    },
     /// A death leaves this corpse, after every corpse of an earlier death
     /// (D2). No effect removes or moves a corpse.
     LeaveCorpse(Corpse),

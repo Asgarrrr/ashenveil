@@ -130,6 +130,8 @@ fn server_messages() -> Vec<ServerMessage> {
         condition_change(300, 1, Condition::Wounded),
         condition_change(u64::MAX, u32::MAX, Condition::BadlyWounded),
         condition_change(301, 0, Condition::Dying),
+        disposition_change(400, 2, Disposition::Hostile),
+        disposition_change(u64::MAX, u32::MAX, Disposition::Neutral),
         ServerMessage::Refused,
         ServerMessage::Quarantined,
         ServerMessage::ControllerTaken,
@@ -149,6 +151,14 @@ fn condition_change(time: u64, entity: u32, condition: Condition) -> ServerMessa
         time: Time::new(time),
         entity: EntityId::new(entity),
         kind: ChangeKind::Condition(condition),
+    })
+}
+
+fn disposition_change(time: u64, entity: u32, disposition: Disposition) -> ServerMessage {
+    ServerMessage::Perceived(PerceivedChange {
+        time: Time::new(time),
+        entity: EntityId::new(entity),
+        kind: ChangeKind::Disposition(disposition),
     })
 }
 
@@ -332,15 +342,51 @@ fn a_malformed_change_of_condition_is_refused() {
             "a change of condition with {rest:?} decodes"
         );
     }
-    // No kind follows the change of condition, with the bytes of a death or
-    // of a wounded entity.
-    for tag in 3..=u8::MAX {
+    // No kind follows the change of disposition, with the bytes of a death
+    // or of a wounded entity.
+    for tag in 4..=u8::MAX {
         for rest in [&[][..], &[1]] {
             assert!(
                 ServerMessage::decode(&change_bytes(tag, rest)).is_err(),
                 "a change of kind {tag} decodes"
             );
         }
+    }
+}
+
+#[test]
+fn a_malformed_change_of_disposition_is_refused() {
+    // The controls: a change of kind 3 is the creature it names coming, at
+    // its time, to the disposition its one tag names, the tag a snapshot
+    // gives it.
+    let known = [(1, Disposition::Hostile), (2, Disposition::Neutral)];
+    for (tag, disposition) in known {
+        assert_eq!(
+            ServerMessage::decode(&change_bytes(3, &[tag])),
+            Ok(ServerMessage::Perceived(PerceivedChange {
+                time: Time::new(100),
+                entity: EntityId::new(2),
+                kind: ChangeKind::Disposition(disposition),
+            })),
+            "tag {tag}"
+        );
+    }
+
+    // Tag 0 is the absence of a disposition: a character has none, so no
+    // change leaves it one, or none.
+    for tag in [0].into_iter().chain(3..=u8::MAX) {
+        assert!(
+            ServerMessage::decode(&change_bytes(3, &[tag])).is_err(),
+            "a disposition tag of {tag} decodes"
+        );
+    }
+    // A change of disposition carries one disposition: not none, not two,
+    // and no condition after it.
+    for rest in [&[][..], &[1, 1], &[1, 2], &[1, 1, 1]] {
+        assert!(
+            ServerMessage::decode(&change_bytes(3, rest)).is_err(),
+            "a change of disposition with {rest:?} decodes"
+        );
     }
 }
 

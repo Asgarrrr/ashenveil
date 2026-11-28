@@ -272,6 +272,16 @@ impl World {
                     }
                 }
                 Effect::Damage { entity, health } => self.entity_mut(entity).health = health,
+                Effect::ChangeDisposition {
+                    entity,
+                    disposition,
+                } => {
+                    let creature = self.entity_mut(entity);
+                    let Controller::Wander(_) = creature.controller else {
+                        ash_core::invariant!("the character {entity:?} has no disposition")
+                    };
+                    creature.controller = Controller::Wander(disposition);
+                }
                 Effect::Remove { entity } => {
                     let row = self.row(entity);
                     self.entities.remove(row);
@@ -558,6 +568,47 @@ mod tests {
                     time: Time::ZERO,
                     entity: target,
                     kind: ChangeKind::Condition(Condition::BadlyWounded),
+                },
+            ]
+        );
+    }
+
+    /// A11: a creature that dies of the attack does not change disposition.
+    /// No play reaches this case: the first attack on a neutral creature
+    /// provokes it, and one hit cannot kill a creature at full hit points.
+    #[test]
+    fn a_neutral_creature_that_the_hit_kills_changes_no_disposition() {
+        // The first draw of seed 182 hits (A6), and a hit removes 3 hit
+        // points.
+        let mut world = World::new(182, Speed::new(1));
+        let attacker = world.awaited();
+        let east = TilePosition { x: 2, y: 1, z: 0 };
+        world.apply(Effects {
+            in_order: alloc::vec![Effect::Create {
+                speed: Speed::new(2),
+                position: east,
+                controller: Controller::Wander(Disposition::Neutral),
+                health: Health { current: 3, max: 6 },
+            }],
+            rng_after: world.rng.clone(),
+        });
+        let target = world.occupant(east).expect("the target stands east");
+
+        assert_eq!(world.submit(Action::Attack(Direction::East)), Ok(()));
+
+        // The hit, then the death: the attacker alone is left, and awaited.
+        assert_eq!(
+            world.perceived_changes,
+            [
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: attacker,
+                    kind: ChangeKind::Act(Outcome::Hit(target)),
+                },
+                PerceivedChange {
+                    time: Time::ZERO,
+                    entity: target,
+                    kind: ChangeKind::Death,
                 },
             ]
         );

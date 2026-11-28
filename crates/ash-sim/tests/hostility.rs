@@ -66,7 +66,9 @@ fn act_at(world: &World, index: usize) -> Act {
     let change = world.perceived_changes()[index];
     match change.kind {
         ChangeKind::Act(outcome) => (change.time, change.entity, outcome),
-        ChangeKind::Death | ChangeKind::Condition(_) => panic!("change {index} is {change:?}"),
+        ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => {
+            panic!("change {index} is {change:?}")
+        }
     }
 }
 
@@ -78,7 +80,7 @@ fn outcomes_of(world: &World, entity: EntityId) -> Vec<Outcome> {
         .filter(|change| change.entity == entity)
         .filter_map(|change| match change.kind {
             ChangeKind::Act(outcome) => Some(outcome),
-            ChangeKind::Death | ChangeKind::Condition(_) => None,
+            ChangeKind::Death | ChangeKind::Condition(_) | ChangeKind::Disposition(_) => None,
         })
         .collect()
 }

@@ -13,7 +13,7 @@ pub enum Controller {
 }
 
 /// A4: how a creature stands toward characters. A kind, never a number
-/// (R18).
+/// (R18). It changes only from neutral to hostile, at a character's attack.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Disposition {
     /// A character's move into the creature is an attack on it (A1).

@@ -214,7 +214,7 @@ verify` runs it.
   - `cargo xtask accept web_model` — a perceived death leaves a corpse in
     the model, and a snapshot replaces the corpses.
 
-### - [ ] S2 — An attacked neutral creature becomes hostile
+### - [x] S2 — An attacked neutral creature becomes hostile
 
 - Files:
   `crates/ash-sim/src/{world,combat,action,effect,perception,controller}.rs`,
@@ -313,8 +313,9 @@ verify` runs it.
   - The same target: setups put entities on the start tile (1, 1) and
     around it. The stranger takes (2, 1), then (1, 2), then (2, 2).
   - The same target: the stranger dies in turn, and a second stranger
-    arrives. `World::stranger_of` answers each one. The run replays
-    identically from the same setup.
+    arrives. `World::stranger_of` answers each one. The corpse of the dead
+    character says a character, in the snapshot of another character. The
+    run replays identically from the same setup.
   - A unit test pins a distance that R11 lengthens: (6, 2) is six moves
     from (1, 1), not five.
 
@@ -402,7 +403,8 @@ verify` runs it.
     stranger dies in turn, and the client controls a second stranger.
   - The same target: after the two deaths, a connection at each count
     receives exactly the rest of the changes. The counts tested stand
-    before each lethal hit, after each death and after each arrival.
+    before each lethal hit, after each death and after each arrival. The
+    corpse of the dead character crosses as a character.
   - `cargo xtask accept decode_any_bytes` — the decoder rejects a
     malformed arrival.
   - `cargo xtask accept web_model` — after the death of its character,
@@ -580,11 +582,25 @@ Choices behind the rows:
   two tiles, the order of the corpses on the wire, an entity tag out of
   range followed by its bytes, the color and the glyph of a drawn corpse,
   and the level of a corpse through the codec.
-- 2026-11-28, open, for the human (found in S1, bug injection): no test
+- 2026-11-28, accepted by the human (found in S1, bug injection): no test
   reaches the corpse of a character before S3. Three bugs pass: the corpse
   of a character says "creature" in the death rule, in the snapshot, or in
-  the server mapping. Proposed:
+  the server mapping. This amends:
   - S3 Acceptance, `character_death`, gains: "The corpse of the dead
-    character says a character, read through its snapshot."
+    character says a character, in the snapshot of another character."
   - S4 Acceptance, `character_death_over_websocket`, gains: "The corpse of
     the dead character crosses as a character."
+- 2026-11-28, recorded (found in S2): the file list of S2 misses the tests
+  that match every kind of perceived change. Nine existing test files gain
+  the change of disposition in their matches:
+  `crates/ash-sim/tests/{attack,creature,death,hostility}.rs`,
+  `crates/ash-server/tests/{attack,condition,creature,death,hostility}_over_websocket.rs`,
+  and the shared `crates/ash-server/tests/websocket/change.rs`. No claim
+  of these tests changes.
+- 2026-11-28, recorded (found in S2, review): a rule that provokes on a
+  bump passed the `provoked` test. Its bump control now compares every
+  change of the bump (A2).
+- 2026-11-28, recorded (found in S2, review): the decoder accepts a change
+  of disposition to neutral, which the simulation never makes. S2 asks to
+  reject a malformed change, not an impossible one. The decoder rejects a
+  change with no disposition.
