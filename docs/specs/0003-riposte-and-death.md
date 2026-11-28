@@ -588,3 +588,17 @@ Choices behind the rows:
     character says a character, read through its snapshot."
   - S4 Acceptance, `character_death_over_websocket`, gains: "The corpse of
     the dead character crosses as a character."
+- 2026-11-28, recorded (found in S2): the file list of S2 misses the tests
+  that match every kind of perceived change. Nine existing test files gain
+  the change of disposition in their matches:
+  `crates/ash-sim/tests/{attack,creature,death,hostility}.rs`,
+  `crates/ash-server/tests/{attack,condition,creature,death,hostility}_over_websocket.rs`,
+  and the shared `crates/ash-server/tests/websocket/change.rs`. No claim
+  of these tests changes.
+- 2026-11-28, recorded (found in S2, review): a rule that provokes on a
+  bump passed the `provoked` test. Its bump control now compares every
+  change of the bump (A2).
+- 2026-11-28, recorded (found in S2, review): the decoder accepts a change
+  of disposition to neutral, which the simulation never makes. S2 asks to
+  reject a malformed change, not an impossible one. The decoder rejects a
+  change with no disposition.
