@@ -239,8 +239,11 @@ impl World {
     /// points of another entity (R18) and its own condition (A9).
     /// A character that no death created perceives from the first change of
     /// its world. An id this world never issued crashes through
-    /// `invariant!`.
-    pub fn perceived_changes_of(&self, character: EntityId) -> Vec<PerceivedChange> {
+    /// `invariant!` at the call, not at the first item.
+    pub fn perceived_changes_of(
+        &self,
+        character: EntityId,
+    ) -> impl Iterator<Item = PerceivedChange> + '_ {
         if !self.ids.has_issued(character) {
             ash_core::invariant!("this world never issued {character:?}");
         }
@@ -257,7 +260,7 @@ impl World {
             Some(death) => &from_arrival[..=death],
             None => from_arrival,
         };
-        let perceives = |change: &&PerceivedChange| match change.kind {
+        let perceives = move |change: &&PerceivedChange| match change.kind {
             ChangeKind::HitPoints { .. } => change.entity == character,
             ChangeKind::Condition(_) => change.entity != character,
             ChangeKind::Act(_)
@@ -265,7 +268,7 @@ impl World {
             | ChangeKind::Disposition(_)
             | ChangeKind::Arrival(_) => true,
         };
-        lived.iter().filter(perceives).copied().collect()
+        lived.iter().filter(perceives).copied()
     }
 
     /// D6: the dead character `stranger` follows. `None` for a character
@@ -672,8 +675,14 @@ mod tests {
             },
         };
         assert_eq!(world.perceived_changes, [hit, hit_points]);
-        assert_eq!(world.perceived_changes_of(target), [hit, hit_points]);
-        assert_eq!(world.perceived_changes_of(attacker), [hit]);
+        assert_eq!(
+            world.perceived_changes_of(target).collect::<Vec<_>>(),
+            [hit, hit_points]
+        );
+        assert_eq!(
+            world.perceived_changes_of(attacker).collect::<Vec<_>>(),
+            [hit]
+        );
     }
 
     /// A10, A11: a hit that crosses two thresholds at once changes the

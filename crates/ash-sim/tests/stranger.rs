@@ -142,13 +142,16 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
     // perceived the changes of the world from its creation, its death last.
     // The striker perceives all three.
     let arrival = all[death + 1];
-    assert_eq!(world.perceived_changes_of(stranger), [arrival]);
     assert_eq!(
-        without_health(&world.perceived_changes_of(victim)),
+        world.perceived_changes_of(stranger).collect::<Vec<_>>(),
+        [arrival]
+    );
+    assert_eq!(
+        without_health(&world.perceived_changes_of(victim).collect::<Vec<_>>()),
         without_health(&all[..=death])
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(striker)),
+        without_health(&world.perceived_changes_of(striker).collect::<Vec<_>>()),
         without_health(&all)
     );
 
@@ -174,15 +177,15 @@ fn the_arrival_follows_the_death_and_begins_the_changes_of_the_stranger() {
     ];
     assert_eq!(world.perceived_changes()[all.len()..], later);
     assert_eq!(
-        world.perceived_changes_of(stranger),
+        world.perceived_changes_of(stranger).collect::<Vec<_>>(),
         [&[arrival][..], &later].concat()
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(victim)),
+        without_health(&world.perceived_changes_of(victim).collect::<Vec<_>>()),
         without_health(&all[..=death])
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(striker)),
+        without_health(&world.perceived_changes_of(striker).collect::<Vec<_>>()),
         without_health(world.perceived_changes())
     );
 }
@@ -264,19 +267,19 @@ fn each_stranger_of_a_chain_perceives_from_its_own_arrival_to_its_own_death() {
     );
 
     assert_eq!(
-        without_health(&world.perceived_changes_of(victim)),
+        without_health(&world.perceived_changes_of(victim).collect::<Vec<_>>()),
         without_health(&all[..=victim_died])
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(first)),
+        without_health(&world.perceived_changes_of(first).collect::<Vec<_>>()),
         without_health(&all[first_arrived..=first_died])
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(second)),
+        without_health(&world.perceived_changes_of(second).collect::<Vec<_>>()),
         without_health(&all[second_arrived..])
     );
     assert_eq!(
-        without_health(&world.perceived_changes_of(striker)),
+        without_health(&world.perceived_changes_of(striker).collect::<Vec<_>>()),
         without_health(&all)
     );
 }
@@ -322,7 +325,7 @@ fn a_stranger_perceives_its_own_hit_points_and_never_its_own_condition() {
     let missed = change(500, striker, ChangeKind::Act(Outcome::Missed(stranger)));
     let hit = change(600, striker, ChangeKind::Act(Outcome::Hit(stranger)));
     assert_eq!(
-        world.perceived_changes_of(stranger),
+        world.perceived_changes_of(stranger).collect::<Vec<_>>(),
         [
             arrival,
             waited(400),
@@ -343,7 +346,7 @@ fn a_stranger_perceives_its_own_hit_points_and_never_its_own_condition() {
     );
     // The striker perceived the victim's whole fight before: only what
     // follows the arrival is the stranger's.
-    let seen = world.perceived_changes_of(striker);
+    let seen = world.perceived_changes_of(striker).collect::<Vec<_>>();
     let arrived = seen
         .iter()
         .position(|seen| *seen == arrival)

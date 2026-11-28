@@ -72,7 +72,7 @@ fn the_struck_character_perceives_its_hit_points_and_the_striker_its_condition()
     // A9, A11: each hit the struck character survives, then its hit points.
     // The lethal hit adds none: the death follows it.
     assert_eq!(
-        world.perceived_changes_of(struck),
+        world.perceived_changes_of(struck).collect::<Vec<_>>(),
         [
             hit(0),
             hit_points(0, 7),
@@ -93,7 +93,7 @@ fn the_struck_character_perceives_its_hit_points_and_the_striker_its_condition()
     // A10, R18: the striker perceives each hit, then the condition it
     // leaves, and never a hit point.
     assert_eq!(
-        world.perceived_changes_of(striker),
+        world.perceived_changes_of(striker).collect::<Vec<_>>(),
         [
             hit(0),
             condition(0, Condition::Wounded),
@@ -138,5 +138,8 @@ fn the_struck_character_perceives_its_hit_points_and_the_striker_its_condition()
         ]
     );
     // D11: the stranger perceives nothing of the hits before its arrival.
-    assert_eq!(world.perceived_changes_of(stranger), [arrival]);
+    assert_eq!(
+        world.perceived_changes_of(stranger).collect::<Vec<_>>(),
+        [arrival]
+    );
 }
