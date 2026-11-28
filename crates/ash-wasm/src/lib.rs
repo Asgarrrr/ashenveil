@@ -433,7 +433,8 @@ mod tests {
         );
         let tile = [3_u32, 4, 1].map(u32::to_le_bytes).concat();
         // Tag 2 is a perceived change; its next tag is the kind of change.
-        let changes: [(&[&[u8]], &str); 9] = [
+        let hit_points = [7_u32, 10].map(u32::to_le_bytes).concat();
+        let changes: [(&[&[u8]], &str); 10] = [
             (
                 &[&[2, 0], &time, &entity, &[0, 4]],
                 r#"{"kind":"act","time":25,"entity":2,"outcome":{"kind":"stepped","direction":"south"}}"#,
@@ -469,6 +470,10 @@ mod tests {
             (
                 &[&[2, 4], &time, &entity, &tile],
                 r#"{"kind":"arrival","time":25,"entity":2,"position":{"x":3,"y":4,"z":1}}"#,
+            ),
+            (
+                &[&[2, 5], &time, &entity, &hit_points],
+                r#"{"kind":"hit_points","time":25,"entity":2,"current":7,"max":10}"#,
             ),
         ];
         for (fields, change) in changes {

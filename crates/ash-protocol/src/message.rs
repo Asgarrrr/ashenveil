@@ -458,6 +458,10 @@ impl Wire for PerceivedChange {
                 None => return Err(DecodeError),
             },
             4 => ChangeKind::Arrival(TilePosition::read(input)?),
+            5 => ChangeKind::HitPoints {
+                current: u32::read(input)?,
+                max: u32::read(input)?,
+            },
             _ => return Err(DecodeError),
         };
         Ok(Self { time, entity, kind })
